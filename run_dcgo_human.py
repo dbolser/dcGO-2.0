@@ -16,6 +16,8 @@ Options:
     --num-cores INT          Number of CPU cores for parallel processing (default: 8)
     --output-dir PATH        Output directory for results (default: results/)
     --batch-size INT         Batch size for Fisher tests (default: 50000)
+    --enable-true-path       Enable True Path Rule for GO annotation propagation
+    --go-ontology PATH       Path to GO ontology file (default: data/raw/go_ontology/go.obo)
 
 Examples:
     # Run for human proteins
@@ -23,6 +25,9 @@ Examples:
 
     # Run for mouse proteins with experimental evidence only
     uv run python run_dcgo_human.py --species mouse --evidence-filter experimental
+
+    # Run with True Path Rule propagation
+    uv run python run_dcgo_human.py --enable-true-path --go-ontology data/raw/go_ontology/go.obo
 """
 
 import time
@@ -32,6 +37,8 @@ from loguru import logger
 import sys
 import numpy as np
 from scipy.stats import hypergeom
+from dataclasses import dataclass
+from typing import Optional
 
 logger.remove()
 logger.add(sys.stderr, level="INFO")
@@ -40,6 +47,21 @@ from src.sparse_fisher import build_sparse_matrices, compute_contingency_tables_
 from src.vectorized_fisher import fisher_exact_parallel, benjamini_hochberg_correction
 from src.domain_annotation_parser import DomainAnnotationParser
 from src.goa_parser import parse_goa_human
+from src.ontology_processor import OntologyProcessor, Annotation
+
+
+@dataclass
+class AssociationResult:
+    """Simple dataclass to hold association results for True Path Rule."""
+    domain: str
+    go_term: str
+    p_value: float
+    q_value: float
+    hyper_score: float
+    a: int  # proteins with both
+    b: int  # proteins with domain only
+    c: int  # proteins with GO only
+    d: int  # proteins with neither
 
 
 def calculate_hypergeometric_score(a: int, b: int, c: int, d: int) -> float:
@@ -117,6 +139,17 @@ def main():
         "--species",
         default="human",
         help="Species to analyze: 'human', 'mouse', or specific GOA file name (default: human)",
+    )
+    parser.add_argument(
+        "--enable-true-path",
+        action="store_true",
+        help="Enable True Path Rule for GO annotation propagation",
+    )
+    parser.add_argument(
+        "--go-ontology",
+        type=Path,
+        default=Path("data/raw/go_ontology/go.obo"),
+        help="Path to GO ontology file (default: data/raw/go_ontology/go.obo)",
     )
 
     args = parser.parse_args()
@@ -264,6 +297,72 @@ def main():
     significant = adjusted_pvalues <= args.fdr_threshold
     n_significant = int(significant.sum())
 
+    # STAGE 5.5: True Path Rule (Optional)
+    propagated_annotations = []
+    if args.enable_true_path and n_significant > 0:
+        logger.info("")
+        logger.info("STAGE 5.5: True Path Rule Propagation")
+        logger.info("─" * 70)
+
+        # Check GO ontology file exists
+        if not args.go_ontology.exists():
+            logger.error(f"GO ontology file not found: {args.go_ontology}")
+            logger.error("Skipping True Path Rule propagation")
+        else:
+            start_time = time.time()
+
+            # Load GO ontology
+            logger.info(f"Loading GO ontology from: {args.go_ontology}")
+            ontology_processor = OntologyProcessor(args.go_ontology)
+
+            # Create AssociationResult objects for significant associations
+            logger.info("Preparing significant associations for True Path filtering...")
+            significant_associations = []
+            significant_indices = np.where(significant)[0]
+
+            for idx in significant_indices:
+                domain_idx = idx // len(go_list)
+                go_idx = idx % len(go_list)
+                table = tables[idx]
+                a, b = int(table[0, 0]), int(table[0, 1])
+                c, d = int(table[1, 0]), int(table[1, 1])
+
+                assoc = AssociationResult(
+                    domain=domain_list[domain_idx],
+                    go_term=go_list[go_idx],
+                    p_value=float(pvalues[idx]),
+                    q_value=float(adjusted_pvalues[idx]),
+                    hyper_score=calculate_hypergeometric_score(a, b, c, d),
+                    a=a, b=b, c=c, d=d
+                )
+                significant_associations.append(assoc)
+
+            logger.info(f"Applying True Path Rule to {len(significant_associations):,} significant associations...")
+
+            # Apply optimal level filtering
+            filtered_associations = ontology_processor.apply_optimal_level_filter(
+                significant_associations,
+                protein_domain_map,
+                protein_go_map,
+                min_background_size=3,
+                alpha_threshold=args.fdr_threshold
+            )
+
+            logger.info(f"✓ Optimal level filtering: {len(filtered_associations):,} associations retained")
+
+            # Propagate annotations up the GO hierarchy
+            propagated_annotations = ontology_processor.propagate_annotations(filtered_associations)
+
+            direct_count = sum(1 for ann in propagated_annotations if ann.annotation_type == "direct")
+            propagated_count = len(propagated_annotations) - direct_count
+
+            logger.info(f"✓ Generated {len(propagated_annotations):,} total annotations:")
+            logger.info(f"  - Direct: {direct_count:,}")
+            logger.info(f"  - Propagated: {propagated_count:,}")
+
+            true_path_time = time.time() - start_time
+            logger.info(f"✓ True Path Rule completed in {true_path_time:.2f}s")
+
     # Export results
     logger.info("")
     logger.info("STAGE 6: Exporting Results")
@@ -319,6 +418,19 @@ def main():
 
     logger.info(f"✓ Exported top 100 associations to: {top_file}")
 
+    # Export propagated annotations if True Path Rule was applied
+    if propagated_annotations:
+        annotations_file = args.output_dir / "domain_go_annotations_propagated.tsv"
+        with open(annotations_file, "w") as f:
+            f.write("domain\tgo_term\tq_value\tassociation_score\tannotation_type\tdirect_source_term\n")
+            for ann in propagated_annotations:
+                f.write(
+                    f"{ann.domain}\t{ann.go_term}\t{ann.q_value:.6e}\t{ann.association_score:.2f}\t"
+                    f"{ann.annotation_type}\t{ann.direct_source_term}\n"
+                )
+
+        logger.info(f"✓ Exported {len(propagated_annotations):,} propagated annotations to: {annotations_file}")
+
     # Performance summary
     total_time = matrix_time + table_time + test_time + fdr_time
 
@@ -331,11 +443,17 @@ def main():
     logger.info(
         f"  Significant associations (FDR < {args.fdr_threshold}): {n_significant:,} ({n_significant / len(pvalues) * 100:.2f}%)"
     )
+    if propagated_annotations:
+        direct_count = sum(1 for ann in propagated_annotations if ann.annotation_type == "direct")
+        propagated_count = len(propagated_annotations) - direct_count
+        logger.info(f"  True Path Rule annotations: {len(propagated_annotations):,} total ({direct_count:,} direct + {propagated_count:,} propagated)")
     logger.info(f"  Total runtime: {total_time:.1f}s ({total_time / 60:.1f} minutes)")
     logger.info("")
     logger.info("Output files:")
     logger.info(f"  {output_file}")
     logger.info(f"  {top_file}")
+    if propagated_annotations:
+        logger.info(f"  {annotations_file}")
 
     return 0
 
