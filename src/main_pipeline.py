@@ -31,7 +31,7 @@ from src.domain_scanning import DomainArchitectureScanner
 from src.domain_annotation_parser import DomainAnnotationParser
 from src.goa_parser import parse_goa_human
 from src.ontology_processor import OntologyProcessor
-from src.statistical_inference import StatisticalInferenceEngine
+from src.statistical_inference import AssociationResult, StatisticalInferenceEngine
 
 
 class PipelineStage(Enum):
@@ -537,7 +537,7 @@ class dcGOPipeline:
 
     async def _apply_true_path_rule(
         self,
-        significant_associations: List[Any],
+        significant_associations: List["AssociationResult"],
         protein_domain_map: Dict[str, List[str]],
         protein_go_map: Dict[str, Set[str]],
         parameters: Dict[str, Any],
@@ -602,9 +602,8 @@ class dcGOPipeline:
         true_path_info["propagated_annotations"] = propagated_annotations
 
         direct_annotations = sum(
-            1
+            getattr(ann, "annotation_type", "") == "direct"
             for ann in propagated_annotations
-            if getattr(ann, "annotation_type", "") == "direct"
         )
         propagated_only = len(propagated_annotations) - direct_annotations
 
@@ -868,6 +867,9 @@ class dcGOPipeline:
 
             # Write associations
             for assoc in associations:
+                # Association objects originate from both the statistical inference
+                # engine and legacy serialized results. We retain these attribute
+                # fallbacks to keep export compatible across both representations.
                 writer.writerow(
                     [
                         getattr(assoc, "domain", getattr(assoc, "domain_id", "")),

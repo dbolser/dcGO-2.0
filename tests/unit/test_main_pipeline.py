@@ -1,173 +1,195 @@
 import asyncio
-import asyncio
+import importlib
 import sys
 import types
 
 import pytest
 
-if "psutil" not in sys.modules:
-    def _cpu_count():
-        return 4
 
-    def _virtual_memory():
-        return types.SimpleNamespace(total=8 * 1024**3)
+@pytest.fixture
+def pipeline_components(monkeypatch):
+    """Provide core pipeline classes with external dependencies safely stubbed."""
 
-    def _disk_usage(_path):
-        return types.SimpleNamespace(free=8 * 1024**3)
+    def ensure_module(name: str, stub: types.SimpleNamespace) -> None:
+        if name not in sys.modules:
+            monkeypatch.setitem(sys.modules, name, stub)
 
-    sys.modules["psutil"] = types.SimpleNamespace(
-        cpu_count=_cpu_count,
-        virtual_memory=_virtual_memory,
-        disk_usage=_disk_usage,
+    ensure_module(
+        "psutil",
+        types.SimpleNamespace(
+            cpu_count=lambda: 4,
+            virtual_memory=lambda: types.SimpleNamespace(total=8 * 1024**3),
+            disk_usage=lambda _path: types.SimpleNamespace(free=8 * 1024**3),
+        ),
     )
 
-if "aiohttp" not in sys.modules:
-    class _DummySession:  # pragma: no cover - stub for import
-        def __init__(self, *args, **kwargs):
-            raise RuntimeError("aiohttp is not available in tests")
-
-    sys.modules["aiohttp"] = types.SimpleNamespace(
-        ClientSession=_DummySession,
-        ClientTimeout=lambda *args, **kwargs: None,
-        TCPConnector=lambda *args, **kwargs: None,
+    ensure_module(
+        "aiohttp",
+        types.SimpleNamespace(
+            ClientSession=lambda *args, **kwargs: (_ for _ in ()).throw(
+                RuntimeError("aiohttp is not available in tests")
+            ),
+            ClientTimeout=lambda *args, **kwargs: None,
+            TCPConnector=lambda *args, **kwargs: None,
+        ),
     )
 
-if "aiofiles" not in sys.modules:
-    async def _raise(*args, **kwargs):  # pragma: no cover - stub for import
-        raise RuntimeError("aiofiles is not available in tests")
+    ensure_module(
+        "aiofiles",
+        types.SimpleNamespace(
+            open=lambda *args, **kwargs: (_ for _ in ()).throw(
+                RuntimeError("aiofiles is not available in tests")
+            )
+        ),
+    )
 
-    sys.modules["aiofiles"] = types.SimpleNamespace(open=_raise)
+    ensure_module(
+        "requests",
+        types.SimpleNamespace(
+            get=lambda *args, **kwargs: types.SimpleNamespace(
+                status_code=200,
+                raise_for_status=lambda: None,
+                iter_content=lambda chunk_size=8192: iter([]),
+            )
+        ),
+    )
 
-if "requests" not in sys.modules:
-    class _DummyResponse:  # pragma: no cover - stub for import
-        status_code = 200
+    if "Bio" not in sys.modules:
+        seqio_stub = types.SimpleNamespace(parse=lambda *args, **kwargs: iter([]))
+        ensure_module("Bio", types.SimpleNamespace(SeqIO=seqio_stub))
+        ensure_module("Bio.SeqIO", seqio_stub)
 
-        def raise_for_status(self):
-            return None
-
-        def iter_content(self, chunk_size=8192):
-            return iter([])
-
-    sys.modules["requests"] = types.SimpleNamespace(get=lambda *args, **kwargs: _DummyResponse())
-
-if "Bio" not in sys.modules:
-    seqio_stub = types.SimpleNamespace(parse=lambda *args, **kwargs: iter([]))
-    sys.modules["Bio"] = types.SimpleNamespace(SeqIO=seqio_stub)
-    sys.modules["Bio.SeqIO"] = seqio_stub
-
-if "networkx" not in sys.modules:
     class _DummyGraph:
         def __init__(self):
             self._nodes = []
 
-        def nodes(self, data=False):
+        def nodes(self, data=False):  # pragma: no cover - simple stub
             return []
 
-        def edges(self):
+        def edges(self):  # pragma: no cover - simple stub
             return []
 
-        def in_degree(self, _node):
+        def in_degree(self, _node):  # pragma: no cover - simple stub
             return 0
 
-        def predecessors(self, _node):
+        def predecessors(self, _node):  # pragma: no cover - simple stub
             return []
 
-        def remove_nodes_from(self, _nodes):
+        def remove_nodes_from(self, _nodes):  # pragma: no cover - simple stub
             return None
 
-    sys.modules["networkx"] = types.SimpleNamespace(
-        DiGraph=_DummyGraph,
-        is_directed_acyclic_graph=lambda *args, **kwargs: True,
-        ancestors=lambda *args, **kwargs: set(),
-        descendants=lambda *args, **kwargs: set(),
-        single_source_shortest_path_length=lambda *args, **kwargs: {},
+    ensure_module(
+        "networkx",
+        types.SimpleNamespace(
+            DiGraph=_DummyGraph,
+            is_directed_acyclic_graph=lambda *args, **kwargs: True,
+            ancestors=lambda *args, **kwargs: set(),
+            descendants=lambda *args, **kwargs: set(),
+            single_source_shortest_path_length=lambda *args, **kwargs: {},
+        ),
     )
 
-if "obonet" not in sys.modules:
-    import types as _types
+    ensure_module(
+        "obonet",
+        types.SimpleNamespace(
+            read_obo=lambda *args, **kwargs: sys.modules["networkx"].DiGraph()
+        ),
+    )
 
-    def _read_obo(*args, **kwargs):
-        return sys.modules["networkx"].DiGraph()
+    ensure_module(
+        "pandas",
+        types.SimpleNamespace(DataFrame=lambda *args, **kwargs: None),
+    )
 
-    sys.modules["obonet"] = _types.SimpleNamespace(read_obo=_read_obo)
-
-if "pandas" not in sys.modules:
-    sys.modules["pandas"] = types.SimpleNamespace(DataFrame=lambda *args, **kwargs: None)
-
-if "scipy" not in sys.modules:
     stats_stub = types.SimpleNamespace(
         fisher_exact=lambda *args, **kwargs: (1.0, 1.0),
         hypergeom=types.SimpleNamespace(sf=lambda *args, **kwargs: 1.0),
     )
-    sys.modules["scipy"] = types.SimpleNamespace(stats=stats_stub)
-    sys.modules["scipy.stats"] = stats_stub
+    ensure_module("scipy", types.SimpleNamespace(stats=stats_stub))
+    ensure_module("scipy.stats", stats_stub)
 
-if "statsmodels" not in sys.modules:
-    def _fdrcorrection(p_values, alpha=0.05, method="indep"):
-        rejected = [p <= alpha for p in p_values]
-        return rejected, [min(alpha, max(0.0, p)) for p in p_values]
-
-    multitest_stub = types.SimpleNamespace(fdrcorrection=_fdrcorrection)
-    sys.modules["statsmodels"] = types.SimpleNamespace(stats=types.SimpleNamespace(multitest=multitest_stub))
-    sys.modules["statsmodels.stats"] = types.SimpleNamespace(multitest=multitest_stub)
-    sys.modules["statsmodels.stats.multitest"] = multitest_stub
-
-from src.main_pipeline import dcGOPipeline
-from src.ontology_processor import Annotation
-from src.statistical_inference import AssociationResult
-
-
-class DummyOntologyProcessor:
-    def __init__(self):
-        self.filter_calls = []
-        self.propagate_calls = []
-
-    def apply_optimal_level_filter(
-        self,
-        significant_associations,
-        protein_domain_map,
-        protein_go_map,
-        min_background_size,
-        alpha_threshold,
-    ):
-        self.filter_calls.append(
-            (significant_associations, min_background_size, alpha_threshold)
+    multitest_stub = types.SimpleNamespace(
+        fdrcorrection=lambda p_values, alpha=0.05, method="indep": (
+            [p <= alpha for p in p_values],
+            [min(alpha, max(0.0, p)) for p in p_values],
         )
-        # Return the first association to simulate filtering
-        return list(significant_associations[:1])
+    )
+    ensure_module(
+        "statsmodels",
+        types.SimpleNamespace(stats=types.SimpleNamespace(multitest=multitest_stub)),
+    )
+    ensure_module("statsmodels.stats", types.SimpleNamespace(multitest=multitest_stub))
+    ensure_module("statsmodels.stats.multitest", multitest_stub)
 
-    def propagate_annotations(self, direct_associations):
-        self.propagate_calls.append(direct_associations)
-        if not direct_associations:
-            return []
+    main_pipeline = importlib.import_module("src.main_pipeline")
+    ontology_module = importlib.import_module("src.ontology_processor")
+    stats_module = importlib.import_module("src.statistical_inference")
 
-        source = direct_associations[0]
-        score = max(1.0, min(100.0, getattr(source, "hyper_score", 1.0)))
-        q_value = getattr(source, "q_value", 0.01) or 0.01
-
-        return [
-            Annotation(
-                domain=source.domain,
-                go_term=source.go_term,
-                q_value=q_value,
-                association_score=score,
-                annotation_type="direct",
-                direct_source_term=source.go_term,
-            ),
-            Annotation(
-                domain=source.domain,
-                go_term="GO:ANCESTOR",
-                q_value=q_value,
-                association_score=score,
-                annotation_type="propagated",
-                direct_source_term=source.go_term,
-            ),
-        ]
+    return types.SimpleNamespace(
+        dcGOPipeline=main_pipeline.dcGOPipeline,
+        Annotation=ontology_module.Annotation,
+        AssociationResult=stats_module.AssociationResult,
+    )
 
 
-def test_apply_true_path_rule_disabled():
-    pipeline = dcGOPipeline(enable_async=False)
-    pipeline.ontology_processor = DummyOntologyProcessor()
+@pytest.fixture
+def dummy_ontology_processor(pipeline_components):
+    Annotation = pipeline_components.Annotation
+
+    class DummyOntologyProcessor:
+        def __init__(self):
+            self.filter_calls = []
+            self.propagate_calls = []
+
+        def apply_optimal_level_filter(
+            self,
+            significant_associations,
+            protein_domain_map,
+            protein_go_map,
+            min_background_size,
+            alpha_threshold,
+        ):
+            self.filter_calls.append(
+                (significant_associations, min_background_size, alpha_threshold)
+            )
+            return list(significant_associations[:1])
+
+        def propagate_annotations(self, direct_associations):
+            self.propagate_calls.append(direct_associations)
+            if not direct_associations:
+                return []
+
+            source = direct_associations[0]
+            score = max(1.0, min(100.0, getattr(source, "hyper_score", 1.0)))
+            q_value = getattr(source, "q_value", None)
+            if q_value is None:
+                q_value = 0.01
+
+            return [
+                Annotation(
+                    domain=source.domain,
+                    go_term=source.go_term,
+                    q_value=q_value,
+                    association_score=score,
+                    annotation_type="direct",
+                    direct_source_term=source.go_term,
+                ),
+                Annotation(
+                    domain=source.domain,
+                    go_term="GO:ANCESTOR",
+                    q_value=q_value,
+                    association_score=score,
+                    annotation_type="propagated",
+                    direct_source_term=source.go_term,
+                ),
+            ]
+
+    return DummyOntologyProcessor()
+
+
+def test_apply_true_path_rule_disabled(pipeline_components, dummy_ontology_processor):
+    pipeline = pipeline_components.dcGOPipeline(enable_async=False)
+    pipeline.ontology_processor = dummy_ontology_processor
 
     result = asyncio.run(
         pipeline._apply_true_path_rule(
@@ -182,10 +204,13 @@ def test_apply_true_path_rule_disabled():
     assert result["filtered_associations"] == []
     assert result["propagated_annotations"] == []
 
-def test_apply_true_path_rule_enabled_propagates():
-    pipeline = dcGOPipeline(enable_async=False)
-    stub_processor = DummyOntologyProcessor()
-    pipeline.ontology_processor = stub_processor
+
+def test_apply_true_path_rule_enabled_propagates(
+    pipeline_components, dummy_ontology_processor
+):
+    pipeline = pipeline_components.dcGOPipeline(enable_async=False)
+    pipeline.ontology_processor = dummy_ontology_processor
+    AssociationResult = pipeline_components.AssociationResult
 
     associations = [
         AssociationResult(
@@ -233,10 +258,10 @@ def test_apply_true_path_rule_enabled_propagates():
     assert result["statistics"]["direct_annotations"] == 1
     assert result["statistics"]["propagated_annotations"] == 1
 
-    assert stub_processor.filter_calls, "Filter should be invoked"
-    call = stub_processor.filter_calls[0]
+    assert dummy_ontology_processor.filter_calls, "Filter should be invoked"
+    call = dummy_ontology_processor.filter_calls[0]
     assert call[1] == 5
     assert call[2] == 0.05
 
-    assert stub_processor.propagate_calls, "Propagation should be invoked"
-    assert len(stub_processor.propagate_calls[0]) == 1
+    assert dummy_ontology_processor.propagate_calls, "Propagation should be invoked"
+    assert len(dummy_ontology_processor.propagate_calls[0]) == 1
