@@ -95,7 +95,8 @@ class DomainAnnotationParser:
     def parse_protein2ipr_file(
         self,
         protein2ipr_path: Path,
-        max_proteins: Optional[int] = None
+        max_proteins: Optional[int] = None,
+        protein_filter: Optional[Set[str]] = None
     ) -> Dict[str, ProteinDomainArchitecture]:
         """
         Parse the protein2ipr.dat file to extract domain annotations.
@@ -103,11 +104,14 @@ class DomainAnnotationParser:
         Args:
             protein2ipr_path: Path to protein2ipr.dat.gz file
             max_proteins: Maximum number of proteins to process (for testing)
+            protein_filter: Set of protein IDs to include (all others ignored for memory efficiency)
 
         Returns:
             Dictionary mapping protein IDs to their domain architectures
         """
         logger.info(f"Parsing domain annotations from {protein2ipr_path}")
+        if protein_filter:
+            logger.info(f"  Filtering to {len(protein_filter):,} specific proteins")
 
         if not protein2ipr_path.exists():
             raise FileNotFoundError(f"protein2ipr file not found: {protein2ipr_path}")
@@ -116,6 +120,7 @@ class DomainAnnotationParser:
         protein_count = 0
         annotation_count = 0
         filtered_count = 0
+        skipped_count = 0
 
         # Determine if file is gzipped
         open_func = gzip.open if protein2ipr_path.suffix == '.gz' else open
@@ -124,7 +129,7 @@ class DomainAnnotationParser:
             for line_num, line in enumerate(f, 1):
                 if line_num % 1000000 == 0:
                     logger.info(f"Processed {line_num:,} lines, {protein_count:,} proteins, "
-                              f"{annotation_count:,} annotations")
+                              f"{annotation_count:,} annotations, {skipped_count:,} skipped")
 
                 # Skip empty lines
                 line = line.strip()
@@ -139,6 +144,12 @@ class DomainAnnotationParser:
                         continue
 
                     protein_id = fields[0]
+
+                    # Skip proteins not in filter set (for memory efficiency)
+                    if protein_filter and protein_id not in protein_filter:
+                        skipped_count += 1
+                        continue
+
                     interpro_id = fields[1]
                     interpro_name = fields[2]
                     signature_id = fields[3]

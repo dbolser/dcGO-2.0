@@ -18,31 +18,30 @@ The dcGO pipeline implements the domain-centric Gene Ontology methodology, which
 
 ---
 
-## ⚡ **Quick Start (Complete Workflow)**
+## ⚡ **Quick Start**
 
-### 1. Installation
+### For Human Proteins (RECOMMENDED - 25 minutes)
+
+See **[QUICKSTART.md](QUICKSTART.md)** for the complete human-only workflow:
+
 ```bash
-# Clone repository
-git clone <your-repo-url>
-cd dcGOspeed
-
-# Install with uv (recommended - handles Python 3.12+ requirements)
+# 1. Install
 uv sync
 
-# Alternative: Install with pip
-pip install -r requirements.txt
+# 2. Download data (~11 MB human GOA + ~20 GB InterPro for all organisms)
+uv run python -m src.data_acquisition --datasets goa_annotations --datasets go_ontology --datasets interpro_mappings
+
+# 3. Extract human proteins (one-time, ~10 min)
+uv run python extract_human_interpro.py
+
+# 4. Run statistical inference (~25 min for 303M tests)
+uv run python test_sparse_fisher.py
 ```
 
-### 2. Verify Installation
-```bash
-# Test core components
-uv run pytest tests/unit/test_data_acquisition.py::TestDataAcquisition::test_init -v
+**Output**: Significant domain-GO associations with FDR < 0.01
 
-# Test end-to-end integration  
-uv run pytest tests/e2e/test_pipeline_integration.py::TestPipelineIntegration::test_complete_pipeline_workflow -v
-```
+### For Full Pipeline (All Organisms - Days on HPC)
 
-### 3. Run Complete Pipeline
 ```bash
 # Full pipeline (downloads ~70GB of data, processes for days on HPC)
 uv run python -m src.main_pipeline --num-cores 8 --output-dir results/
