@@ -748,20 +748,29 @@ class DataAcquisition:
             raise ValueError(f"Unknown data source: {source_name}")
         
         url = custom_url or self.config.DATASOURCES[source_name]
-        
-        # Determine filename
-        filename = f"{source_name}{Path(urllib.parse.urlparse(url).path).suffix}"
-        filepath = self.data_dir / filename
-        
+
+        # Preserve original filename and organize by source subdirectory
+        # Extract the original filename from URL
+        parsed_url = urllib.parse.urlparse(url)
+        original_filename = Path(parsed_url.path).name
+
+        # Create source-specific subdirectory
+        source_dir = self.data_dir / source_name
+        source_dir.mkdir(parents=True, exist_ok=True)
+
+        filepath = source_dir / original_filename
+
         # Check if redownload is needed
         if filepath.exists() and not force_redownload:
             logger.info(f"File {filepath} already exists, use force_redownload=True to override")
             return filepath
-        
+
         # Download the file
         logger.info(f"Downloading {source_name} dataset")
+        logger.info(f"  Source: {url}")
+        logger.info(f"  Destination: {filepath}")
         self.download_with_progress(url, filepath)
-        
+
         return filepath
     
     def verify_all_downloads(self) -> Dict[str, bool]:

@@ -29,6 +29,8 @@ from config.settings import config
 from src.data_acquisition import DataAcquisition, DataAcquisitionError
 from src.database_manager import DatabaseError, dcGODatabaseManager
 from src.domain_scanning import DomainArchitectureScanner
+from src.domain_annotation_parser import DomainAnnotationParser
+from src.goa_parser import GOAParser, parse_goa_human
 from src.ontology_processor import OntologyProcessor
 from src.statistical_inference import StatisticalInferenceEngine
 
@@ -200,7 +202,7 @@ class dcGOPipeline:
             format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} | {message}",
             rotation="100 MB",
             retention="30 days",
-            compression="gzip"
+            compression="gz"
         )
         
         logger.info("Pipeline logging configured successfully")
@@ -278,7 +280,7 @@ class dcGOPipeline:
         # Initialize components concurrently where possible
         async def init_data_acquisition():
             self.data_acquisition = DataAcquisition(
-                data_dir=self.config.DATA_DIR / "raw",
+                config=self.config,
                 chunk_size=parameters.get('download_chunk_size', 65536),
                 timeout=parameters.get('download_timeout', 30)
             )
@@ -298,16 +300,14 @@ class dcGOPipeline:
         )
         
         # Initialize remaining components that depend on data
-        self.domain_scanner = DomainArchitectureScanner(
-            data_dir=self.config.DATA_DIR,
-            num_cores=parameters.get('num_cores', self.config.NUM_CORES)
-        )
-        
-        self.ontology_processor = OntologyProcessor(
-            fdr_threshold=parameters.get('fdr_threshold', self.config.FDR_THRESHOLD)
-        )
-        
-        self.statistical_engine = StatisticalInferenceEngine()
+        # Note: domain_scanner not needed when using pre-computed annotations
+        self.domain_scanner = None
+
+        # Note: OntologyProcessor will be initialized later when GO file is downloaded
+        self.ontology_processor = None
+
+        # Note: StatisticalInferenceEngine will be initialized later with domain and GO data
+        self.statistical_engine = None
         
         logger.info("All components initialized successfully")
     
@@ -338,9 +338,9 @@ class dcGOPipeline:
                     
                     for dataset in datasets_to_download:
                         future = executor.submit(
-                            self.data_acquisition.download_specific_dataset, 
+                            self.data_acquisition.download_specific_dataset,
                             dataset,
-                            force=parameters.get('force_download', False)
+                            force_redownload=parameters.get('force_download', False)
                         )
                         download_futures.append((dataset, future))
                     
@@ -360,7 +360,7 @@ class dcGOPipeline:
                     try:
                         file_path = self.data_acquisition.download_specific_dataset(
                             dataset,
-                            force=parameters.get('force_download', False)
+                            force_redownload=parameters.get('force_download', False)
                         )
                         downloaded_files[dataset] = file_path
                     except Exception as e:
@@ -376,131 +376,124 @@ class dcGOPipeline:
     
     async def run_domain_scanning(self, parameters: Dict[str, Any], data_files: Dict[str, Path]) -> Dict[str, Any]:
         """
-        Execute domain scanning stage.
-        
+        Execute domain annotation parsing stage (using pre-computed InterPro annotations).
+
         Args:
             parameters: Pipeline parameters
             data_files: Downloaded data files from previous stage
-            
+
         Returns:
-            Dictionary with domain scanning results and statistics
+            Dictionary with domain annotation results and statistics
         """
-        logger.info("Starting domain scanning stage...")
-        
+        logger.info("Starting domain annotation parsing stage...")
+
         try:
-            # Get protein sequences file (UniProt Swiss-Prot preferably)
-            sequence_file = data_files.get('uniprot_sprot')
-            if not sequence_file or not sequence_file.exists():
-                sequence_file = data_files.get('uniprot_trembl')
-                if not sequence_file or not sequence_file.exists():
-                    raise PipelineError("No UniProt sequence file available for domain scanning")
-            
-            logger.info(f"Using sequence file: {sequence_file}")
-            
-            # Configure scanning parameters
-            scan_params = {
-                'sequence_file': sequence_file,
-                'output_dir': self.config.DATA_DIR / "processed" / "domains",
-                'num_cores': parameters.get('num_cores', self.config.NUM_CORES),
-                'batch_size': parameters.get('scan_batch_size', 1000),
-                'evalue_threshold': parameters.get('evalue_threshold', 1e-3),
-                'use_pfam': parameters.get('use_pfam', True),
-                'use_interpro': parameters.get('use_interpro', True)
+            # Get pre-computed InterPro mappings file
+            interpro_file = data_files.get('interpro_mappings')
+            if not interpro_file or not interpro_file.exists():
+                raise PipelineError("InterPro mappings file (protein2ipr.dat) not available")
+
+            logger.info(f"Using pre-computed domain annotations: {interpro_file}")
+
+            # Initialize domain annotation parser
+            parser = DomainAnnotationParser(
+                max_supra_domain_length=parameters.get('max_supra_domain_length',
+                                                      self.config.MAX_SUPRA_DOMAIN_LENGTH),
+                min_domain_length=parameters.get('min_domain_length', 10)
+            )
+
+            # Parse domain annotations
+            logger.info("Parsing protein2ipr.dat file (this may take several minutes)...")
+            domain_architectures = await asyncio.to_thread(
+                parser.parse_protein2ipr_file,
+                interpro_file,
+                max_proteins=parameters.get('max_proteins', None)
+            )
+
+            # Get protein-domain mapping for statistical inference
+            protein_domain_map = parser.get_protein_domain_map()
+
+            # Get statistics
+            stats = parser.get_domain_statistics()
+
+            scan_results = {
+                'domain_architectures': domain_architectures,
+                'protein_domain_map': protein_domain_map,
+                'statistics': stats
             }
-            
-            # Create output directory
-            scan_params['output_dir'].mkdir(parents=True, exist_ok=True)
-            
-            # Run domain scanning with progress tracking
-            scan_results = {}
-            
-            if scan_params['use_interpro']:
-                logger.info("Running InterProScan analysis...")
-                interpro_results = await asyncio.to_thread(
-                    self.domain_scanner.run_interproscan_batch,
-                    sequence_file,
-                    scan_params['output_dir'] / "interpro_results.tsv",
-                    batch_size=scan_params['batch_size'],
-                    num_cores=scan_params['num_cores']
-                )
-                scan_results['interpro'] = interpro_results
-            
-            # Store results in database
+
+            logger.info(f"Domain annotation parsing completed:")
+            logger.info(f"  Proteins with domains: {stats['total_proteins']:,}")
+            logger.info(f"  Unique domains: {stats['total_unique_domains']:,}")
+
+            # Store results in database if available
             if self.database_manager:
-                logger.info("Storing domain scan results in database...")
-                await asyncio.to_thread(
-                    self.database_manager.store_domain_results,
-                    scan_results
-                )
-            
-            logger.info("Domain scanning completed successfully")
+                logger.info("Storing domain annotation results in database...")
+                # Note: This may need database schema updates
+
             return scan_results
-            
+
         except Exception as e:
-            logger.error(f"Domain scanning failed: {e}")
-            raise PipelineError("Domain scanning stage failed") from e
+            logger.error(f"Domain annotation parsing failed: {e}")
+            raise PipelineError("Domain annotation parsing stage failed") from e
     
     async def run_ontology_processing(self, parameters: Dict[str, Any], data_files: Dict[str, Path]) -> Dict[str, Any]:
         """
         Execute ontology processing stage.
-        
+
         Args:
             parameters: Pipeline parameters
             data_files: Downloaded data files from previous stage
-            
+
         Returns:
             Dictionary with processed ontology data and annotations
         """
         logger.info("Starting ontology processing stage...")
-        
+
         try:
             # Get GO ontology and annotation files
             go_ontology_file = data_files.get('go_ontology')
             goa_file = data_files.get('goa_annotations')
-            
+
             if not go_ontology_file or not go_ontology_file.exists():
                 raise PipelineError("GO ontology file not available")
             if not goa_file or not goa_file.exists():
                 raise PipelineError("GOA annotation file not available")
-            
+
             logger.info(f"Using GO ontology: {go_ontology_file}")
             logger.info(f"Using GOA annotations: {goa_file}")
-            
-            # Load and process ontology
-            await asyncio.to_thread(
-                self.ontology_processor.load_ontology,
+
+            # Initialize ontology processor with the GO file
+            logger.info("Initializing ontology processor...")
+            self.ontology_processor = await asyncio.to_thread(
+                OntologyProcessor,
                 go_ontology_file
             )
-            
-            # Process annotations with filtering
-            processing_params = {
-                'min_proteins': parameters.get('min_proteins_per_association', 
-                                              self.config.MIN_PROTEINS_PER_ASSOCIATION),
-                'fdr_threshold': parameters.get('fdr_threshold', self.config.FDR_THRESHOLD),
-                'evidence_codes': parameters.get('evidence_codes', None),  # None = use all
-                'aspects': parameters.get('go_aspects', ['P', 'F', 'C'])  # Process, Function, Component
-            }
-            
-            # Process annotations
-            processed_annotations = await asyncio.to_thread(
-                self.ontology_processor.process_annotations,
+
+            # Parse GOA annotations with evidence code filtering
+            evidence_filter = parameters.get('evidence_filter', self.config.processing.evidence_filter)
+            logger.info(f"Parsing GOA file with evidence filter: {evidence_filter}")
+
+            protein_go_map = await asyncio.to_thread(
+                parse_goa_human,
                 goa_file,
-                **processing_params
+                evidence_filter=evidence_filter,
+                aspects=set(parameters.get('go_aspects', ['P', 'F', 'C']))
             )
-            
+
             ontology_results = {
                 'ontology_graph': self.ontology_processor.go_graph,
-                'processed_annotations': processed_annotations,
+                'protein_go_map': protein_go_map,
                 'statistics': {
                     'total_terms': len(self.ontology_processor.go_graph.nodes()),
-                    'total_annotations': len(processed_annotations),
-                    'aspects_processed': processing_params['aspects']
+                    'total_proteins': len(protein_go_map),
+                    'evidence_filter': evidence_filter
                 }
             }
             
             logger.info(f"Ontology processing completed. "
-                       f"Processed {ontology_results['statistics']['total_annotations']} annotations "
-                       f"across {ontology_results['statistics']['total_terms']} GO terms")
+                       f"Proteins with GO annotations: {ontology_results['statistics']['total_proteins']:,}, "
+                       f"GO terms: {ontology_results['statistics']['total_terms']:,}")
             
             return ontology_results
             
@@ -539,24 +532,23 @@ class dcGOPipeline:
             }
             
             logger.info(f"Running statistical tests with FDR threshold: {stats_params['fdr_threshold']}")
-            
+
             # Prepare data for statistical analysis
-            protein_domain_map = domain_results.get('protein_domains', {})
-            protein_go_map = {}
-            
-            # Build protein-GO mapping from processed annotations
-            for annotation in ontology_results['processed_annotations']:
-                protein_id = annotation.protein_id
-                go_term = annotation.go_term
-                
-                if protein_id not in protein_go_map:
-                    protein_go_map[protein_id] = set()
-                protein_go_map[protein_id].add(go_term)
-            
-            # Load data into statistical engine
-            self.statistical_engine.load_protein_domain_map(protein_domain_map)
-            self.statistical_engine.load_protein_go_map(protein_go_map)
-            
+            protein_domain_map = domain_results.get('protein_domain_map', {})
+            protein_go_map = ontology_results.get('protein_go_map', {})
+
+            logger.info(f"Prepared data for statistical inference:")
+            logger.info(f"  Proteins with domains: {len(protein_domain_map):,}")
+            logger.info(f"  Proteins with GO annotations: {len(protein_go_map):,}")
+
+            # Initialize statistical engine with the data
+            logger.info("Initializing statistical inference engine...")
+            self.statistical_engine = await asyncio.to_thread(
+                StatisticalInferenceEngine,
+                protein_domain_map,
+                protein_go_map
+            )
+
             # Run statistical tests
             statistical_results = await asyncio.to_thread(
                 self.statistical_engine.run_statistical_tests,

@@ -224,4 +224,6 @@ interpro.log
 .python-version
 
 # Local configuration overrides
-config/local_settings.py
+config/local_settings.pydata/
+logs/
+data/raw/

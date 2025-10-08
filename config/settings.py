@@ -56,6 +56,7 @@ class ProcessingParameters:
     min_sequence_length: int = 20
     chunk_size: int = 65536
     timeout: int = 30
+    evidence_filter: str = 'manual'  # 'all', 'manual' (no IEA), or 'experimental'
     
     def __post_init__(self) -> None:
         """Validate processing parameters."""
@@ -134,8 +135,8 @@ class Config:
         'uniprot_sprot': DataSource(
             name='uniprot_sprot',
             url='https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.fasta.gz',
-            description='UniProt Swiss-Prot protein sequences',
-            required=True
+            description='UniProt Swiss-Prot protein sequences (only needed for local HMM scanning)',
+            required=False
         ),
         'uniprot_trembl': DataSource(
             name='uniprot_trembl', 
@@ -145,8 +146,8 @@ class Config:
         ),
         'goa_annotations': DataSource(
             name='goa_annotations',
-            url='ftp://ftp.ebi.ac.uk/pub/databases/GO/goa/UNIPROT/goa_uniprot_all.gaf.gz',
-            description='Gene Ontology Annotation (GOA) database',
+            url='https://ftp.ebi.ac.uk/pub/databases/GO/goa/HUMAN/goa_human.gaf.gz',
+            description='Gene Ontology Annotation (GOA) database for human',
             required=True
         ),
         'go_ontology': DataSource(
