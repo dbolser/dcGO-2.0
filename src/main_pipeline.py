@@ -31,7 +31,7 @@ from src.domain_scanning import DomainArchitectureScanner
 from src.domain_annotation_parser import DomainAnnotationParser
 from src.goa_parser import parse_goa_human
 from src.ontology_processor import OntologyProcessor
-from src.statistical_inference import StatisticalInferenceEngine
+from src.statistical_inference import AssociationResult, StatisticalInferenceEngine
 
 
 class PipelineStage(Enum):
@@ -535,6 +535,94 @@ class dcGOPipeline:
             logger.error(f"Ontology processing failed: {e}")
             raise PipelineError("Ontology processing stage failed") from e
 
+    async def _apply_true_path_rule(
+        self,
+        significant_associations: List["AssociationResult"],
+        protein_domain_map: Dict[str, List[str]],
+        protein_go_map: Dict[str, Set[str]],
+        parameters: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Apply the True Path Rule to significant associations."""
+
+        apply_true_path = parameters.get("apply_true_path", True)
+        true_path_info: Dict[str, Any] = {
+            "enabled": apply_true_path,
+            "filtered_associations": [],
+            "propagated_annotations": [],
+            "parameters": {},
+            "statistics": {},
+        }
+
+        if not apply_true_path:
+            logger.info("True Path propagation disabled via parameters")
+            return true_path_info
+
+        if not significant_associations:
+            logger.info("No significant associations available for True Path propagation")
+            return true_path_info
+
+        if not self.ontology_processor:
+            raise PipelineError(
+                "Ontology processor is required for True Path propagation"
+            )
+
+        true_path_params = {
+            "min_background_size": parameters.get(
+                "true_path_min_background",
+                self.config.processing.min_proteins_per_association,
+            ),
+            "alpha_threshold": parameters.get(
+                "true_path_alpha_threshold",
+                self.config.processing.alpha_threshold,
+            ),
+        }
+
+        true_path_info["parameters"] = true_path_params
+
+        try:
+            filtered_associations = await asyncio.to_thread(
+                self.ontology_processor.apply_optimal_level_filter,
+                significant_associations,
+                protein_domain_map,
+                protein_go_map,
+                true_path_params["min_background_size"],
+                true_path_params["alpha_threshold"],
+            )
+
+            propagated_annotations = await asyncio.to_thread(
+                self.ontology_processor.propagate_annotations,
+                filtered_associations,
+            )
+
+        except Exception as exc:  # pragma: no cover - defensive guard
+            logger.error(f"True Path propagation failed: {exc}")
+            raise PipelineError("True Path propagation failed") from exc
+
+        true_path_info["filtered_associations"] = filtered_associations
+        true_path_info["propagated_annotations"] = propagated_annotations
+
+        direct_annotations = sum(
+            getattr(ann, "annotation_type", "") == "direct"
+            for ann in propagated_annotations
+        )
+        propagated_only = len(propagated_annotations) - direct_annotations
+
+        true_path_info["statistics"] = {
+            "optimal_level_associations": len(filtered_associations),
+            "total_annotations": len(propagated_annotations),
+            "direct_annotations": direct_annotations,
+            "propagated_annotations": propagated_only,
+        }
+
+        logger.info(
+            "True Path propagation generated {} annotations ({} direct, {} propagated)",
+            len(propagated_annotations),
+            direct_annotations,
+            propagated_only,
+        )
+
+        return true_path_info
+
     async def run_statistical_inference(
         self,
         parameters: Dict[str, Any],
@@ -593,16 +681,33 @@ class dcGOPipeline:
             # Run statistical tests
             statistical_results = await asyncio.to_thread(
                 self.statistical_engine.run_statistical_tests,
-                fdr_threshold=stats_params["fdr_threshold"],
-                min_proteins=stats_params["min_proteins"],
+                min_cooccurrence=stats_params["min_proteins"],
+                fdr_alpha=stats_params["fdr_threshold"],
             )
 
             # Process results
             significant_associations = [
                 result
                 for result in statistical_results
-                if result.fdr_corrected_p <= stats_params["fdr_threshold"]
+                if getattr(result, "q_value", None) is not None
+                and result.q_value <= stats_params["fdr_threshold"]
             ]
+
+            true_path_state = (
+                "enabled"
+                if parameters.get("apply_true_path", True)
+                else "disabled"
+            )
+            logger.info(
+                f"Applying True Path Rule filtering and propagation: {true_path_state}"
+            )
+
+            true_path_info = await self._apply_true_path_rule(
+                significant_associations,
+                protein_domain_map,
+                protein_go_map,
+                parameters,
+            )
 
             inference_results = {
                 "all_results": statistical_results,
@@ -613,8 +718,25 @@ class dcGOPipeline:
                     "fdr_threshold": stats_params["fdr_threshold"],
                     "correction_method": stats_params["correction_method"],
                 },
+                "true_path": true_path_info,
                 "parameters": stats_params,
             }
+
+            inference_results["statistics"]["true_path_enabled"] = (
+                true_path_info.get("enabled", False)
+            )
+            if true_path_info.get("enabled"):
+                tp_stats = true_path_info.get("statistics", {})
+                inference_results["statistics"].update(
+                    {
+                        "true_path_optimal_associations": tp_stats.get(
+                            "optimal_level_associations", 0
+                        ),
+                        "true_path_total_annotations": tp_stats.get(
+                            "total_annotations", 0
+                        ),
+                    }
+                )
 
             logger.info(
                 f"Statistical inference completed. "
@@ -675,6 +797,19 @@ class dcGOPipeline:
                 )
                 output_files["all_results"] = all_results_file
 
+            true_path_info = inference_results.get("true_path", {})
+            if (
+                true_path_info.get("enabled")
+                and true_path_info.get("propagated_annotations")
+            ):
+                annotations_file = run_dir / "domain_go_annotations.tsv"
+                await asyncio.to_thread(
+                    self._export_annotations_tsv,
+                    true_path_info["propagated_annotations"],
+                    annotations_file,
+                )
+                output_files["propagated_annotations"] = annotations_file
+
             # Export summary statistics
             summary_file = run_dir / "pipeline_summary.json"
             summary_data = {
@@ -720,27 +855,63 @@ class dcGOPipeline:
             # Write header
             writer.writerow(
                 [
-                    "domain_id",
+                    "domain",
                     "go_term",
                     "p_value",
-                    "fdr_corrected_p",
+                    "q_value",
                     "association_score",
-                    "num_proteins",
+                    "proteins_with_both",
                     "description",
                 ]
             )
 
             # Write associations
             for assoc in associations:
+                # Association objects originate from both the statistical inference
+                # engine and legacy serialized results. We retain these attribute
+                # fallbacks to keep export compatible across both representations.
                 writer.writerow(
                     [
-                        assoc.domain_id,
+                        getattr(assoc, "domain", getattr(assoc, "domain_id", "")),
                         assoc.go_term,
-                        assoc.p_value,
-                        assoc.fdr_corrected_p,
-                        assoc.association_score,
-                        assoc.num_proteins,
+                        getattr(assoc, "p_value", ""),
+                        getattr(assoc, "q_value", getattr(assoc, "fdr_corrected_p", "")),
+                        getattr(assoc, "hyper_score", getattr(assoc, "association_score", "")),
+                        getattr(assoc, "a", getattr(assoc, "num_proteins", "")),
                         getattr(assoc, "description", ""),
+                    ]
+                )
+
+    def _export_annotations_tsv(
+        self, annotations: List[Any], output_file: Path
+    ) -> None:
+        """Export propagated annotations to TSV format."""
+
+        import csv
+
+        with open(output_file, "w", newline="") as f:
+            writer = csv.writer(f, delimiter="\t")
+
+            writer.writerow(
+                [
+                    "domain",
+                    "go_term",
+                    "q_value",
+                    "association_score",
+                    "annotation_type",
+                    "direct_source_term",
+                ]
+            )
+
+            for ann in annotations:
+                writer.writerow(
+                    [
+                        getattr(ann, "domain", ""),
+                        getattr(ann, "go_term", ""),
+                        getattr(ann, "q_value", ""),
+                        getattr(ann, "association_score", ""),
+                        getattr(ann, "annotation_type", ""),
+                        getattr(ann, "direct_source_term", ""),
                     ]
                 )
 
@@ -768,6 +939,7 @@ class dcGOPipeline:
         num_cores: Optional[int] = None,
         fdr_threshold: Optional[float] = None,
         export_all_results: bool = False,
+        apply_true_path: bool = True,
         **additional_params: Any,
     ) -> Dict[str, Any]:
         """
@@ -780,6 +952,7 @@ class dcGOPipeline:
             num_cores: Number of cores for parallel processing
             fdr_threshold: FDR threshold for significance
             export_all_results: Export all results, not just significant ones
+            apply_true_path: Whether to apply True Path Rule propagation
             **additional_params: Additional pipeline parameters
 
         Returns:
@@ -798,6 +971,7 @@ class dcGOPipeline:
             "num_cores": num_cores or self.config.NUM_CORES,
             "fdr_threshold": fdr_threshold or self.config.FDR_THRESHOLD,
             "export_all_results": export_all_results,
+            "apply_true_path": apply_true_path,
             "skip_existing": not force_download,
             **additional_params,
         }
@@ -969,6 +1143,11 @@ class dcGOPipeline:
     "--checkpoint-file", type=click.Path(), help="Custom checkpoint file path"
 )
 @click.option(
+    "--disable-true-path",
+    is_flag=True,
+    help="Disable True Path Rule propagation of GO annotations",
+)
+@click.option(
     "--log-level",
     type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"]),
     default="INFO",
@@ -987,6 +1166,7 @@ def main(
     max_workers: int,
     disable_async: bool,
     checkpoint_file: Optional[str],
+    disable_true_path: bool,
     log_level: str,
     dry_run: bool,
 ) -> None:
@@ -1016,6 +1196,7 @@ def main(
         click.echo(f"  Export all results: {export_all_results}")
         click.echo(f"  Max workers: {max_workers}")
         click.echo(f"  Async enabled: {not disable_async}")
+        click.echo(f"  True Path propagation: {not disable_true_path}")
         return
 
     # Convert datasets tuple to list
@@ -1048,6 +1229,7 @@ def main(
                 num_cores=num_cores,
                 fdr_threshold=fdr_threshold,
                 export_all_results=export_all_results,
+                apply_true_path=not disable_true_path,
             )
         )
 

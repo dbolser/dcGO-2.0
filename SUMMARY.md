@@ -113,3 +113,23 @@ This inherent flexibility makes dcGO a powerful, universal engine for translatin
 This capability transforms dcGO from a tool for functional annotation into a comprehensive platform for hypothesis generation. It allows researchers to ask novel questions, such as "Which protein domains are statistically enriched in proteins associated with hypertension?" or "Which domain families are most commonly implicated in neurodegenerative diseases?". This positions the dcGO methodology as a foundational approach for building a multi-faceted, domain-centric understanding of biology.
 
 
+
+
+1.6. Practical Implementation of dcGO-2.0
+
+The dcGO-2.0 codebase reimplements the classical methodology as a staged, fully automated pipeline whose components mirror the conceptual steps outlined above.
+
+**Pipeline orchestration.** The `dcGOPipeline` orchestrator (`src/main_pipeline.py`) wires together data acquisition, domain scanning, ontology processing, statistical inference, True Path refinement, and export. Each run is checkpointed, progress-tracked, and configurable through the CLI, including a `--disable-true-path` flag that exposes the propagation step as an explicit, user-controlled option.
+
+**Stage 1 – data acquisition.** `DataAcquisition` (`src/data_acquisition.py`) pulls prerequisite datasets and validates external dependencies. Downloads are streamed asynchronously with retry-aware progress tracking, while InterProScan binaries are verified for presence and executability before downstream analyses begin.
+
+**Stage 2 – domain architecture construction.** `DomainArchitectureScanner` (`src/domain_scanning.py`) prepares protein FASTA collections, invokes InterProScan, parses the resulting XML/TSV records, and generates both single-domain and supra-domain identifiers. Supra-domains are formed from contiguous domain runs, ensuring that pairwise and triplet architectures are preserved for the downstream correspondence matrix.
+
+**Stage 3 – ontology ingestion.** GOA inputs are parsed by `GOAParser` (`src/goa_parser.py`), which enforces evidence-code and GO-aspect filters (defaulting to the full P/F/C spectrum while permitting preset constraints such as `NON_IEA_EVIDENCE`). The parser collapses the accepted records into a protein→GO-term map and tracks statistics about excluded qualifiers or evidence categories.
+
+**Stage 4 – statistical inference.** `StatisticalInferenceEngine` (`src/statistical_inference.py`) constructs the domain-term contingency tables, applies one-tailed Fisher's exact tests, rescales hypergeometric enrichment scores, and corrects p-values with Benjamini–Hochberg FDR control. Minimum co-occurrence and FDR thresholds are configurable via the pipeline parameters, yielding a vetted list of significant direct associations.
+
+**Stage 5 – True Path refinement.** When enabled (the default), the pipeline executes `_apply_true_path_rule` in the orchestrator, which delegates to `OntologyProcessor` (`src/ontology_processor.py`) for a two-phase refinement. `apply_optimal_level_filter` retests each significant association against every parent term using parent-restricted backgrounds; associations that fail to show stronger enrichment than their parents are pruned. `propagate_annotations` then lifts each surviving association to all ancestors, marking propagated entries separately from direct observations so exports can differentiate between statistically supported and ontology-implied annotations.
+
+**Stage 6 – exports.** The final stage writes TSV summaries of significant associations, direct-plus-propagated annotations, and (optionally) the full statistical result set. Export metadata captures the configuration used, including whether True Path propagation was active, to facilitate downstream reproducibility.
+
