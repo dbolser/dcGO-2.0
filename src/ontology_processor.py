@@ -11,7 +11,7 @@ import networkx as nx
 import obonet
 import pandas as pd
 from pathlib import Path
-from typing import Dict, List, Set, Tuple, Optional, Union
+from typing import Dict, List, Set, Union
 from loguru import logger
 from dataclasses import dataclass
 from scipy.stats import fisher_exact

@@ -13,24 +13,23 @@ Python: 3.12+
 import asyncio
 import json
 import sys
-import time
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any, Dict, List, Optional, Set
 
 import click
 from loguru import logger
 
 from config.settings import config
 from src.data_acquisition import DataAcquisition, DataAcquisitionError
-from src.database_manager import DatabaseError, dcGODatabaseManager
+from src.database_manager import dcGODatabaseManager
 from src.domain_scanning import DomainArchitectureScanner
 from src.domain_annotation_parser import DomainAnnotationParser
-from src.goa_parser import GOAParser, parse_goa_human
+from src.goa_parser import parse_goa_human
 from src.ontology_processor import OntologyProcessor
 from src.statistical_inference import StatisticalInferenceEngine
 
@@ -422,7 +421,7 @@ class dcGOPipeline:
                 'statistics': stats
             }
 
-            logger.info(f"Domain annotation parsing completed:")
+            logger.info("Domain annotation parsing completed:")
             logger.info(f"  Proteins with domains: {stats['total_proteins']:,}")
             logger.info(f"  Unique domains: {stats['total_unique_domains']:,}")
 
@@ -537,7 +536,7 @@ class dcGOPipeline:
             protein_domain_map = domain_results.get('protein_domain_map', {})
             protein_go_map = ontology_results.get('protein_go_map', {})
 
-            logger.info(f"Prepared data for statistical inference:")
+            logger.info("Prepared data for statistical inference:")
             logger.info(f"  Proteins with domains: {len(protein_domain_map):,}")
             logger.info(f"  Proteins with GO annotations: {len(protein_go_map):,}")
 
@@ -911,7 +910,7 @@ def main(
     
     if dry_run:
         click.echo("DRY RUN MODE - No actual processing will be performed")
-        click.echo(f"Parameters that would be used:")
+        click.echo("Parameters that would be used:")
         click.echo(f"  Resume: {resume}")
         click.echo(f"  Force download: {force_download}")
         click.echo(f"  Datasets: {list(datasets) if datasets else 'all'}")
@@ -963,7 +962,7 @@ def main(
             click.echo(f"FDR threshold used: {stats['fdr_threshold']}")
         
         if 'output_files' in results:
-            click.echo(f"\nOutput files generated:")
+            click.echo("\nOutput files generated:")
             for file_type, file_path in results['output_files'].items():
                 click.echo(f"  {file_type}: {file_path}")
         

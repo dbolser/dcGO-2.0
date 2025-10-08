@@ -12,7 +12,7 @@ License: MIT
 import sqlite3
 import pandas as pd
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Union, Tuple
+from typing import Dict, List, Any, Optional, Union
 from contextlib import contextmanager
 from loguru import logger
 import json

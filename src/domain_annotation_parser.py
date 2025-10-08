@@ -18,7 +18,7 @@ import gzip
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set
 
 from loguru import logger
 
@@ -86,7 +86,7 @@ class DomainAnnotationParser:
         self.protein_domains: Dict[str, List[DomainAnnotation]] = defaultdict(list)
         self.domain_counts: Dict[str, int] = defaultdict(int)
 
-        logger.info(f"DomainAnnotationParser initialized:")
+        logger.info("DomainAnnotationParser initialized:")
         logger.info(f"  Max supra-domain length: {max_supra_domain_length}")
         logger.info(f"  Min domain length: {min_domain_length}")
         if species_filter:
@@ -193,7 +193,7 @@ class DomainAnnotationParser:
                 self.domain_counts[interpro_id] += 1
                 annotation_count += 1
 
-        logger.info(f"Parsing complete:")
+        logger.info("Parsing complete:")
         logger.info(f"  Total proteins: {protein_count:,}")
         logger.info(f"  Total annotations: {annotation_count:,}")
         logger.info(f"  Unique domains: {len(self.domain_counts):,}")

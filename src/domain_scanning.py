@@ -91,7 +91,7 @@ class DomainArchitectureScanner:
         self.work_dir = self.temp_dir / f"dcgo_domain_scan_{int(time.time())}"
         self.work_dir.mkdir(parents=True, exist_ok=True)
         
-        logger.info(f"DomainArchitectureScanner initialized:")
+        logger.info("DomainArchitectureScanner initialized:")
         logger.info(f"  InterProScan: {self.interproscan_path}")
         logger.info(f"  CPU cores: {self.cores}")
         logger.info(f"  Working directory: {self.work_dir}")
@@ -186,7 +186,7 @@ class DomainArchitectureScanner:
                     logger.error(f"Error processing {seq_file}: {e}")
                     continue
         
-        logger.info(f"Sequence preparation complete:")
+        logger.info("Sequence preparation complete:")
         logger.info(f"  Total sequences: {sequence_count}")
         logger.info(f"  Invalid sequences skipped: {invalid_sequences}")
         logger.info(f"  Output file: {output_file}")
@@ -301,7 +301,7 @@ class DomainArchitectureScanner:
             except Exception as e:
                 logger.error(f"InterProScan attempt {attempt + 1} failed: {e}")
                 if attempt < retry_attempts - 1:
-                    logger.info(f"Retrying in 30 seconds...")
+                    logger.info("Retrying in 30 seconds...")
                     time.sleep(30)
                 else:
                     raise

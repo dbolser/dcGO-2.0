@@ -21,10 +21,10 @@ import stat
 import tarfile
 import urllib.parse
 from pathlib import Path
-from typing import Dict, Optional, List, Tuple, Union, Coroutine, Any
+from typing import Dict, Optional, List, Tuple, Any
 from dataclasses import dataclass
 from contextlib import asynccontextmanager, contextmanager
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 import time
 
 import aiohttp

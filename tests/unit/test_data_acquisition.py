@@ -9,7 +9,7 @@ import pytest
 import tempfile
 import gzip
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from urllib.error import URLError
 
 # Add src to path for testing
@@ -17,7 +17,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from data_acquisition import DataAcquisition, DataAcquisitionError
-from config.settings import Config, DataSource
+from config.settings import Config
 
 
 class TestDataAcquisition:

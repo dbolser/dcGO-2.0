@@ -4,7 +4,6 @@ Test configuration module
 Basic tests to ensure configuration is loaded correctly.
 """
 
-import pytest
 from pathlib import Path
 from config.settings import Config
 

@@ -9,8 +9,7 @@ import pytest
 import tempfile
 import networkx as nx
 from pathlib import Path
-from typing import Dict, List, Set
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 # Add src to path for testing
 import sys

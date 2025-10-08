@@ -9,7 +9,6 @@ import pytest
 import tempfile
 import gzip
 from pathlib import Path
-from unittest.mock import patch, Mock
 import pandas as pd
 
 # Add src to path for testing
@@ -18,8 +17,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from config.settings import Config, DataSource
 from data_acquisition import DataAcquisition
-from statistical_inference import StatisticalInferenceEngine, AssociationResult
-from ontology_processor import OntologyProcessor, Annotation
+from statistical_inference import StatisticalInferenceEngine
+from ontology_processor import Annotation
 from database_manager import dcGODatabaseManager
 
 

@@ -33,7 +33,7 @@ def extract_human_proteins(
 
     # Extract matching lines
     logger.info(f"Extracting annotations from {interpro_file}")
-    logger.info(f"  This will take ~10 minutes to scan the 20GB file")
+    logger.info("  This will take ~10 minutes to scan the 20GB file")
 
     matched_lines = 0
     total_lines = 0
@@ -53,7 +53,7 @@ def extract_human_proteins(
                 fout.write(line)
                 matched_lines += 1
 
-    logger.info(f"✓ Extraction complete!")
+    logger.info("✓ Extraction complete!")
     logger.info(f"  Total lines scanned: {total_lines:,}")
     logger.info(f"  Matching lines found: {matched_lines:,}")
     logger.info(f"  Output file: {output_file}")

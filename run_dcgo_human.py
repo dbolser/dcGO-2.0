@@ -96,7 +96,7 @@ def main():
     logger.info("=" * 70)
     logger.info("dcGO PIPELINE - HUMAN PROTEIN ANALYSIS")
     logger.info("=" * 70)
-    logger.info(f"Configuration:")
+    logger.info("Configuration:")
     logger.info(f"  Evidence filter: {args.evidence_filter}")
     logger.info(f"  FDR threshold: {args.fdr_threshold}")
     logger.info(f"  CPU cores: {args.num_cores}")

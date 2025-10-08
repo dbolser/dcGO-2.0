@@ -592,7 +592,7 @@ class StatisticalInferenceEngine:
         # Filter to significant results
         significant_results = [r for r in results if r.q_value < alpha]
         
-        logger.info(f"FDR correction results:")
+        logger.info("FDR correction results:")
         logger.info(f"  Input associations: {len(results)}")
         logger.info(f"  Significant after correction: {len(significant_results)}")
         logger.info(f"  Rejection rate: {100 * len(significant_results) / len(results):.2f}%")
