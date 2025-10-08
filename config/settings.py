@@ -155,17 +155,37 @@ class Config:
             description='Gene Ontology basic ontology file',
             required=True
         ),
+        # Pre-computed domain annotations (preferred approach)
+        'interpro_mappings': DataSource(
+            name='interpro_mappings',
+            url='https://ftp.ebi.ac.uk/pub/databases/interpro/current_release/protein2ipr.dat.gz',
+            description='Pre-computed InterPro domain mappings for UniProt proteins',
+            required=True
+        ),
+        'pfam_regions': DataSource(
+            name='pfam_regions',
+            url='https://ftp.ebi.ac.uk/pub/databases/Pfam/current_release/Pfam-A.regions.tsv.gz',
+            description='Pfam domain region annotations',
+            required=False
+        ),
+        'interpro_definitions': DataSource(
+            name='interpro_definitions',
+            url='https://ftp.ebi.ac.uk/pub/databases/interpro/current_release/interpro.xml.gz',
+            description='InterPro entry definitions and metadata',
+            required=False
+        ),
+        # Optional: Local computation tools
         'pfam_hmms': DataSource(
             name='pfam_hmms',
             url='https://ftp.ebi.ac.uk/pub/databases/Pfam/current_release/Pfam-A.hmm.gz',
-            description='Pfam HMM profiles for domain detection',
+            description='Pfam HMM profiles for local domain detection',
             required=False
         ),
         'interpro_scan': DataSource(
             name='interpro_scan',
             url='https://ftp.ebi.ac.uk/pub/software/unix/iprscan/5/5.67-99.0/interproscan-5.67-99.0-64-bit.tar.gz',
-            description='InterProScan domain analysis software',
-            required=True
+            description='InterProScan software for local domain analysis',
+            required=False
         )
     })
     
