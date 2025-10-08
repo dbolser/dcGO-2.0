@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-dcGO Pipeline - Human Protein Analysis
+dcGO Pipeline - Protein Domain-GO Association Analysis
 
-This script runs the complete dcGO statistical inference pipeline for human proteins.
+This script runs the complete dcGO statistical inference pipeline for any species.
 It performs domain-GO association analysis using sparse matrix operations and parallel
 Fisher's exact tests.
 
@@ -10,11 +10,19 @@ Usage:
     uv run python run_dcgo_human.py [OPTIONS]
 
 Options:
+    --species STR            Species to analyze: 'human', 'mouse', etc. (default: human)
     --evidence-filter STR    Evidence code filter: 'all', 'manual', 'experimental' (default: manual)
     --fdr-threshold FLOAT    FDR significance threshold (default: 0.01)
     --num-cores INT          Number of CPU cores for parallel processing (default: 8)
     --output-dir PATH        Output directory for results (default: results/)
     --batch-size INT         Batch size for Fisher tests (default: 50000)
+
+Examples:
+    # Run for human proteins
+    uv run python run_dcgo_human.py --species human --num-cores 16
+
+    # Run for mouse proteins with experimental evidence only
+    uv run python run_dcgo_human.py --species mouse --evidence-filter experimental
 """
 
 import time
@@ -105,6 +113,11 @@ def main():
         default=50000,
         help="Batch size for Fisher tests (default: 50000)",
     )
+    parser.add_argument(
+        "--species",
+        default="human",
+        help="Species to analyze: 'human', 'mouse', or specific GOA file name (default: human)",
+    )
 
     args = parser.parse_args()
 
@@ -112,22 +125,28 @@ def main():
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info("=" * 70)
-    logger.info("dcGO PIPELINE - HUMAN PROTEIN ANALYSIS")
+    logger.info(f"dcGO PIPELINE - {args.species.upper()} PROTEIN ANALYSIS")
     logger.info("=" * 70)
     logger.info("Configuration:")
+    logger.info(f"  Species: {args.species}")
     logger.info(f"  Evidence filter: {args.evidence_filter}")
     logger.info(f"  FDR threshold: {args.fdr_threshold}")
     logger.info(f"  CPU cores: {args.num_cores}")
     logger.info(f"  Output directory: {args.output_dir}")
 
-    # File paths
-    goa_file = Path("data/raw/goa_annotations/goa_human.gaf.gz")
-    interpro_file = Path("data/interim/protein2ipr_human.dat.gz")
+    # File paths - support different species
+    goa_file = Path(f"data/raw/goa_annotations/goa_{args.species}.gaf.gz")
+    interpro_file = Path(f"data/interim/protein2ipr_{args.species}.dat.gz")
 
     # Check files exist
     if not interpro_file.exists():
-        logger.error(f"Human InterPro file not found: {interpro_file}")
-        logger.error("Please run: uv run python extract_human_interpro.py")
+        logger.error(f"{args.species.title()} InterPro file not found: {interpro_file}")
+        logger.error(f"Please extract {args.species} data from protein2ipr.dat.gz")
+        return 1
+
+    if not goa_file.exists():
+        logger.error(f"{args.species.title()} GOA file not found: {goa_file}")
+        logger.error(f"Please download GOA file for {args.species}")
         return 1
 
     # Load data
