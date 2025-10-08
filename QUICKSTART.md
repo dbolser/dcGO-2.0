@@ -50,7 +50,7 @@ This creates:
 Run the complete statistical inference pipeline:
 
 ```bash
-uv run python test_sparse_fisher.py
+uv run python run_dcgo_human.py --num-cores 8
 ```
 
 This performs:
@@ -58,11 +58,12 @@ This performs:
 2. Parse InterPro domains (<1s) - 18,783 proteins, 232K annotations
 3. Build sparse matrices (<1s) - Efficient protein×domain and protein×GO matrices
 4. Compute contingency tables (~5 min) - All 303M domain-GO combinations
-5. Run Fisher's exact tests (~20 min) - Parallel processing at 30K+ tests/second
-6. Apply FDR correction (<1s) - Benjamini-Hochberg with α=0.01
+5. Run Fisher's exact tests (~40 min) - Parallel processing at 100K-120K tests/second
+6. Apply FDR correction (~4 min) - Benjamini-Hochberg with α=0.01
+7. Calculate hypergeometric scores - Association strength (1-100 scale)
 
-**Total time**: ~25 minutes
-**Output**: Significant domain-GO associations with FDR < 0.01
+**Total time**: ~50 minutes
+**Output**: 42,220 significant domain-GO associations with FDR < 0.01
 
 ## Configuration Options
 
@@ -99,15 +100,22 @@ After running the pipeline:
 
 ```
 results/
-├── domain_go_associations.tsv       # Significant associations
-├── domain_go_associations_all.tsv   # All tested associations
-├── statistics_summary.json          # Performance metrics
-└── dcgo_database.db                 # SQLite database (if using full pipeline)
+├── domain_go_associations_significant.tsv  # Significant associations (FDR < 0.01)
+├── domain_go_associations_top100.tsv       # Top 100 most significant
+└── dcgo_database.db                        # SQLite database (if using full pipeline)
 
 data/interim/
 ├── protein2ipr_human.dat.gz         # Human domain annotations
 └── human_proteins.txt               # Human protein IDs
 ```
+
+**TSV file columns:**
+- `domain`: InterPro domain ID (e.g., IPR000001)
+- `go_term`: Gene Ontology term ID (e.g., GO:0003674)
+- `p_value`: Fisher's exact test p-value
+- `adj_p_value`: FDR-corrected q-value (Benjamini-Hochberg)
+- `odds_ratio`: Enrichment odds ratio
+- `hyper_score`: Hypergeometric association score (1-100 scale)
 
 ## Advanced Usage
 
@@ -115,22 +123,16 @@ data/interim/
 
 ```bash
 # Use experimental evidence only
-uv run python test_sparse_fisher.py --evidence-filter experimental
+uv run python run_dcgo_human.py --evidence-filter experimental
 
 # Adjust FDR threshold
-uv run python test_sparse_fisher.py --fdr-threshold 0.05
+uv run python run_dcgo_human.py --fdr-threshold 0.05
 
 # Use more/fewer CPU cores
-uv run python test_sparse_fisher.py --num-cores 16
-```
+uv run python run_dcgo_human.py --num-cores 16
 
-### Testing with Subsets
-
-To test with a smaller dataset (faster):
-
-```bash
-# Test with top 100 domains and GO terms only
-uv run python test_vectorized_fisher.py
+# Specify output directory
+uv run python run_dcgo_human.py --output-dir my_results/
 ```
 
 ## Performance Notes
@@ -139,7 +141,9 @@ uv run python test_vectorized_fisher.py
 - 18,705 unique domains
 - 16,241 unique GO terms
 - 303,787,905 total tests
-- ~25 minutes total time on 8 cores
+- ~50 minutes total time on 8 cores
+- Processing rate: 100,000-120,000 tests/second
+- 42,220 significant associations (FDR < 0.01)
 
 **Memory usage**:
 - Peak: ~15 GB (during Fisher tests)
@@ -159,8 +163,8 @@ uv run python test_vectorized_fisher.py
 
 ### Slow Performance
 - Ensure `data/interim/protein2ipr_human.dat.gz` exists (don't parse full 20GB file)
-- Use `evidence_filter='manual'` (excludes ~30% low-quality annotations)
-- Increase `num_cores` for parallel processing
+- Use `--evidence-filter manual` (excludes ~30% low-quality annotations)
+- Increase `--num-cores` for parallel processing
 
 ### Missing Files
 ```bash

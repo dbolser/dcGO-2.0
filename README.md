@@ -20,7 +20,7 @@ The dcGO pipeline implements the domain-centric Gene Ontology methodology, which
 
 ## ⚡ **Quick Start**
 
-### For Human Proteins (RECOMMENDED - 25 minutes)
+### For Human Proteins (RECOMMENDED - 50 minutes)
 
 See **[QUICKSTART.md](QUICKSTART.md)** for the complete human-only workflow:
 
@@ -34,11 +34,16 @@ uv run python -m src.data_acquisition --datasets goa_annotations --datasets go_o
 # 3. Extract human proteins (one-time, ~10 min)
 uv run python extract_human_interpro.py
 
-# 4. Run statistical inference (~25 min for 303M tests)
-uv run python test_sparse_fisher.py
+# 4. Run statistical inference (~50 min for 303M tests)
+uv run python run_dcgo_human.py --num-cores 8
 ```
 
-**Output**: Significant domain-GO associations with FDR < 0.01
+**Output**: 42,220 significant domain-GO associations (FDR < 0.01) with hypergeometric scores
+
+**Performance** (8 cores):
+- 303,787,905 Fisher's exact tests completed
+- Processing rate: ~100,000-120,000 tests/second
+- Results include p-values, FDR-corrected q-values, odds ratios, and hypergeometric association scores (1-100)
 
 ### For Full Pipeline (All Organisms - Days on HPC)
 
