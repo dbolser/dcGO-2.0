@@ -12,10 +12,9 @@ import sys
 logger.remove()
 logger.add(sys.stderr, level="INFO")
 
+
 def extract_human_proteins(
-    protein_set_file: Path,
-    interpro_file: Path,
-    output_file: Path
+    protein_set_file: Path, interpro_file: Path, output_file: Path
 ):
     """
     Extract lines from protein2ipr.dat for specific proteins.
@@ -38,16 +37,17 @@ def extract_human_proteins(
     matched_lines = 0
     total_lines = 0
 
-    with gzip.open(interpro_file, 'rt') as fin, \
-         gzip.open(output_file, 'wt') as fout:
+    with gzip.open(interpro_file, "rt") as fin, gzip.open(output_file, "wt") as fout:
         for line in fin:
             total_lines += 1
 
             if total_lines % 10000000 == 0:
-                logger.info(f"  Processed {total_lines:,} lines, found {matched_lines:,} matches")
+                logger.info(
+                    f"  Processed {total_lines:,} lines, found {matched_lines:,} matches"
+                )
 
             # Quick check: does the line start with any of our protein IDs?
-            protein_id = line.split('\t')[0] if '\t' in line else ''
+            protein_id = line.split("\t")[0] if "\t" in line else ""
 
             if protein_id in protein_ids:
                 fout.write(line)
@@ -59,6 +59,7 @@ def extract_human_proteins(
     logger.info(f"  Output file: {output_file}")
     logger.info(f"  Output size: {output_file.stat().st_size / 1e6:.1f} MB")
 
+
 def main():
     # Parse GOA to get human protein IDs
     from src.goa_parser import parse_goa_human
@@ -66,9 +67,7 @@ def main():
     logger.info("Step 1: Parsing GOA to get human protein IDs...")
     goa_file = Path("data/raw/goa_annotations/goa_human.gaf.gz")
     protein_go_map = parse_goa_human(
-        goa_file,
-        evidence_filter='manual',
-        aspects={'P', 'F', 'C'}
+        goa_file, evidence_filter="manual", aspects={"P", "F", "C"}
     )
 
     # Write protein IDs to temp file
@@ -76,7 +75,7 @@ def main():
     protein_list_file.parent.mkdir(parents=True, exist_ok=True)
 
     logger.info(f"Writing {len(protein_go_map):,} protein IDs to {protein_list_file}")
-    with open(protein_list_file, 'w') as f:
+    with open(protein_list_file, "w") as f:
         for protein_id in sorted(protein_go_map.keys()):
             f.write(f"{protein_id}\n")
 
@@ -93,7 +92,10 @@ def main():
     logger.info("SUCCESS! Human-specific InterPro file created")
     logger.info("=" * 60)
     logger.info(f"You can now use: {output_file}")
-    logger.info(f"This file contains only the {len(protein_go_map):,} human proteins from GOA")
+    logger.info(
+        f"This file contains only the {len(protein_go_map):,} human proteins from GOA"
+    )
+
 
 if __name__ == "__main__":
     sys.exit(main() or 0)

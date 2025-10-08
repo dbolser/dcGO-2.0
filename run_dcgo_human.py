@@ -48,9 +48,9 @@ def calculate_hypergeometric_score(a: int, b: int, c: int, d: int) -> float:
         float: Association score between 1.0 and 100.0
     """
     n = a + b + c + d  # total proteins
-    k = a + c          # proteins with domain
-    m = a + b          # proteins with GO term
-    x = a              # proteins with both
+    k = a + c  # proteins with domain
+    m = a + b  # proteins with GO term
+    x = a  # proteins with both
 
     if k == 0 or m == 0 or x == 0:
         return 0.0
@@ -75,18 +75,36 @@ def calculate_hypergeometric_score(a: int, b: int, c: int, d: int) -> float:
 
 
 def main():
-    parser = argparse.ArgumentParser(description='dcGO Pipeline - Human Protein Analysis')
-    parser.add_argument('--evidence-filter', default='manual',
-                       choices=['all', 'manual', 'experimental'],
-                       help='GO annotation evidence filter (default: manual)')
-    parser.add_argument('--fdr-threshold', type=float, default=0.01,
-                       help='FDR significance threshold (default: 0.01)')
-    parser.add_argument('--num-cores', type=int, default=8,
-                       help='Number of CPU cores (default: 8)')
-    parser.add_argument('--output-dir', type=Path, default=Path('results'),
-                       help='Output directory (default: results/)')
-    parser.add_argument('--batch-size', type=int, default=50000,
-                       help='Batch size for Fisher tests (default: 50000)')
+    parser = argparse.ArgumentParser(
+        description="dcGO Pipeline - Human Protein Analysis"
+    )
+    parser.add_argument(
+        "--evidence-filter",
+        default="manual",
+        choices=["all", "manual", "experimental"],
+        help="GO annotation evidence filter (default: manual)",
+    )
+    parser.add_argument(
+        "--fdr-threshold",
+        type=float,
+        default=0.01,
+        help="FDR significance threshold (default: 0.01)",
+    )
+    parser.add_argument(
+        "--num-cores", type=int, default=8, help="Number of CPU cores (default: 8)"
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("results"),
+        help="Output directory (default: results/)",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=50000,
+        help="Batch size for Fisher tests (default: 50000)",
+    )
 
     args = parser.parse_args()
 
@@ -118,7 +136,9 @@ def main():
     logger.info("─" * 70)
 
     logger.info("Parsing GO annotations...")
-    protein_go_map = parse_goa_human(goa_file, evidence_filter=args.evidence_filter, aspects={'P', 'F', 'C'})
+    protein_go_map = parse_goa_human(
+        goa_file, evidence_filter=args.evidence_filter, aspects={"P", "F", "C"}
+    )
 
     logger.info("Parsing domain annotations...")
     parser_obj = DomainAnnotationParser(max_supra_domain_length=3, min_domain_length=10)
@@ -145,7 +165,9 @@ def main():
     domain_list = sorted(all_domains)
     go_list = sorted(all_go_terms)
 
-    logger.info(f"✓ Dataset prepared: {len(proteins_with_both):,} proteins, {len(domain_list):,} domains, {len(go_list):,} GO terms")
+    logger.info(
+        f"✓ Dataset prepared: {len(proteins_with_both):,} proteins, {len(domain_list):,} domains, {len(go_list):,} GO terms"
+    )
     logger.info(f"  Total tests: {len(domain_list) * len(go_list):,}")
 
     # Build sparse matrices
@@ -155,10 +177,7 @@ def main():
     start_time = time.time()
 
     protein_domain_matrix, protein_go_matrix = build_sparse_matrices(
-        protein_domain_map,
-        protein_go_map,
-        domain_list,
-        go_list
+        protein_domain_map, protein_go_map, domain_list, go_list
     )
 
     matrix_time = time.time() - start_time
@@ -173,7 +192,9 @@ def main():
     tables = compute_contingency_tables_sparse(protein_domain_matrix, protein_go_matrix)
 
     table_time = time.time() - start_time
-    logger.info(f"✓ Contingency tables computed in {table_time:.2f}s ({table_time / 60:.1f} min)")
+    logger.info(
+        f"✓ Contingency tables computed in {table_time:.2f}s ({table_time / 60:.1f} min)"
+    )
 
     # Run Fisher's exact tests
     logger.info("")
@@ -188,18 +209,22 @@ def main():
         elapsed = time.time() - start_time
         rate = completed / elapsed if elapsed > 0 else 0
         eta = (total - completed) / rate if rate > 0 else 0
-        logger.info(f"  Progress: {completed:,} / {total:,} ({progress_pct:.1f}%) | {rate:,.0f} tests/s | ETA: {eta/60:.1f} min")
+        logger.info(
+            f"  Progress: {completed:,} / {total:,} ({progress_pct:.1f}%) | {rate:,.0f} tests/s | ETA: {eta / 60:.1f} min"
+        )
 
     odds_ratios, pvalues = fisher_exact_parallel(
         tables,
-        alternative='greater',
+        alternative="greater",
         n_jobs=args.num_cores,
         batch_size=args.batch_size,
-        progress_callback=progress_callback
+        progress_callback=progress_callback,
     )
 
     test_time = time.time() - start_time
-    logger.info(f"✓ Fisher tests completed in {test_time:.2f}s ({test_time / 60:.1f} min)")
+    logger.info(
+        f"✓ Fisher tests completed in {test_time:.2f}s ({test_time / 60:.1f} min)"
+    )
     logger.info(f"  Rate: {len(pvalues) / test_time:,.0f} tests/second")
 
     # Apply FDR correction
@@ -208,7 +233,9 @@ def main():
     logger.info("─" * 70)
     start_time = time.time()
 
-    adjusted_pvalues, threshold = benjamini_hochberg_correction(pvalues, alpha=args.fdr_threshold)
+    adjusted_pvalues, threshold = benjamini_hochberg_correction(
+        pvalues, alpha=args.fdr_threshold
+    )
 
     fdr_time = time.time() - start_time
     logger.info(f"✓ FDR correction completed in {fdr_time:.2f}s")
@@ -229,7 +256,7 @@ def main():
 
     # Export significant associations with hypergeometric scores
     output_file = args.output_dir / "domain_go_associations_significant.tsv"
-    with open(output_file, 'w') as f:
+    with open(output_file, "w") as f:
         f.write("domain\tgo_term\tp_value\tadj_p_value\todds_ratio\thyper_score\n")
         for idx in significant_indices:
             domain_idx = idx // len(go_list)
@@ -241,8 +268,10 @@ def main():
             c, d = int(table[1, 0]), int(table[1, 1])
             hyper_score = calculate_hypergeometric_score(a, b, c, d)
 
-            f.write(f"{domain_list[domain_idx]}\t{go_list[go_idx]}\t"
-                   f"{pvalues[idx]:.6e}\t{adjusted_pvalues[idx]:.6e}\t{odds_ratios[idx]:.4f}\t{hyper_score:.2f}\n")
+            f.write(
+                f"{domain_list[domain_idx]}\t{go_list[go_idx]}\t"
+                f"{pvalues[idx]:.6e}\t{adjusted_pvalues[idx]:.6e}\t{odds_ratios[idx]:.4f}\t{hyper_score:.2f}\n"
+            )
 
     logger.info(f"✓ Exported significant associations to: {output_file}")
     logger.info(f"  {n_significant:,} associations (FDR < {args.fdr_threshold})")
@@ -250,8 +279,10 @@ def main():
     # Export top associations with hypergeometric scores
     top_file = args.output_dir / "domain_go_associations_top100.tsv"
     top_indices = np.argsort(pvalues)[:100]
-    with open(top_file, 'w') as f:
-        f.write("rank\tdomain\tgo_term\tp_value\tadj_p_value\todds_ratio\thyper_score\n")
+    with open(top_file, "w") as f:
+        f.write(
+            "rank\tdomain\tgo_term\tp_value\tadj_p_value\todds_ratio\thyper_score\n"
+        )
         for rank, idx in enumerate(top_indices, 1):
             domain_idx = idx // len(go_list)
             go_idx = idx % len(go_list)
@@ -262,8 +293,10 @@ def main():
             c, d = int(table[1, 0]), int(table[1, 1])
             hyper_score = calculate_hypergeometric_score(a, b, c, d)
 
-            f.write(f"{rank}\t{domain_list[domain_idx]}\t{go_list[go_idx]}\t"
-                   f"{pvalues[idx]:.6e}\t{adjusted_pvalues[idx]:.6e}\t{odds_ratios[idx]:.4f}\t{hyper_score:.2f}\n")
+            f.write(
+                f"{rank}\t{domain_list[domain_idx]}\t{go_list[go_idx]}\t"
+                f"{pvalues[idx]:.6e}\t{adjusted_pvalues[idx]:.6e}\t{odds_ratios[idx]:.4f}\t{hyper_score:.2f}\n"
+            )
 
     logger.info(f"✓ Exported top 100 associations to: {top_file}")
 
@@ -276,7 +309,9 @@ def main():
     logger.info("=" * 70)
     logger.info("Results Summary:")
     logger.info(f"  Total domain-GO tests: {len(pvalues):,}")
-    logger.info(f"  Significant associations (FDR < {args.fdr_threshold}): {n_significant:,} ({n_significant / len(pvalues) * 100:.2f}%)")
+    logger.info(
+        f"  Significant associations (FDR < {args.fdr_threshold}): {n_significant:,} ({n_significant / len(pvalues) * 100:.2f}%)"
+    )
     logger.info(f"  Total runtime: {total_time:.1f}s ({total_time / 60:.1f} minutes)")
     logger.info("")
     logger.info("Output files:")

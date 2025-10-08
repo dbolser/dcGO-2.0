@@ -15,7 +15,7 @@ def build_sparse_matrices(
     protein_domains: Dict[str, Set[str]],
     protein_go: Dict[str, Set[str]],
     domain_list: List[str],
-    go_list: List[str]
+    go_list: List[str],
 ) -> Tuple[sparse.csr_matrix, sparse.csr_matrix]:
     """
     Build sparse binary matrices for protein-domain and protein-GO relationships.
@@ -40,8 +40,12 @@ def build_sparse_matrices(
     n_domains = len(domain_list)
     n_go_terms = len(go_list)
 
-    logger.info(f"Building sparse matrices: {n_proteins:,} proteins × {n_domains:,} domains")
-    logger.info(f"                         {n_proteins:,} proteins × {n_go_terms:,} GO terms")
+    logger.info(
+        f"Building sparse matrices: {n_proteins:,} proteins × {n_domains:,} domains"
+    )
+    logger.info(
+        f"                         {n_proteins:,} proteins × {n_go_terms:,} GO terms"
+    )
 
     # Build protein-domain matrix
     rows_d, cols_d = [], []
@@ -57,7 +61,7 @@ def build_sparse_matrices(
     protein_domain_matrix = sparse.csr_matrix(
         (np.ones(len(rows_d), dtype=np.int8), (rows_d, cols_d)),
         shape=(n_proteins, n_domains),
-        dtype=np.int8
+        dtype=np.int8,
     )
 
     # Build protein-GO matrix
@@ -74,18 +78,19 @@ def build_sparse_matrices(
     protein_go_matrix = sparse.csr_matrix(
         (np.ones(len(rows_g), dtype=np.int8), (rows_g, cols_g)),
         shape=(n_proteins, n_go_terms),
-        dtype=np.int8
+        dtype=np.int8,
     )
 
-    logger.info(f"Protein-domain matrix: {protein_domain_matrix.nnz:,} non-zero entries")
+    logger.info(
+        f"Protein-domain matrix: {protein_domain_matrix.nnz:,} non-zero entries"
+    )
     logger.info(f"Protein-GO matrix: {protein_go_matrix.nnz:,} non-zero entries")
 
     return protein_domain_matrix, protein_go_matrix
 
 
 def compute_contingency_tables_sparse(
-    protein_domain_matrix: sparse.csr_matrix,
-    protein_go_matrix: sparse.csr_matrix
+    protein_domain_matrix: sparse.csr_matrix, protein_go_matrix: sparse.csr_matrix
 ) -> np.ndarray:
     """
     Compute all 2x2 contingency tables using sparse matrix operations.
@@ -112,18 +117,26 @@ def compute_contingency_tables_sparse(
     n_domains = protein_domain_matrix.shape[1]
     n_go_terms = protein_go_matrix.shape[1]
 
-    logger.info(f"Computing contingency tables for {n_domains:,} × {n_go_terms:,} = {n_domains * n_go_terms:,} pairs")
+    logger.info(
+        f"Computing contingency tables for {n_domains:,} × {n_go_terms:,} = {n_domains * n_go_terms:,} pairs"
+    )
 
     # Compute a: proteins with both (domain AND GO)
     # This is the dot product of transposed matrices
     logger.info("  Computing overlap counts (a)...")
-    a_matrix = protein_domain_matrix.T @ protein_go_matrix  # Shape: (n_domains, n_go_terms)
+    a_matrix = (
+        protein_domain_matrix.T @ protein_go_matrix
+    )  # Shape: (n_domains, n_go_terms)
     a_matrix = a_matrix.toarray().astype(np.int32)  # Convert to dense for faster access
 
     # Compute marginal counts
     logger.info("  Computing marginal counts...")
-    domain_counts = np.array(protein_domain_matrix.sum(axis=0)).flatten().astype(np.int32)  # Proteins per domain
-    go_counts = np.array(protein_go_matrix.sum(axis=0)).flatten().astype(np.int32)  # Proteins per GO term
+    domain_counts = (
+        np.array(protein_domain_matrix.sum(axis=0)).flatten().astype(np.int32)
+    )  # Proteins per domain
+    go_counts = (
+        np.array(protein_go_matrix.sum(axis=0)).flatten().astype(np.int32)
+    )  # Proteins per GO term
 
     # Build all contingency tables
     logger.info("  Building contingency table array...")

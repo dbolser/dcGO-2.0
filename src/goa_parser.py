@@ -24,16 +24,37 @@ from loguru import logger
 
 
 # Standard evidence code sets for filtering
-EXPERIMENTAL_EVIDENCE = {'EXP', 'IDA', 'IPI', 'IMP', 'IGI', 'IEP'}
-COMPUTATIONAL_EVIDENCE = {'ISS', 'ISO', 'ISA', 'ISM', 'IGC', 'IBA', 'IBD', 'IKR', 'IRD', 'RCA'}
-AUTHOR_EVIDENCE = {'TAS', 'NAS'}
-CURATOR_EVIDENCE = {'IC', 'ND'}
-ELECTRONIC_EVIDENCE = {'IEA'}
+EXPERIMENTAL_EVIDENCE = {"EXP", "IDA", "IPI", "IMP", "IGI", "IEP"}
+COMPUTATIONAL_EVIDENCE = {
+    "ISS",
+    "ISO",
+    "ISA",
+    "ISM",
+    "IGC",
+    "IBA",
+    "IBD",
+    "IKR",
+    "IRD",
+    "RCA",
+}
+AUTHOR_EVIDENCE = {"TAS", "NAS"}
+CURATOR_EVIDENCE = {"IC", "ND"}
+ELECTRONIC_EVIDENCE = {"IEA"}
 
 # Common evidence code presets
-MANUAL_EVIDENCE = EXPERIMENTAL_EVIDENCE | COMPUTATIONAL_EVIDENCE | AUTHOR_EVIDENCE | CURATOR_EVIDENCE
-NON_IEA_EVIDENCE = EXPERIMENTAL_EVIDENCE | COMPUTATIONAL_EVIDENCE | AUTHOR_EVIDENCE | CURATOR_EVIDENCE
-ALL_EVIDENCE = EXPERIMENTAL_EVIDENCE | COMPUTATIONAL_EVIDENCE | AUTHOR_EVIDENCE | CURATOR_EVIDENCE | ELECTRONIC_EVIDENCE
+MANUAL_EVIDENCE = (
+    EXPERIMENTAL_EVIDENCE | COMPUTATIONAL_EVIDENCE | AUTHOR_EVIDENCE | CURATOR_EVIDENCE
+)
+NON_IEA_EVIDENCE = (
+    EXPERIMENTAL_EVIDENCE | COMPUTATIONAL_EVIDENCE | AUTHOR_EVIDENCE | CURATOR_EVIDENCE
+)
+ALL_EVIDENCE = (
+    EXPERIMENTAL_EVIDENCE
+    | COMPUTATIONAL_EVIDENCE
+    | AUTHOR_EVIDENCE
+    | CURATOR_EVIDENCE
+    | ELECTRONIC_EVIDENCE
+)
 
 
 @dataclass
@@ -43,13 +64,15 @@ class GOAAnnotation:
     protein_id: str
     go_term: str
     evidence_code: str
-    aspect: str  # P (biological process), F (molecular function), C (cellular component)
+    aspect: (
+        str  # P (biological process), F (molecular function), C (cellular component)
+    )
     db_reference: str
     taxon_id: str
 
     def __post_init__(self):
         """Validate GO term format."""
-        if not self.go_term.startswith('GO:'):
+        if not self.go_term.startswith("GO:"):
             raise ValueError(f"Invalid GO term format: {self.go_term}")
 
 
@@ -65,7 +88,7 @@ class GOAParser:
         self,
         evidence_codes: Optional[Set[str]] = None,
         aspects: Optional[Set[str]] = None,
-        exclude_qualifiers: bool = True
+        exclude_qualifiers: bool = True,
     ):
         """
         Initialize GOA parser with filtering options.
@@ -80,7 +103,7 @@ class GOAParser:
             exclude_qualifiers: Exclude annotations with qualifiers like 'NOT'
         """
         self.evidence_codes = evidence_codes
-        self.aspects = aspects or {'P', 'F', 'C'}
+        self.aspects = aspects or {"P", "F", "C"}
         self.exclude_qualifiers = exclude_qualifiers
 
         self.annotations: List[GOAAnnotation] = []
@@ -111,22 +134,22 @@ class GOAParser:
             raise FileNotFoundError(f"GAF file not found: {gaf_path}")
 
         # Determine if file is gzipped
-        open_func = gzip.open if gaf_path.suffix == '.gz' else open
+        open_func = gzip.open if gaf_path.suffix == ".gz" else open
 
         line_count = 0
-        with open_func(gaf_path, 'rt') as f:
+        with open_func(gaf_path, "rt") as f:
             for line in f:
                 line_count += 1
 
                 # Skip comments and header lines
-                if line.startswith('!'):
+                if line.startswith("!"):
                     continue
 
                 # Parse GAF 2.2 format
                 try:
-                    fields = line.strip().split('\t')
+                    fields = line.strip().split("\t")
                     if len(fields) < 15:
-                        self.statistics['malformed_lines'] += 1
+                        self.statistics["malformed_lines"] += 1
                         continue
 
                     # Extract relevant fields (GAF 2.2 format)
@@ -145,18 +168,18 @@ class GOAParser:
                     # Apply filters
                     # 1. Exclude qualifiers like 'NOT' if requested
                     if self.exclude_qualifiers and qualifier:
-                        if 'NOT' in qualifier.upper():
-                            self.statistics['excluded_qualifiers'] += 1
+                        if "NOT" in qualifier.upper():
+                            self.statistics["excluded_qualifiers"] += 1
                             continue
 
                     # 2. Filter by evidence code
                     if self.evidence_codes and evidence_code not in self.evidence_codes:
-                        self.statistics['filtered_evidence'] += 1
+                        self.statistics["filtered_evidence"] += 1
                         continue
 
                     # 3. Filter by aspect
                     if aspect not in self.aspects:
-                        self.statistics['filtered_aspect'] += 1
+                        self.statistics["filtered_aspect"] += 1
                         continue
 
                     # Create annotation
@@ -166,34 +189,42 @@ class GOAParser:
                         evidence_code=evidence_code,
                         aspect=aspect,
                         db_reference=db_reference,
-                        taxon_id=taxon
+                        taxon_id=taxon,
                     )
 
                     self.annotations.append(annotation)
                     self.protein_go_map[protein_id].add(go_id)
-                    self.statistics['accepted_annotations'] += 1
-                    self.statistics[f'evidence_{evidence_code}'] += 1
-                    self.statistics[f'aspect_{aspect}'] += 1
+                    self.statistics["accepted_annotations"] += 1
+                    self.statistics[f"evidence_{evidence_code}"] += 1
+                    self.statistics[f"aspect_{aspect}"] += 1
 
                 except (IndexError, ValueError) as e:
-                    self.statistics['parse_errors'] += 1
+                    self.statistics["parse_errors"] += 1
                     logger.debug(f"Error parsing line {line_count}: {e}")
                     continue
 
         # Log statistics
         logger.info("GAF parsing complete:")
         logger.info(f"  Total lines: {line_count:,}")
-        logger.info(f"  Accepted annotations: {self.statistics['accepted_annotations']:,}")
+        logger.info(
+            f"  Accepted annotations: {self.statistics['accepted_annotations']:,}"
+        )
         logger.info(f"  Unique proteins: {len(self.protein_go_map):,}")
         logger.info(f"  Filtered by evidence: {self.statistics['filtered_evidence']:,}")
         logger.info(f"  Filtered by aspect: {self.statistics['filtered_aspect']:,}")
-        logger.info(f"  Excluded qualifiers: {self.statistics['excluded_qualifiers']:,}")
+        logger.info(
+            f"  Excluded qualifiers: {self.statistics['excluded_qualifiers']:,}"
+        )
 
         # Show evidence code distribution
-        evidence_stats = {k: v for k, v in self.statistics.items() if k.startswith('evidence_')}
+        evidence_stats = {
+            k: v for k, v in self.statistics.items() if k.startswith("evidence_")
+        }
         if evidence_stats:
             logger.info("  Evidence code distribution:")
-            for code, count in sorted(evidence_stats.items(), key=lambda x: x[1], reverse=True)[:10]:
+            for code, count in sorted(
+                evidence_stats.items(), key=lambda x: x[1], reverse=True
+            )[:10]:
                 logger.info(f"    {code.replace('evidence_', '')}: {count:,}")
 
         return dict(self.protein_go_map)
@@ -208,9 +239,7 @@ class GOAParser:
 
 
 def parse_goa_human(
-    gaf_path: Path,
-    evidence_filter: str = 'manual',
-    aspects: Optional[Set[str]] = None
+    gaf_path: Path, evidence_filter: str = "manual", aspects: Optional[Set[str]] = None
 ) -> Dict[str, Set[str]]:
     """
     Convenience function to parse human GOA file with common presets.
@@ -228,14 +257,13 @@ def parse_goa_human(
     """
     # Select evidence codes based on preset
     evidence_codes = {
-        'all': None,  # No filtering
-        'manual': NON_IEA_EVIDENCE,
-        'experimental': EXPERIMENTAL_EVIDENCE
+        "all": None,  # No filtering
+        "manual": NON_IEA_EVIDENCE,
+        "experimental": EXPERIMENTAL_EVIDENCE,
     }.get(evidence_filter, NON_IEA_EVIDENCE)
 
     parser = GOAParser(
-        evidence_codes=evidence_codes,
-        aspects=aspects or {'P', 'F', 'C'}
+        evidence_codes=evidence_codes, aspects=aspects or {"P", "F", "C"}
     )
 
     return parser.parse_gaf_file(gaf_path)

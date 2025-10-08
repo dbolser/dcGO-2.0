@@ -13,8 +13,7 @@ import multiprocessing as mp
 
 
 def fisher_exact_vectorized_batch(
-    contingency_tables: np.ndarray,
-    alternative: str = 'greater'
+    contingency_tables: np.ndarray, alternative: str = "greater"
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Compute Fisher's exact test for a batch of 2x2 contingency tables.
@@ -53,10 +52,10 @@ def _fisher_batch_wrapper(args):
 
 def fisher_exact_parallel(
     contingency_tables: np.ndarray,
-    alternative: str = 'greater',
+    alternative: str = "greater",
     n_jobs: int = -1,
     batch_size: int = 10000,
-    progress_callback=None
+    progress_callback=None,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Compute Fisher's exact test in parallel for large arrays of contingency tables.
@@ -105,10 +104,7 @@ def fisher_exact_parallel(
 
 
 def build_contingency_table(
-    n_domain_and_go: int,
-    n_domain_not_go: int,
-    n_go_not_domain: int,
-    n_neither: int
+    n_domain_and_go: int, n_domain_not_go: int, n_go_not_domain: int, n_neither: int
 ) -> np.ndarray:
     """
     Build a 2x2 contingency table from counts.
@@ -127,17 +123,14 @@ def build_contingency_table(
     Returns:
         2x2 numpy array
     """
-    return np.array([
-        [n_domain_and_go, n_domain_not_go],
-        [n_go_not_domain, n_neither]
-    ], dtype=np.int32)
+    return np.array(
+        [[n_domain_and_go, n_domain_not_go], [n_go_not_domain, n_neither]],
+        dtype=np.int32,
+    )
 
 
 def build_contingency_tables_vectorized(
-    domains: np.ndarray,
-    go_terms: np.ndarray,
-    protein_domains: dict,
-    protein_go: dict
+    domains: np.ndarray, go_terms: np.ndarray, protein_domains: dict, protein_go: dict
 ) -> np.ndarray:
     """
     Build contingency tables for all domain-GO combinations.
@@ -166,7 +159,9 @@ def build_contingency_tables_vectorized(
     idx = 0
     for domain in domains:
         # Get proteins with this domain
-        proteins_with_domain = {p for p, doms in protein_domains.items() if domain in doms}
+        proteins_with_domain = {
+            p for p, doms in protein_domains.items() if domain in doms
+        }
         n_with_domain = len(proteins_with_domain)
         n_without_domain = n_total_proteins - n_with_domain
 
@@ -179,7 +174,9 @@ def build_contingency_tables_vectorized(
             n_domain_and_go = len(proteins_with_domain & proteins_with_go)
             n_domain_not_go = n_with_domain - n_domain_and_go
             n_go_not_domain = n_with_go - n_domain_and_go
-            n_neither = n_total_proteins - n_domain_and_go - n_domain_not_go - n_go_not_domain
+            n_neither = (
+                n_total_proteins - n_domain_and_go - n_domain_not_go - n_go_not_domain
+            )
 
             tables[idx] = build_contingency_table(
                 n_domain_and_go, n_domain_not_go, n_go_not_domain, n_neither
@@ -189,7 +186,9 @@ def build_contingency_tables_vectorized(
     return tables
 
 
-def benjamini_hochberg_correction(pvalues: np.ndarray, alpha: float = 0.05) -> Tuple[np.ndarray, float]:
+def benjamini_hochberg_correction(
+    pvalues: np.ndarray, alpha: float = 0.05
+) -> Tuple[np.ndarray, float]:
     """
     Apply Benjamini-Hochberg FDR correction to p-values.
 
@@ -217,8 +216,7 @@ def benjamini_hochberg_correction(pvalues: np.ndarray, alpha: float = 0.05) -> T
         # Ensure monotonicity
         if i < n - 1:
             adjusted[sorted_indices[i]] = min(
-                adjusted[sorted_indices[i]],
-                adjusted[sorted_indices[i + 1]]
+                adjusted[sorted_indices[i]], adjusted[sorted_indices[i + 1]]
             )
 
     # Find threshold: largest p-value where adjusted p-value <= alpha

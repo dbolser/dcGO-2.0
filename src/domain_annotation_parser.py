@@ -46,7 +46,7 @@ class ProteinDomainArchitecture:
 
     protein_id: str
     single_domains: List[str]  # Individual domain IDs
-    supra_domains: List[str]   # Contiguous domain combinations
+    supra_domains: List[str]  # Contiguous domain combinations
     domain_annotations: List[DomainAnnotation]
 
     @property
@@ -67,7 +67,7 @@ class DomainAnnotationParser:
         self,
         max_supra_domain_length: int = 3,
         min_domain_length: int = 10,
-        species_filter: Optional[Set[str]] = None
+        species_filter: Optional[Set[str]] = None,
     ):
         """
         Initialize the domain annotation parser.
@@ -96,7 +96,7 @@ class DomainAnnotationParser:
         self,
         protein2ipr_path: Path,
         max_proteins: Optional[int] = None,
-        protein_filter: Optional[Set[str]] = None
+        protein_filter: Optional[Set[str]] = None,
     ) -> Dict[str, ProteinDomainArchitecture]:
         """
         Parse the protein2ipr.dat file to extract domain annotations.
@@ -123,13 +123,15 @@ class DomainAnnotationParser:
         skipped_count = 0
 
         # Determine if file is gzipped
-        open_func = gzip.open if protein2ipr_path.suffix == '.gz' else open
+        open_func = gzip.open if protein2ipr_path.suffix == ".gz" else open
 
-        with open_func(protein2ipr_path, 'rt') as f:
+        with open_func(protein2ipr_path, "rt") as f:
             for line_num, line in enumerate(f, 1):
                 if line_num % 1000000 == 0:
-                    logger.info(f"Processed {line_num:,} lines, {protein_count:,} proteins, "
-                              f"{annotation_count:,} annotations, {skipped_count:,} skipped")
+                    logger.info(
+                        f"Processed {line_num:,} lines, {protein_count:,} proteins, "
+                        f"{annotation_count:,} annotations, {skipped_count:,} skipped"
+                    )
 
                 # Skip empty lines
                 line = line.strip()
@@ -138,9 +140,11 @@ class DomainAnnotationParser:
 
                 # Parse tab-separated fields
                 try:
-                    fields = line.split('\t')
+                    fields = line.split("\t")
                     if len(fields) < 6:
-                        logger.debug(f"Skipping malformed line {line_num}: insufficient fields")
+                        logger.debug(
+                            f"Skipping malformed line {line_num}: insufficient fields"
+                        )
                         continue
 
                     protein_id = fields[0]
@@ -162,7 +166,9 @@ class DomainAnnotationParser:
 
                 # Apply species filter if provided
                 if self.species_filter:
-                    if not any(protein_id.startswith(prefix) for prefix in self.species_filter):
+                    if not any(
+                        protein_id.startswith(prefix) for prefix in self.species_filter
+                    ):
                         filtered_count += 1
                         continue
 
@@ -173,7 +179,7 @@ class DomainAnnotationParser:
                     interpro_name=interpro_name,
                     signature_id=signature_id,
                     start=start,
-                    end=end
+                    end=end,
                 )
 
                 # Filter by minimum domain length
@@ -229,13 +235,15 @@ class DomainAnnotationParser:
                 protein_id=protein_id,
                 single_domains=single_domains,
                 supra_domains=supra_domains,
-                domain_annotations=sorted_annotations
+                domain_annotations=sorted_annotations,
             )
 
             architectures[protein_id] = architecture
 
         # Calculate statistics
-        total_supra_domains = sum(len(arch.supra_domains) for arch in architectures.values())
+        total_supra_domains = sum(
+            len(arch.supra_domains) for arch in architectures.values()
+        )
         logger.info(f"Generated {len(architectures):,} domain architectures")
         logger.info(f"  Total supra-domains: {total_supra_domains:,}")
 
@@ -257,10 +265,12 @@ class DomainAnnotationParser:
         supra_domains = []
 
         # Generate all contiguous combinations up to max length
-        for length in range(2, min(len(domain_ids) + 1, self.max_supra_domain_length + 1)):
+        for length in range(
+            2, min(len(domain_ids) + 1, self.max_supra_domain_length + 1)
+        ):
             for i in range(len(domain_ids) - length + 1):
                 # Create supra-domain from contiguous domains
-                supra_domain = ','.join(domain_ids[i:i+length])
+                supra_domain = ",".join(domain_ids[i : i + length])
                 supra_domains.append(supra_domain)
 
         return supra_domains
@@ -289,13 +299,13 @@ class DomainAnnotationParser:
             Dictionary with domain statistics including counts and coverage
         """
         return {
-            'total_proteins': len(self.protein_domains),
-            'total_unique_domains': len(self.domain_counts),
-            'domain_counts': dict(sorted(
-                self.domain_counts.items(),
-                key=lambda x: x[1],
-                reverse=True
-            )[:100])  # Top 100 domains
+            "total_proteins": len(self.protein_domains),
+            "total_unique_domains": len(self.domain_counts),
+            "domain_counts": dict(
+                sorted(self.domain_counts.items(), key=lambda x: x[1], reverse=True)[
+                    :100
+                ]
+            ),  # Top 100 domains
         }
 
     def filter_by_human_uniprot(self) -> None:
@@ -309,13 +319,15 @@ class DomainAnnotationParser:
         # This is a simplified filter - in practice, we'll rely on the
         # intersection with the human GOA file
         logger.info("Note: For human-only analysis, use human-specific GOA file")
-        logger.info("The pipeline will automatically intersect domain and GO annotations")
+        logger.info(
+            "The pipeline will automatically intersect domain and GO annotations"
+        )
 
 
 def parse_human_domains(
     protein2ipr_path: Path,
     max_supra_domain_length: int = 3,
-    max_proteins: Optional[int] = None
+    max_proteins: Optional[int] = None,
 ) -> Dict[str, ProteinDomainArchitecture]:
     """
     Convenience function to parse human domain annotations.
@@ -328,11 +340,6 @@ def parse_human_domains(
     Returns:
         Dictionary mapping protein IDs to their domain architectures
     """
-    parser = DomainAnnotationParser(
-        max_supra_domain_length=max_supra_domain_length
-    )
+    parser = DomainAnnotationParser(max_supra_domain_length=max_supra_domain_length)
 
-    return parser.parse_protein2ipr_file(
-        protein2ipr_path,
-        max_proteins=max_proteins
-    )
+    return parser.parse_protein2ipr_file(protein2ipr_path, max_proteins=max_proteins)
