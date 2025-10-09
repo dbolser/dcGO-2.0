@@ -1,0 +1,81 @@
+2025-10-09 00:08:16.646 | INFO     | __main__:main:330 - ======================================================================
+2025-10-09 00:08:16.647 | INFO     | __main__:main:331 - dcGO VALIDATION - InterPro Gold Standard Comparison
+2025-10-09 00:08:16.647 | INFO     | __main__:main:332 - ======================================================================
+2025-10-09 00:08:16.647 | INFO     | __main__:main:342 - 
+2025-10-09 00:08:16.647 | INFO     | __main__:main:343 - STEP 1: Loading Data
+2025-10-09 00:08:16.647 | INFO     | __main__:main:344 - ──────────────────────────────────────────────────────────────────────
+2025-10-09 00:08:16.647 | INFO     | __main__:parse_interpro2go:33 - Parsing InterPro gold standard: data/raw/interpro_mappings/interpro2go
+2025-10-09 00:08:16.701 | INFO     | __main__:parse_interpro2go:64 - ✓ Loaded 30,198 gold standard domain-GO associations
+2025-10-09 00:08:16.708 | INFO     | __main__:parse_interpro2go:69 -   Unique domains: 14,755
+2025-10-09 00:08:16.708 | INFO     | __main__:parse_interpro2go:70 -   Unique GO terms: 5,663
+2025-10-09 00:08:16.708 | INFO     | __main__:load_dcgo_predictions:77 - Loading dcGO predictions: results_no_true_path/domain_go_associations_significant.tsv
+2025-10-09 00:08:16.749 | INFO     | __main__:load_dcgo_predictions:81 - ✓ Loaded 42,220 predicted associations
+2025-10-09 00:08:16.752 | INFO     | __main__:load_dcgo_predictions:82 -   Unique domains: 6,362
+2025-10-09 00:08:16.755 | INFO     | __main__:load_dcgo_predictions:83 -   Unique GO terms: 6,539
+2025-10-09 00:08:16.756 | INFO     | __main__:load_dcgo_predictions:84 -   p-value range: 4.40e-235 to 1.39e-06
+2025-10-09 00:08:16.756 | INFO     | __main__:load_dcgo_predictions:85 -   Hyper score range: 58.57 to 100.00
+2025-10-09 00:08:16.756 | INFO     | __main__:main:350 - 
+2025-10-09 00:08:16.756 | INFO     | __main__:main:351 - STEP 2: Basic Overlap Analysis
+2025-10-09 00:08:16.756 | INFO     | __main__:main:352 - ──────────────────────────────────────────────────────────────────────
+2025-10-09 00:08:16.791 | INFO     | __main__:main:361 - Predictions: 42,220
+2025-10-09 00:08:16.791 | INFO     | __main__:main:362 - Gold standard: 30,198
+2025-10-09 00:08:16.791 | INFO     | __main__:main:363 - ✓ Overlap: 1,781 (4.22% of predictions)
+2025-10-09 00:08:16.791 | INFO     | __main__:main:364 -   Novel predictions: 40,439 (95.78%)
+2025-10-09 00:08:16.791 | INFO     | __main__:main:365 -   Missed gold standard: 28,417 (94.10%)
+2025-10-09 00:08:16.791 | INFO     | __main__:main:368 - 
+2025-10-09 00:08:16.791 | INFO     | __main__:main:369 - STEP 3: Performance at Various Thresholds
+2025-10-09 00:08:16.791 | INFO     | __main__:main:370 - ──────────────────────────────────────────────────────────────────────
+2025-10-09 00:08:16.791 | INFO     | __main__:calculate_overlap_at_thresholds:147 - Calculating performance metrics at various thresholds...
+2025-10-09 00:08:17.364 | INFO     | __main__:main:382 - ✓ Best F1 score: 0.0492 at p_value≤1.00e-04
+2025-10-09 00:08:17.364 | INFO     | __main__:main:383 -   Precision: 0.0422
+2025-10-09 00:08:17.364 | INFO     | __main__:main:384 -   Recall: 0.0590
+2025-10-09 00:08:17.364 | INFO     | __main__:main:385 -   True positives: 1,781
+2025-10-09 00:08:17.366 | INFO     | __main__:main:389 - ✓ Saved metrics: validation/performance_metrics.tsv
+2025-10-09 00:08:17.366 | INFO     | __main__:main:392 - 
+2025-10-09 00:08:17.366 | INFO     | __main__:main:393 - STEP 4: Novel High-Confidence Predictions
+2025-10-09 00:08:17.366 | INFO     | __main__:main:394 - ──────────────────────────────────────────────────────────────────────
+2025-10-09 00:08:17.366 | INFO     | __main__:analyze_novel_predictions:210 - Analyzing top 100 novel predictions...
+2025-10-09 00:08:17.646 | INFO     | __main__:analyze_novel_predictions:224 - ✓ Found 40,439 novel predictions
+2025-10-09 00:08:17.647 | INFO     | __main__:analyze_novel_predictions:225 -   Top novel prediction score: 100.00
+2025-10-09 00:08:17.651 | INFO     | __main__:main:398 - ✓ Saved novel predictions: validation/novel_predictions_top100.tsv
+2025-10-09 00:08:17.652 | INFO     | __main__:main:402 - 
+2025-10-09 00:08:17.652 | INFO     | __main__:main:403 - STEP 5: Domain Architecture Analysis
+2025-10-09 00:08:17.652 | INFO     | __main__:main:404 - ──────────────────────────────────────────────────────────────────────
+2025-10-09 00:08:17.652 | INFO     | __main__:load_domain_architectures:97 - Loading protein domain architectures: data/interim/protein2ipr_human.dat.gz
+2025-10-09 00:08:17.654 | INFO     | src.domain_annotation_parser:__init__:89 - DomainAnnotationParser initialized:
+2025-10-09 00:08:17.654 | INFO     | src.domain_annotation_parser:__init__:90 -   Max supra-domain length: 1
+2025-10-09 00:08:17.654 | INFO     | src.domain_annotation_parser:__init__:91 -   Min domain length: 10
+2025-10-09 00:08:17.654 | INFO     | src.domain_annotation_parser:parse_protein2ipr_file:112 - Parsing domain annotations from data/interim/protein2ipr_human.dat.gz
+2025-10-09 00:08:18.456 | INFO     | src.domain_annotation_parser:parse_protein2ipr_file:202 - Parsing complete:
+2025-10-09 00:08:18.456 | INFO     | src.domain_annotation_parser:parse_protein2ipr_file:203 -   Total proteins: 18,783
+2025-10-09 00:08:18.456 | INFO     | src.domain_annotation_parser:parse_protein2ipr_file:204 -   Total annotations: 232,965
+2025-10-09 00:08:18.456 | INFO     | src.domain_annotation_parser:parse_protein2ipr_file:205 -   Unique domains: 18,705
+2025-10-09 00:08:18.456 | INFO     | src.domain_annotation_parser:_generate_domain_architectures:219 - Generating domain architectures with supra-domains...
+2025-10-09 00:08:18.745 | INFO     | src.domain_annotation_parser:_generate_domain_architectures:247 - Generated 18,783 domain architectures
+2025-10-09 00:08:18.745 | INFO     | src.domain_annotation_parser:_generate_domain_architectures:248 -   Total supra-domains: 0
+2025-10-09 00:08:18.846 | INFO     | __main__:load_domain_architectures:126 - ✓ Analyzed 18,705 domain architectures
+2025-10-09 00:08:18.899 | INFO     | __main__:analyze_domain_architecture_contribution:237 - Analyzing domain architecture contributions...
+2025-10-09 00:08:18.929 | INFO     | __main__:analyze_domain_architecture_contribution:261 - ✓ Analyzed 1781 overlapping associations
+2025-10-09 00:08:18.929 | INFO     | __main__:analyze_domain_architecture_contribution:262 -   Avg fraction single-domain: 0.74%
+2025-10-09 00:08:18.930 | INFO     | __main__:analyze_domain_architecture_contribution:263 -   Median proteins per association: 4
+2025-10-09 00:08:18.941 | INFO     | __main__:main:411 - ✓ Saved architecture analysis: validation/architecture_contribution.tsv
+2025-10-09 00:08:18.941 | INFO     | __main__:main:418 - 
+2025-10-09 00:08:18.941 | INFO     | __main__:main:419 - STEP 6: Creating Visualizations
+2025-10-09 00:08:18.941 | INFO     | __main__:main:420 - ──────────────────────────────────────────────────────────────────────
+2025-10-09 00:08:18.941 | INFO     | __main__:create_visualizations:275 - Creating visualizations...
+2025-10-09 00:08:20.895 | INFO     | __main__:create_visualizations:323 - ✓ Saved visualization: validation/validation_metrics.png
+2025-10-09 00:08:20.899 | INFO     | __main__:main:425 - 
+2025-10-09 00:08:20.899 | INFO     | __main__:main:426 - ======================================================================
+2025-10-09 00:08:20.899 | INFO     | __main__:main:427 - VALIDATION COMPLETE!
+2025-10-09 00:08:20.899 | INFO     | __main__:main:428 - ======================================================================
+2025-10-09 00:08:20.899 | INFO     | __main__:main:429 - Summary:
+2025-10-09 00:08:20.899 | INFO     | __main__:main:430 -   Overlap with gold standard: 1,781 / 42,220 (4.22%)
+2025-10-09 00:08:20.900 | INFO     | __main__:main:431 -   Best F1 score: 0.0492
+2025-10-09 00:08:20.900 | INFO     | __main__:main:432 -   Novel high-confidence predictions: 40,439
+2025-10-09 00:08:20.900 | INFO     | __main__:main:434 -   Avg single-domain contribution: 0.74%
+2025-10-09 00:08:20.900 | INFO     | __main__:main:435 - 
+2025-10-09 00:08:20.900 | INFO     | __main__:main:436 - Output files:
+2025-10-09 00:08:20.900 | INFO     | __main__:main:437 -   validation/performance_metrics.tsv
+2025-10-09 00:08:20.900 | INFO     | __main__:main:438 -   validation/novel_predictions_top100.tsv
+2025-10-09 00:08:20.900 | INFO     | __main__:main:440 -   validation/architecture_contribution.tsv
+2025-10-09 00:08:20.900 | INFO     | __main__:main:441 -   validation/validation_metrics.png
