@@ -199,12 +199,12 @@ def main():
     # Get intersection
     proteins_with_both = set(protein_go_map.keys()) & set(domain_architectures.keys())
 
-    # Build protein-domain map
+    # Build protein-domain map (using lists for compatibility with ontology processor)
     protein_domain_map = {}
     all_domains = set()
     for protein_id in proteins_with_both:
         arch = domain_architectures[protein_id]
-        domains = set(arch.single_domains)
+        domains = list(arch.single_domains)
         if domains:
             protein_domain_map[protein_id] = domains
             all_domains.update(domains)
@@ -340,12 +340,14 @@ def main():
             logger.info(f"Applying True Path Rule to {len(significant_associations):,} significant associations...")
 
             # Apply optimal level filtering
+            # Note: alpha_threshold is for raw p-values from Fisher tests, not FDR-corrected
+            # Using 0.05 as recommended threshold for parent-child comparison tests
             filtered_associations = ontology_processor.apply_optimal_level_filter(
                 significant_associations,
                 protein_domain_map,
                 protein_go_map,
                 min_background_size=3,
-                alpha_threshold=args.fdr_threshold
+                alpha_threshold=0.05
             )
 
             logger.info(f"✓ Optimal level filtering: {len(filtered_associations):,} associations retained")
