@@ -227,3 +227,4 @@ interpro.log
 config/local_settings.pydata/
 logs/
 data/raw/
+validation/*.tsv
