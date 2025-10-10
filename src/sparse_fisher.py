@@ -5,10 +5,140 @@ This approach uses sparse matrices to efficiently compute contingency tables
 for all domain-GO combinations simultaneously.
 """
 
+from dataclasses import dataclass
+from enum import Enum
+from typing import Dict, List, Set, Tuple
+
 import numpy as np
-from scipy import sparse
-from typing import Dict, Set, Tuple, List
 from loguru import logger
+from scipy import sparse
+
+
+class DomainType(Enum):
+    """Classification of domain features."""
+
+    SINGLE = "single"  # Individual domain (e.g., "IPR000001")
+    SUPRA_PAIR = "supra_pair"  # 2-domain combination (e.g., "IPR000001,IPR000002")
+    SUPRA_TRIPLE = "supra_triple"  # 3-domain combination
+
+
+@dataclass
+class DomainMetadata:
+    """
+    Metadata about domains in the analysis.
+
+    This tracks information needed for hierarchical statistical inference,
+    allowing supra-domains to "borrow strength" from their constituent domains.
+    """
+
+    domain_id: str
+    domain_type: DomainType
+    constituent_domains: List[str]  # Empty for single domains
+    observation_count: int  # Number of proteins with this domain
+    index: int  # Position in domain_list array
+
+    @property
+    def is_single_domain(self) -> bool:
+        """Check if this is a single domain (not a supra-domain)."""
+        return self.domain_type == DomainType.SINGLE
+
+    @property
+    def is_supra_domain(self) -> bool:
+        """Check if this is a supra-domain (multi-domain combination)."""
+        return self.domain_type in (DomainType.SUPRA_PAIR, DomainType.SUPRA_TRIPLE)
+
+
+def parse_domain_id(domain_id: str) -> Tuple[DomainType, List[str]]:
+    """
+    Parse a domain ID to determine its type and constituent domains.
+
+    Args:
+        domain_id: Domain identifier (e.g., "IPR000001" or "IPR000001,IPR000002")
+
+    Returns:
+        Tuple of (domain_type, constituent_domains)
+
+    Examples:
+        >>> parse_domain_id("IPR000001")
+        (DomainType.SINGLE, ["IPR000001"])
+
+        >>> parse_domain_id("IPR000001,IPR000002")
+        (DomainType.SUPRA_PAIR, ["IPR000001", "IPR000002"])
+    """
+    if "," not in domain_id:
+        return DomainType.SINGLE, [domain_id]
+
+    constituents = domain_id.split(",")
+    num_constituents = len(constituents)
+
+    if num_constituents == 2:
+        return DomainType.SUPRA_PAIR, constituents
+    elif num_constituents == 3:
+        return DomainType.SUPRA_TRIPLE, constituents
+    else:
+        # Fallback for edge cases (shouldn't happen with max_supra_domain_length=3)
+        logger.warning(
+            f"Unexpected supra-domain length {num_constituents} for {domain_id}"
+        )
+        return DomainType.SUPRA_TRIPLE, constituents
+
+
+def build_domain_metadata(
+    domain_list: List[str], protein_domains: Dict[str, Set[str]]
+) -> Dict[str, DomainMetadata]:
+    """
+    Build comprehensive metadata for all domains in the analysis.
+
+    Args:
+        domain_list: Ordered list of all domain IDs (single + supra)
+        protein_domains: Dict mapping protein_id -> set of domain IDs
+
+    Returns:
+        Dictionary mapping domain_id -> DomainMetadata
+    """
+    logger.info("Building domain metadata...")
+
+    metadata = {}
+
+    # Count observations for each domain
+    domain_counts: Dict[str, int] = {}
+    for domains in protein_domains.values():
+        for domain in domains:
+            domain_counts[domain] = domain_counts.get(domain, 0) + 1
+
+    # Build metadata for each domain
+    single_count = 0
+    supra_pair_count = 0
+    supra_triple_count = 0
+
+    for idx, domain_id in enumerate(domain_list):
+        domain_type, constituents = parse_domain_id(domain_id)
+
+        # Track constituent domains (empty list for single domains)
+        constituent_list = constituents if domain_type != DomainType.SINGLE else []
+
+        metadata[domain_id] = DomainMetadata(
+            domain_id=domain_id,
+            domain_type=domain_type,
+            constituent_domains=constituent_list,
+            observation_count=domain_counts.get(domain_id, 0),
+            index=idx,
+        )
+
+        # Count by type
+        if domain_type == DomainType.SINGLE:
+            single_count += 1
+        elif domain_type == DomainType.SUPRA_PAIR:
+            supra_pair_count += 1
+        elif domain_type == DomainType.SUPRA_TRIPLE:
+            supra_triple_count += 1
+
+    logger.info(f"  Total domains: {len(metadata):,}")
+    logger.info(f"    Single domains: {single_count:,}")
+    logger.info(f"    Supra-domain pairs: {supra_pair_count:,}")
+    logger.info(f"    Supra-domain triples: {supra_triple_count:,}")
+
+    return metadata
 
 
 def build_sparse_matrices(
@@ -16,19 +146,21 @@ def build_sparse_matrices(
     protein_go: Dict[str, Set[str]],
     domain_list: List[str],
     go_list: List[str],
-) -> Tuple[sparse.csr_matrix, sparse.csr_matrix]:
+) -> Tuple[sparse.csr_matrix, sparse.csr_matrix, Dict[str, DomainMetadata]]:
     """
     Build sparse binary matrices for protein-domain and protein-GO relationships.
 
     Args:
         protein_domains: Dict mapping protein_id -> set of domain IDs
         protein_go: Dict mapping protein_id -> set of GO term IDs
-        domain_list: Ordered list of all domain IDs
+        domain_list: Ordered list of all domain IDs (includes both single and supra-domains)
         go_list: Ordered list of all GO term IDs
 
     Returns:
-        Tuple of (protein_domain_matrix, protein_go_matrix)
-        Both matrices have shape (n_proteins, n_features) and are binary (0/1)
+        Tuple of (protein_domain_matrix, protein_go_matrix, domain_metadata)
+        - protein_domain_matrix: Binary matrix (n_proteins, n_domains)
+        - protein_go_matrix: Binary matrix (n_proteins, n_go_terms)
+        - domain_metadata: Metadata for hierarchical inference
     """
     # Get all proteins
     all_proteins = sorted(set(protein_domains.keys()) | set(protein_go.keys()))
@@ -86,7 +218,10 @@ def build_sparse_matrices(
     )
     logger.info(f"Protein-GO matrix: {protein_go_matrix.nnz:,} non-zero entries")
 
-    return protein_domain_matrix, protein_go_matrix
+    # Build domain metadata for hierarchical inference
+    domain_metadata = build_domain_metadata(domain_list, protein_domains)
+
+    return protein_domain_matrix, protein_go_matrix, domain_metadata
 
 
 def compute_contingency_tables_sparse(
@@ -146,7 +281,6 @@ def compute_contingency_tables_sparse(
     idx = 0
     for d_idx in range(n_domains):
         n_with_domain = domain_counts[d_idx]
-        n_without_domain = n_proteins - n_with_domain
 
         for g_idx in range(n_go_terms):
             n_with_go = go_counts[g_idx]

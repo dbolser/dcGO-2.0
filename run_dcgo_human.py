@@ -30,23 +30,24 @@ Examples:
     uv run python run_dcgo_human.py --enable-true-path --go-ontology data/raw/go_ontology/go.obo
 """
 
-import time
 import argparse
-from pathlib import Path
-from loguru import logger
 import sys
-import numpy as np
-from scipy.stats import hypergeom
+import time
 from dataclasses import dataclass
+from pathlib import Path
+
+import numpy as np
+from loguru import logger
+from scipy.stats import hypergeom
 
 logger.remove()
 logger.add(sys.stderr, level="INFO")
 
-from src.sparse_fisher import build_sparse_matrices, compute_contingency_tables_sparse
-from src.vectorized_fisher import fisher_exact_parallel, benjamini_hochberg_correction
 from src.domain_annotation_parser import DomainAnnotationParser
 from src.goa_parser import parse_goa_human
 from src.ontology_processor import OntologyProcessor
+from src.sparse_fisher import build_sparse_matrices, compute_contingency_tables_sparse
+from src.vectorized_fisher import benjamini_hochberg_correction, fisher_exact_parallel
 
 
 @dataclass
@@ -151,6 +152,18 @@ def main():
         default=Path("data/raw/go_ontology/go.obo"),
         help="Path to GO ontology file (default: data/raw/go_ontology/go.obo)",
     )
+    parser.add_argument(
+        "--enable-supra-domains",
+        action="store_true",
+        default=True,
+        help="Include supra-domain (multi-domain) combinations in analysis (default: True)",
+    )
+    parser.add_argument(
+        "--disable-supra-domains",
+        dest="enable_supra_domains",
+        action="store_false",
+        help="Disable supra-domain analysis (single domains only)",
+    )
 
     args = parser.parse_args()
 
@@ -165,6 +178,9 @@ def main():
     logger.info(f"  Evidence filter: {args.evidence_filter}")
     logger.info(f"  FDR threshold: {args.fdr_threshold}")
     logger.info(f"  CPU cores: {args.num_cores}")
+    logger.info(
+        f"  Supra-domains: {'ENABLED' if args.enable_supra_domains else 'DISABLED'}"
+    )
     logger.info(f"  Output directory: {args.output_dir}")
 
     # File paths - support different species
@@ -200,14 +216,34 @@ def main():
     proteins_with_both = set(protein_go_map.keys()) & set(domain_architectures.keys())
 
     # Build protein-domain map (using lists for compatibility with ontology processor)
+    # CRITICAL: Include both single domains AND supra-domains as per dcGO methodology
     protein_domain_map = {}
     all_domains = set()
+    single_domain_count = 0
+    supra_domain_count = 0
+
     for protein_id in proteins_with_both:
         arch = domain_architectures[protein_id]
+
+        # Always include single domains
         domains = list(arch.single_domains)
+        single_domain_count += len(domains)
+
+        # Include supra-domains if enabled (default: True)
+        if args.enable_supra_domains:
+            domains.extend(arch.supra_domains)
+            supra_domain_count += len(arch.supra_domains)
+
         if domains:
             protein_domain_map[protein_id] = domains
             all_domains.update(domains)
+
+    logger.info(f"  Single domains: {single_domain_count:,} annotations")
+    if args.enable_supra_domains:
+        logger.info(f"  Supra-domains: {supra_domain_count:,} annotations")
+        logger.info(
+            f"  Total domain features: {single_domain_count + supra_domain_count:,}"
+        )
 
     # Get all GO terms
     all_go_terms = set()
@@ -228,7 +264,7 @@ def main():
     logger.info("─" * 70)
     start_time = time.time()
 
-    protein_domain_matrix, protein_go_matrix = build_sparse_matrices(
+    protein_domain_matrix, protein_go_matrix, domain_metadata = build_sparse_matrices(
         protein_domain_map, protein_go_map, domain_list, go_list
     )
 
