@@ -99,6 +99,10 @@ Thumbs.db
 .python-version
 
 # Junk to ignore
-validation/*.tsv
-
 data/interim/human_proteins.txt
+results*/domain_go_associations_significant.tsv
+
+data/raw/interpro_mappings/interpro2go
+
+validation*_path/*
+results*_path/*
