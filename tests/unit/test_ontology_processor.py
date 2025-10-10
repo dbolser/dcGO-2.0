@@ -15,6 +15,7 @@ from src.ontology_processor import OntologyProcessor, Annotation
 @dataclass
 class MockAssociation:
     """Mock association result for testing."""
+
     domain: str
     go_term: str
     p_value: float
@@ -88,7 +89,7 @@ is_a: GO:0003674 ! molecular_function
 @pytest.fixture
 def temp_obo_file():
     """Create a temporary OBO file for testing."""
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.obo', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".obo", delete=False) as f:
         f.write(TEST_OBO_CONTENT)
         temp_path = Path(f.name)
 
@@ -206,7 +207,9 @@ class TestAncestorsDescendants:
 class TestOptimalLevelFilter:
     """Test suite for optimal level filtering (True Path Rule Phase 1)."""
 
-    def test_filter_keeps_specific_associations(self, ontology_processor, sample_protein_maps):
+    def test_filter_keeps_specific_associations(
+        self, ontology_processor, sample_protein_maps
+    ):
         """Test that optimal level filter keeps specific term associations."""
         protein_domain_map, protein_go_map = sample_protein_maps
 
@@ -218,7 +221,7 @@ class TestOptimalLevelFilter:
                 go_term="GO:0006812",  # cation transport (most specific)
                 p_value=1e-10,
                 q_value=1e-8,
-                hyper_score=95.0
+                hyper_score=95.0,
             )
         ]
 
@@ -227,24 +230,26 @@ class TestOptimalLevelFilter:
             protein_domain_map,
             protein_go_map,
             min_background_size=3,
-            alpha_threshold=0.05
+            alpha_threshold=0.05,
         )
 
         # Should keep the specific association
-        assert len(filtered) >= 0  # May be filtered if not significantly better than parent
+        assert (
+            len(filtered) >= 0
+        )  # May be filtered if not significantly better than parent
 
     def test_filter_rejects_general_associations(self, ontology_processor):
         """Test that optimal level filter rejects overly general associations."""
         # Create protein maps where domain is associated with specific term
         # but association is also present at general level
         protein_domain_map = {
-            f"P{i:03d}": ["IPR001"] if i < 50 else []
-            for i in range(100)
+            f"P{i:03d}": ["IPR001"] if i < 50 else [] for i in range(100)
         }
 
         protein_go_map = {
             f"P{i:03d}": {"GO:0006812", "GO:0006811", "GO:0006810", "GO:0009987"}
-            if i < 50 else {"GO:0009987"}
+            if i < 50
+            else {"GO:0009987"}
             for i in range(100)
         }
 
@@ -255,7 +260,7 @@ class TestOptimalLevelFilter:
                 go_term="GO:0009987",  # cellular process (very general)
                 p_value=1e-5,
                 q_value=1e-3,
-                hyper_score=70.0
+                hyper_score=70.0,
             )
         ]
 
@@ -264,7 +269,7 @@ class TestOptimalLevelFilter:
             protein_domain_map,
             protein_go_map,
             min_background_size=3,
-            alpha_threshold=0.05
+            alpha_threshold=0.05,
         )
 
         # Result depends on whether association is significantly stronger
@@ -281,7 +286,7 @@ class TestOptimalLevelFilter:
                 go_term="GO:0008150",  # biological_process (typically a root)
                 p_value=1e-10,
                 q_value=1e-8,
-                hyper_score=95.0
+                hyper_score=95.0,
             )
         ]
 
@@ -290,7 +295,7 @@ class TestOptimalLevelFilter:
             protein_domain_map,
             protein_go_map,
             min_background_size=3,
-            alpha_threshold=0.05
+            alpha_threshold=0.05,
         )
 
         # Should not error and should return a list
@@ -315,7 +320,7 @@ class TestOptimalLevelFilter:
                 go_term="GO:0006812",
                 p_value=1e-5,
                 q_value=1e-3,
-                hyper_score=80.0
+                hyper_score=80.0,
             )
         ]
 
@@ -325,7 +330,7 @@ class TestOptimalLevelFilter:
             protein_domain_map,
             protein_go_map,
             min_background_size=10,  # Require 10 proteins (we only have 2)
-            alpha_threshold=0.05
+            alpha_threshold=0.05,
         )
 
         # Should reject or handle gracefully
@@ -340,7 +345,7 @@ class TestOptimalLevelFilter:
             protein_domain_map,
             protein_go_map,
             min_background_size=3,
-            alpha_threshold=0.05
+            alpha_threshold=0.05,
         )
 
         assert filtered == []
@@ -355,7 +360,7 @@ class TestOptimalLevelFilter:
                 go_term="GO:9999999",  # Non-existent term
                 p_value=1e-10,
                 q_value=1e-8,
-                hyper_score=95.0
+                hyper_score=95.0,
             )
         ]
 
@@ -365,7 +370,7 @@ class TestOptimalLevelFilter:
             protein_domain_map,
             protein_go_map,
             min_background_size=3,
-            alpha_threshold=0.05
+            alpha_threshold=0.05,
         )
 
         assert len(filtered) == 1
@@ -384,7 +389,7 @@ class TestAnnotationPropagation:
                 go_term="GO:0006812",  # cation transport
                 p_value=1e-10,
                 q_value=1e-8,
-                hyper_score=95.0
+                hyper_score=95.0,
             )
         ]
 
@@ -401,7 +406,9 @@ class TestAnnotationPropagation:
         # If the term has ancestors in the ontology, should have propagated annotations
         ancestors = ontology_processor.get_ancestors("GO:0006812")
         if ancestors:
-            propagated_anns = [ann for ann in propagated if ann.annotation_type == "propagated"]
+            propagated_anns = [
+                ann for ann in propagated if ann.annotation_type == "propagated"
+            ]
             assert len(propagated_anns) > 0
 
     def test_propagate_preserves_scores(self, ontology_processor):
@@ -412,7 +419,7 @@ class TestAnnotationPropagation:
                 go_term="GO:0006812",
                 p_value=1e-10,
                 q_value=1e-8,
-                hyper_score=95.0
+                hyper_score=95.0,
             )
         ]
 
@@ -431,7 +438,7 @@ class TestAnnotationPropagation:
                 go_term="GO:0006812",
                 p_value=1e-10,
                 q_value=1e-8,
-                hyper_score=95.0
+                hyper_score=95.0,
             )
         ]
 
@@ -449,15 +456,15 @@ class TestAnnotationPropagation:
                 go_term="GO:0006812",
                 p_value=1e-10,
                 q_value=1e-8,
-                hyper_score=95.0
+                hyper_score=95.0,
             ),
             MockAssociation(
                 domain="IPR002",
                 go_term="GO:0008324",  # cation transmembrane transporter activity
                 p_value=1e-9,
                 q_value=1e-7,
-                hyper_score=92.0
-            )
+                hyper_score=92.0,
+            ),
         ]
 
         propagated = ontology_processor.propagate_annotations(direct_associations)
@@ -480,15 +487,15 @@ class TestAnnotationPropagation:
                 go_term="GO:0006812",  # cation transport
                 p_value=1e-10,
                 q_value=1e-8,
-                hyper_score=95.0
+                hyper_score=95.0,
             ),
             MockAssociation(
                 domain="IPR001",
                 go_term="GO:0006811",  # ion transport (parent of above)
                 p_value=1e-9,
                 q_value=1e-7,
-                hyper_score=90.0
-            )
+                hyper_score=90.0,
+            ),
         ]
 
         propagated = ontology_processor.propagate_annotations(direct_associations)
@@ -510,7 +517,7 @@ class TestAnnotationPropagation:
                 go_term="GO:9999999",  # Non-existent
                 p_value=1e-10,
                 q_value=1e-8,
-                hyper_score=95.0
+                hyper_score=95.0,
             )
         ]
 
@@ -534,7 +541,7 @@ class TestAnnotationValidation:
                 q_value=0.001,
                 association_score=95.0,
                 annotation_type="direct",
-                direct_source_term="GO:0006812"
+                direct_source_term="GO:0006812",
             ),
             Annotation(
                 domain="IPR001",
@@ -542,8 +549,8 @@ class TestAnnotationValidation:
                 q_value=0.001,
                 association_score=95.0,
                 annotation_type="propagated",
-                direct_source_term="GO:0006812"
-            )
+                direct_source_term="GO:0006812",
+            ),
         ]
 
         stats = ontology_processor.validate_annotations(annotations)
@@ -563,7 +570,7 @@ class TestAnnotationValidation:
                 q_value=0.001,
                 association_score=150.0,  # Invalid (>100)
                 annotation_type="direct",
-                direct_source_term="GO:0006812"
+                direct_source_term="GO:0006812",
             )
 
 
@@ -579,7 +586,8 @@ class TestIntegrationFullTruePathRule:
         }
 
         protein_go_map = {
-            f"P{i:03d}": {"GO:0006812"} if i < 30
+            f"P{i:03d}": {"GO:0006812"}
+            if i < 30
             else ({"GO:0008324"} if i < 60 else {"GO:0009987"})
             for i in range(100)
         }
@@ -591,15 +599,15 @@ class TestIntegrationFullTruePathRule:
                 go_term="GO:0006812",
                 p_value=1e-15,
                 q_value=1e-12,
-                hyper_score=98.0
+                hyper_score=98.0,
             ),
             MockAssociation(
                 domain="IPR002",
                 go_term="GO:0008324",
                 p_value=1e-14,
                 q_value=1e-11,
-                hyper_score=97.0
-            )
+                hyper_score=97.0,
+            ),
         ]
 
         # Apply optimal level filter
@@ -608,7 +616,7 @@ class TestIntegrationFullTruePathRule:
             protein_domain_map,
             protein_go_map,
             min_background_size=3,
-            alpha_threshold=0.05
+            alpha_threshold=0.05,
         )
 
         # Propagate annotations
@@ -619,7 +627,9 @@ class TestIntegrationFullTruePathRule:
             assert len(propagated) > 0
 
             # Count direct vs propagated
-            direct_count = sum(1 for ann in propagated if ann.annotation_type == "direct")
+            direct_count = sum(
+                1 for ann in propagated if ann.annotation_type == "direct"
+            )
             propagated_count = len(propagated) - direct_count
 
             # Should have both types

@@ -161,12 +161,15 @@ class TestComputeContingencyTables:
         # P3: D2
         # P4: neither
         protein_domain = sparse.csr_matrix(
-            np.array([
-                [1, 0],  # P1
-                [1, 1],  # P2
-                [0, 1],  # P3
-                [0, 0],  # P4
-            ], dtype=np.int8)
+            np.array(
+                [
+                    [1, 0],  # P1
+                    [1, 1],  # P2
+                    [0, 1],  # P3
+                    [0, 0],  # P4
+                ],
+                dtype=np.int8,
+            )
         )
 
         # Protein-GO matrix:
@@ -175,12 +178,15 @@ class TestComputeContingencyTables:
         # P3: GO2
         # P4: neither
         protein_go = sparse.csr_matrix(
-            np.array([
-                [1, 0],  # P1
-                [1, 1],  # P2
-                [0, 1],  # P3
-                [0, 0],  # P4
-            ], dtype=np.int8)
+            np.array(
+                [
+                    [1, 0],  # P1
+                    [1, 1],  # P2
+                    [0, 1],  # P3
+                    [0, 0],  # P4
+                ],
+                dtype=np.int8,
+            )
         )
 
         return protein_domain, protein_go
@@ -266,10 +272,10 @@ class TestComputeContingencyTables:
         density = 0.01
 
         protein_domain = sparse.random(
-            n_proteins, n_domains, density=density, format='csr', dtype=np.int8
+            n_proteins, n_domains, density=density, format="csr", dtype=np.int8
         )
         protein_go = sparse.random(
-            n_proteins, n_go_terms, density=density, format='csr', dtype=np.int8
+            n_proteins, n_go_terms, density=density, format="csr", dtype=np.int8
         )
 
         # Make binary
@@ -305,8 +311,12 @@ class TestIntegration:
         }
 
         # Get all unique domains and GO terms
-        all_domains = sorted(set(d for domains in protein_domains.values() for d in domains))
-        all_go_terms = sorted(set(g for go_terms in protein_go.values() for g in go_terms))
+        all_domains = sorted(
+            set(d for domains in protein_domains.values() for d in domains)
+        )
+        all_go_terms = sorted(
+            set(g for go_terms in protein_go.values() for g in go_terms)
+        )
 
         # Build matrices
         domain_matrix, go_matrix = build_sparse_matrices(

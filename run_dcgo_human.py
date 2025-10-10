@@ -38,7 +38,6 @@ import sys
 import numpy as np
 from scipy.stats import hypergeom
 from dataclasses import dataclass
-from typing import Optional
 
 logger.remove()
 logger.add(sys.stderr, level="INFO")
@@ -47,12 +46,13 @@ from src.sparse_fisher import build_sparse_matrices, compute_contingency_tables_
 from src.vectorized_fisher import fisher_exact_parallel, benjamini_hochberg_correction
 from src.domain_annotation_parser import DomainAnnotationParser
 from src.goa_parser import parse_goa_human
-from src.ontology_processor import OntologyProcessor, Annotation
+from src.ontology_processor import OntologyProcessor
 
 
 @dataclass
 class AssociationResult:
     """Simple dataclass to hold association results for True Path Rule."""
+
     domain: str
     go_term: str
     p_value: float
@@ -333,11 +333,16 @@ def main():
                     p_value=float(pvalues[idx]),
                     q_value=float(adjusted_pvalues[idx]),
                     hyper_score=calculate_hypergeometric_score(a, b, c, d),
-                    a=a, b=b, c=c, d=d
+                    a=a,
+                    b=b,
+                    c=c,
+                    d=d,
                 )
                 significant_associations.append(assoc)
 
-            logger.info(f"Applying True Path Rule to {len(significant_associations):,} significant associations...")
+            logger.info(
+                f"Applying True Path Rule to {len(significant_associations):,} significant associations..."
+            )
 
             # Apply optimal level filtering
             # Note: alpha_threshold is for raw p-values from Fisher tests, not FDR-corrected
@@ -347,18 +352,26 @@ def main():
                 protein_domain_map,
                 protein_go_map,
                 min_background_size=3,
-                alpha_threshold=0.05
+                alpha_threshold=0.05,
             )
 
-            logger.info(f"✓ Optimal level filtering: {len(filtered_associations):,} associations retained")
+            logger.info(
+                f"✓ Optimal level filtering: {len(filtered_associations):,} associations retained"
+            )
 
             # Propagate annotations up the GO hierarchy
-            propagated_annotations = ontology_processor.propagate_annotations(filtered_associations)
+            propagated_annotations = ontology_processor.propagate_annotations(
+                filtered_associations
+            )
 
-            direct_count = sum(1 for ann in propagated_annotations if ann.annotation_type == "direct")
+            direct_count = sum(
+                1 for ann in propagated_annotations if ann.annotation_type == "direct"
+            )
             propagated_count = len(propagated_annotations) - direct_count
 
-            logger.info(f"✓ Generated {len(propagated_annotations):,} total annotations:")
+            logger.info(
+                f"✓ Generated {len(propagated_annotations):,} total annotations:"
+            )
             logger.info(f"  - Direct: {direct_count:,}")
             logger.info(f"  - Propagated: {propagated_count:,}")
 
@@ -424,14 +437,18 @@ def main():
     if propagated_annotations:
         annotations_file = args.output_dir / "domain_go_annotations_propagated.tsv"
         with open(annotations_file, "w") as f:
-            f.write("domain\tgo_term\tq_value\tassociation_score\tannotation_type\tdirect_source_term\n")
+            f.write(
+                "domain\tgo_term\tq_value\tassociation_score\tannotation_type\tdirect_source_term\n"
+            )
             for ann in propagated_annotations:
                 f.write(
                     f"{ann.domain}\t{ann.go_term}\t{ann.q_value:.6e}\t{ann.association_score:.2f}\t"
                     f"{ann.annotation_type}\t{ann.direct_source_term}\n"
                 )
 
-        logger.info(f"✓ Exported {len(propagated_annotations):,} propagated annotations to: {annotations_file}")
+        logger.info(
+            f"✓ Exported {len(propagated_annotations):,} propagated annotations to: {annotations_file}"
+        )
 
     # Performance summary
     total_time = matrix_time + table_time + test_time + fdr_time
@@ -446,9 +463,13 @@ def main():
         f"  Significant associations (FDR < {args.fdr_threshold}): {n_significant:,} ({n_significant / len(pvalues) * 100:.2f}%)"
     )
     if propagated_annotations:
-        direct_count = sum(1 for ann in propagated_annotations if ann.annotation_type == "direct")
+        direct_count = sum(
+            1 for ann in propagated_annotations if ann.annotation_type == "direct"
+        )
         propagated_count = len(propagated_annotations) - direct_count
-        logger.info(f"  True Path Rule annotations: {len(propagated_annotations):,} total ({direct_count:,} direct + {propagated_count:,} propagated)")
+        logger.info(
+            f"  True Path Rule annotations: {len(propagated_annotations):,} total ({direct_count:,} direct + {propagated_count:,} propagated)"
+        )
     logger.info(f"  Total runtime: {total_time:.1f}s ({total_time / 60:.1f} minutes)")
     logger.info("")
     logger.info("Output files:")

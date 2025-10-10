@@ -6,7 +6,6 @@ Tests parsing of InterPro protein2ipr.dat files and supra-domain generation.
 
 import pytest
 import gzip
-import tempfile
 from pathlib import Path
 
 from src.domain_annotation_parser import (

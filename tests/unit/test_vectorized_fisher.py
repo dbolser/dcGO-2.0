@@ -6,7 +6,6 @@ Tests the parallel statistical testing implementation.
 
 import pytest
 import numpy as np
-from scipy import stats
 
 from src.vectorized_fisher import (
     fisher_exact_vectorized_batch,
@@ -26,9 +25,9 @@ class TestBuildContingencyTable:
 
         assert table.shape == (2, 2)
         assert table[0, 0] == 10  # both
-        assert table[0, 1] == 5   # domain only
-        assert table[1, 0] == 3   # GO only
-        assert table[1, 1] == 7   # neither
+        assert table[0, 1] == 5  # domain only
+        assert table[1, 0] == 3  # GO only
+        assert table[1, 1] == 7  # neither
 
     def test_table_sum(self):
         """Test that table values sum to total proteins."""
@@ -49,7 +48,9 @@ class TestFisherExactVectorizedBatch:
         # Known case: strong association
         table = np.array([[[10, 2], [2, 10]]], dtype=np.int32)
 
-        odds_ratios, pvalues = fisher_exact_vectorized_batch(table, alternative="greater")
+        odds_ratios, pvalues = fisher_exact_vectorized_batch(
+            table, alternative="greater"
+        )
 
         assert len(odds_ratios) == 1
         assert len(pvalues) == 1
@@ -58,13 +59,18 @@ class TestFisherExactVectorizedBatch:
 
     def test_multiple_tables(self):
         """Test Fisher's exact test on multiple contingency tables."""
-        tables = np.array([
-            [[10, 2], [2, 10]],  # Strong enrichment
-            [[5, 5], [5, 5]],    # No association
-            [[2, 10], [10, 2]],  # Depletion
-        ], dtype=np.int32)
+        tables = np.array(
+            [
+                [[10, 2], [2, 10]],  # Strong enrichment
+                [[5, 5], [5, 5]],  # No association
+                [[2, 10], [10, 2]],  # Depletion
+            ],
+            dtype=np.int32,
+        )
 
-        odds_ratios, pvalues = fisher_exact_vectorized_batch(tables, alternative="greater")
+        odds_ratios, pvalues = fisher_exact_vectorized_batch(
+            tables, alternative="greater"
+        )
 
         assert len(odds_ratios) == 3
         assert len(pvalues) == 3
@@ -83,12 +89,17 @@ class TestFisherExactVectorizedBatch:
     def test_edge_case_zeros(self):
         """Test handling of contingency tables with zeros."""
         # Table with zero in one cell
-        tables = np.array([
-            [[10, 0], [0, 10]],  # Perfect association
-            [[0, 10], [10, 0]],  # Perfect inverse
-        ], dtype=np.int32)
+        tables = np.array(
+            [
+                [[10, 0], [0, 10]],  # Perfect association
+                [[0, 10], [10, 0]],  # Perfect inverse
+            ],
+            dtype=np.int32,
+        )
 
-        odds_ratios, pvalues = fisher_exact_vectorized_batch(tables, alternative="greater")
+        odds_ratios, pvalues = fisher_exact_vectorized_batch(
+            tables, alternative="greater"
+        )
 
         # Should not raise errors
         assert len(odds_ratios) == 2
@@ -117,11 +128,14 @@ class TestFisherExactParallel:
 
     def test_small_batch(self):
         """Test parallel processing with small number of tables."""
-        tables = np.array([
-            [[10, 5], [5, 10]],
-            [[8, 3], [3, 8]],
-            [[6, 4], [4, 6]],
-        ], dtype=np.int32)
+        tables = np.array(
+            [
+                [[10, 5], [5, 10]],
+                [[8, 3], [3, 8]],
+                [[6, 4], [4, 6]],
+            ],
+            dtype=np.int32,
+        )
 
         odds_ratios, pvalues = fisher_exact_parallel(
             tables, alternative="greater", n_jobs=2, batch_size=2

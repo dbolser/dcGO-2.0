@@ -6,12 +6,10 @@ Tests the interaction between run_dcgo_human.py and the OntologyProcessor.
 
 import pytest
 import tempfile
-import numpy as np
 from pathlib import Path
-from unittest.mock import Mock, patch
 from dataclasses import dataclass
 
-from src.ontology_processor import OntologyProcessor, Annotation
+from src.ontology_processor import OntologyProcessor
 
 
 # Test GO ontology with realistic hierarchy
@@ -100,6 +98,7 @@ is_a: GO:0043167 ! ion binding
 @dataclass
 class AssociationResult:
     """Mock association result matching run_dcgo_human.py structure."""
+
     domain: str
     go_term: str
     p_value: float
@@ -114,7 +113,7 @@ class AssociationResult:
 @pytest.fixture
 def temp_obo_file():
     """Create temporary OBO file for integration tests."""
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.obo', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".obo", delete=False) as f:
         f.write(TEST_OBO_CONTENT)
         temp_path = Path(f.name)
 
@@ -135,14 +134,17 @@ class TestPipelineIntegration:
         """Test complete data flow from significant associations to propagated annotations."""
         # Simulate protein data from pipeline
         protein_domain_map = {
-            f"P{i:04d}": ["IPR012345"] if i < 50 else []
-            for i in range(100)
+            f"P{i:04d}": ["IPR012345"] if i < 50 else [] for i in range(100)
         }
 
         protein_go_map = {
-            f"P{i:04d}": {"GO:0098655"} if i < 40  # Very specific term
-            else ({"GO:0006812"} if i < 50  # Parent term
-                  else {"GO:0051179"})  # Unrelated term
+            f"P{i:04d}": {"GO:0098655"}
+            if i < 40  # Very specific term
+            else (
+                {"GO:0006812"}
+                if i < 50  # Parent term
+                else {"GO:0051179"}
+            )  # Unrelated term
             for i in range(100)
         }
 
@@ -154,7 +156,10 @@ class TestPipelineIntegration:
                 p_value=1e-20,
                 q_value=1e-17,
                 hyper_score=99.5,
-                a=40, b=10, c=0, d=50
+                a=40,
+                b=10,
+                c=0,
+                d=50,
             ),
             AssociationResult(
                 domain="IPR012345",
@@ -162,8 +167,11 @@ class TestPipelineIntegration:
                 p_value=1e-18,
                 q_value=1e-15,
                 hyper_score=98.0,
-                a=50, b=0, c=0, d=50
-            )
+                a=50,
+                b=0,
+                c=0,
+                d=50,
+            ),
         ]
 
         # Stage 1: Apply optimal level filter
@@ -172,7 +180,7 @@ class TestPipelineIntegration:
             protein_domain_map,
             protein_go_map,
             min_background_size=3,
-            alpha_threshold=0.05
+            alpha_threshold=0.05,
         )
 
         # Should retain at least the most specific association
@@ -187,7 +195,9 @@ class TestPipelineIntegration:
         # Check annotation types if we have results
         if propagated:
             direct_anns = [ann for ann in propagated if ann.annotation_type == "direct"]
-            propagated_anns = [ann for ann in propagated if ann.annotation_type == "propagated"]
+            propagated_anns = [
+                ann for ann in propagated if ann.annotation_type == "propagated"
+            ]
 
             assert len(direct_anns) > 0
             # May or may not have propagated annotations depending on term depth
@@ -205,16 +215,16 @@ class TestPipelineIntegration:
         """Test pipeline with multiple domains and terms."""
         # Realistic multi-domain scenario
         protein_domain_map = {
-            f"P{i:04d}": ["IPR001"] if i < 30
-            else (["IPR002"] if 30 <= i < 60
-                  else ["IPR003"])
+            f"P{i:04d}": ["IPR001"]
+            if i < 30
+            else (["IPR002"] if 30 <= i < 60 else ["IPR003"])
             for i in range(100)
         }
 
         protein_go_map = {
-            f"P{i:04d}": {"GO:0098655"} if i < 30
-            else ({"GO:0043169"} if 30 <= i < 60
-                  else {"GO:0051179"})
+            f"P{i:04d}": {"GO:0098655"}
+            if i < 30
+            else ({"GO:0043169"} if 30 <= i < 60 else {"GO:0051179"})
             for i in range(100)
         }
 
@@ -231,7 +241,7 @@ class TestPipelineIntegration:
             protein_domain_map,
             protein_go_map,
             min_background_size=3,
-            alpha_threshold=0.05
+            alpha_threshold=0.05,
         )
 
         propagated = ontology_processor.propagate_annotations(filtered)
@@ -252,14 +262,13 @@ class TestPipelineIntegration:
     def test_pipeline_threshold_sensitivity(self, ontology_processor):
         """Test that alpha_threshold affects filtering results."""
         protein_domain_map = {
-            f"P{i:04d}": ["IPR001"] if i < 40 else []
-            for i in range(100)
+            f"P{i:04d}": ["IPR001"] if i < 40 else [] for i in range(100)
         }
 
         protein_go_map = {
-            f"P{i:04d}": {"GO:0098655"} if i < 30
-            else ({"GO:0006812"} if i < 40
-                  else {"GO:0051179"})
+            f"P{i:04d}": {"GO:0098655"}
+            if i < 30
+            else ({"GO:0006812"} if i < 40 else {"GO:0051179"})
             for i in range(100)
         }
 
@@ -273,7 +282,7 @@ class TestPipelineIntegration:
             protein_domain_map,
             protein_go_map,
             min_background_size=3,
-            alpha_threshold=0.001  # Very strict
+            alpha_threshold=0.001,  # Very strict
         )
 
         # Test with lenient threshold
@@ -282,7 +291,7 @@ class TestPipelineIntegration:
             protein_domain_map,
             protein_go_map,
             min_background_size=3,
-            alpha_threshold=0.05  # Standard
+            alpha_threshold=0.05,  # Standard
         )
 
         # Lenient should retain at least as many as strict
@@ -311,7 +320,7 @@ class TestPipelineIntegration:
             protein_domain_map,
             protein_go_map,
             min_background_size=3,
-            alpha_threshold=0.05
+            alpha_threshold=0.05,
         )
 
         assert isinstance(filtered, list)
@@ -319,8 +328,7 @@ class TestPipelineIntegration:
     def test_pipeline_preserves_statistics(self, ontology_processor):
         """Test that propagated annotations preserve original statistics."""
         protein_domain_map = {
-            f"P{i:04d}": ["IPR001"] if i < 40 else []
-            for i in range(100)
+            f"P{i:04d}": ["IPR001"] if i < 40 else [] for i in range(100)
         }
 
         protein_go_map = {
@@ -333,11 +341,15 @@ class TestPipelineIntegration:
 
         associations = [
             AssociationResult(
-                "IPR001", "GO:0098655",
+                "IPR001",
+                "GO:0098655",
                 p_value=1e-20,
                 q_value=original_q,
                 hyper_score=original_score,
-                a=35, b=5, c=5, d=55
+                a=35,
+                b=5,
+                c=5,
+                d=55,
             )
         ]
 
@@ -346,7 +358,7 @@ class TestPipelineIntegration:
             protein_domain_map,
             protein_go_map,
             min_background_size=3,
-            alpha_threshold=0.05
+            alpha_threshold=0.05,
         )
 
         if filtered:
@@ -372,7 +384,7 @@ class TestPipelineEdgeCases:
             protein_domain_map,
             protein_go_map,
             min_background_size=3,
-            alpha_threshold=0.05
+            alpha_threshold=0.05,
         )
 
         propagated = ontology_processor.propagate_annotations(filtered)
@@ -384,15 +396,21 @@ class TestPipelineEdgeCases:
         """Test when optimal level filter rejects all associations."""
         # Create scenario where associations are not at optimal level
         protein_domain_map = {
-            f"P{i:04d}": ["IPR001"] if i < 50 else []
-            for i in range(100)
+            f"P{i:04d}": ["IPR001"] if i < 50 else [] for i in range(100)
         }
 
         # All proteins with domain have very specific term
         # Association with general term should be filtered
         protein_go_map = {
-            f"P{i:04d}": {"GO:0098655", "GO:0006812", "GO:0006811", "GO:0006810", "GO:0008150"}
-            if i < 50 else {"GO:0008150"}
+            f"P{i:04d}": {
+                "GO:0098655",
+                "GO:0006812",
+                "GO:0006811",
+                "GO:0006810",
+                "GO:0008150",
+            }
+            if i < 50
+            else {"GO:0008150"}
             for i in range(100)
         }
 
@@ -406,7 +424,7 @@ class TestPipelineEdgeCases:
             protein_domain_map,
             protein_go_map,
             min_background_size=3,
-            alpha_threshold=0.05
+            alpha_threshold=0.05,
         )
 
         # May filter out general association if specific exists
@@ -416,14 +434,13 @@ class TestPipelineEdgeCases:
     def test_large_scale_propagation(self, ontology_processor):
         """Test propagation with many associations."""
         protein_domain_map = {
-            f"P{i:04d}": [f"IPR{j:03d}" for j in range(i % 5)]
-            for i in range(200)
+            f"P{i:04d}": [f"IPR{j:03d}" for j in range(i % 5)] for i in range(200)
         }
 
         protein_go_map = {
-            f"P{i:04d}": {"GO:0098655"} if i % 3 == 0
-            else ({"GO:0043169"} if i % 3 == 1
-                  else {"GO:0051179"})
+            f"P{i:04d}": {"GO:0098655"}
+            if i % 3 == 0
+            else ({"GO:0043169"} if i % 3 == 1 else {"GO:0051179"})
             for i in range(200)
         }
 
@@ -431,12 +448,7 @@ class TestPipelineEdgeCases:
         associations = []
         for i in range(20):
             assoc = AssociationResult(
-                f"IPR{i:03d}",
-                "GO:0098655",
-                1e-10,
-                1e-8,
-                95.0,
-                60, 10, 10, 120
+                f"IPR{i:03d}", "GO:0098655", 1e-10, 1e-8, 95.0, 60, 10, 10, 120
             )
             associations.append(assoc)
 
@@ -445,7 +457,7 @@ class TestPipelineEdgeCases:
             protein_domain_map,
             protein_go_map,
             min_background_size=3,
-            alpha_threshold=0.05
+            alpha_threshold=0.05,
         )
 
         if filtered:
@@ -465,8 +477,7 @@ class TestPipelineOutputFormat:
     def test_annotation_export_format(self, ontology_processor):
         """Test that annotations can be exported in expected TSV format."""
         protein_domain_map = {
-            f"P{i:04d}": ["IPR001"] if i < 40 else []
-            for i in range(100)
+            f"P{i:04d}": ["IPR001"] if i < 40 else [] for i in range(100)
         }
 
         protein_go_map = {
@@ -483,7 +494,7 @@ class TestPipelineOutputFormat:
             protein_domain_map,
             protein_go_map,
             min_background_size=3,
-            alpha_threshold=0.05
+            alpha_threshold=0.05,
         )
 
         if filtered:
@@ -491,12 +502,12 @@ class TestPipelineOutputFormat:
 
             # Verify all required fields are present
             for ann in propagated:
-                assert hasattr(ann, 'domain')
-                assert hasattr(ann, 'go_term')
-                assert hasattr(ann, 'q_value')
-                assert hasattr(ann, 'association_score')
-                assert hasattr(ann, 'annotation_type')
-                assert hasattr(ann, 'direct_source_term')
+                assert hasattr(ann, "domain")
+                assert hasattr(ann, "go_term")
+                assert hasattr(ann, "q_value")
+                assert hasattr(ann, "association_score")
+                assert hasattr(ann, "annotation_type")
+                assert hasattr(ann, "direct_source_term")
 
                 # Verify types
                 assert isinstance(ann.domain, str)
@@ -509,8 +520,7 @@ class TestPipelineOutputFormat:
     def test_compare_with_without_true_path(self, ontology_processor):
         """Test difference between results with and without True Path Rule."""
         protein_domain_map = {
-            f"P{i:04d}": ["IPR001"] if i < 40 else []
-            for i in range(100)
+            f"P{i:04d}": ["IPR001"] if i < 40 else [] for i in range(100)
         }
 
         protein_go_map = {
@@ -531,7 +541,7 @@ class TestPipelineOutputFormat:
             protein_domain_map,
             protein_go_map,
             min_background_size=3,
-            alpha_threshold=0.05
+            alpha_threshold=0.05,
         )
 
         with_tpr = 0
