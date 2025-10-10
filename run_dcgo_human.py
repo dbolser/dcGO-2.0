@@ -45,8 +45,14 @@ logger.add(sys.stderr, level="INFO")
 
 from src.domain_annotation_parser import DomainAnnotationParser
 from src.goa_parser import parse_goa_human
+from src.hierarchical_inference import HierarchicalInferenceEngine
 from src.ontology_processor import OntologyProcessor
-from src.sparse_fisher import build_sparse_matrices, compute_contingency_tables_sparse
+from src.sparse_fisher import (
+    DomainMetadata,
+    build_sparse_matrices,
+    compute_contingency_tables_sparse,
+    parse_domain_id,
+)
 from src.vectorized_fisher import benjamini_hochberg_correction, fisher_exact_parallel
 
 
@@ -164,6 +170,17 @@ def main():
         action="store_false",
         help="Disable supra-domain analysis (single domains only)",
     )
+    parser.add_argument(
+        "--enable-shrinkage",
+        action="store_true",
+        help="Enable hierarchical shrinkage for supra-domains (empirical Bayes regularization)",
+    )
+    parser.add_argument(
+        "--shrinkage-strength",
+        type=float,
+        default=0.5,
+        help="Shrinkage strength factor 0-1 (default: 0.5). Higher = more regularization",
+    )
 
     args = parser.parse_args()
 
@@ -181,6 +198,10 @@ def main():
     logger.info(
         f"  Supra-domains: {'ENABLED' if args.enable_supra_domains else 'DISABLED'}"
     )
+    if args.enable_supra_domains and args.enable_shrinkage:
+        logger.info(
+            f"  Hierarchical shrinkage: ENABLED (strength={args.shrinkage_strength})"
+        )
     logger.info(f"  Output directory: {args.output_dir}")
 
     # File paths - support different species
@@ -315,6 +336,42 @@ def main():
     )
     logger.info(f"  Rate: {len(pvalues) / test_time:,.0f} tests/second")
 
+    # STAGE 4.5: Hierarchical Shrinkage (Optional)
+    if args.enable_supra_domains and args.enable_shrinkage:
+        logger.info("")
+        logger.info("STAGE 4.5: Hierarchical Shrinkage")
+        logger.info("─" * 70)
+        start_time = time.time()
+
+        # Initialize shrinkage engine
+        shrinkage_engine = HierarchicalInferenceEngine(
+            shrinkage_strength=args.shrinkage_strength,
+            min_observations=3,  # From config
+        )
+
+        # Apply shrinkage to p-values
+        original_pvalues = pvalues.copy()
+        pvalues = shrinkage_engine.shrink_pvalues(
+            pvalues, domain_list, go_list, domain_metadata
+        )
+
+        # Report shrinkage statistics
+        stats = shrinkage_engine.get_shrinkage_statistics(
+            original_pvalues,
+            pvalues,
+            domain_list,
+            domain_metadata,
+            significance_threshold=args.fdr_threshold,
+        )
+
+        shrinkage_time = time.time() - start_time
+        logger.info(f"✓ Hierarchical shrinkage completed in {shrinkage_time:.2f}s")
+        logger.info(f"  Supra-domain tests affected: {stats['n_supra_tests']:,}")
+        logger.info(
+            f"  P-values increased (regularized): {stats['n_pvalues_increased']:,} ({stats['pct_pvalues_increased']:.1f}%)"
+        )
+        logger.info(f"  Median p-value ratio: {stats['median_pvalue_ratio']:.3f}")
+
     # Apply FDR correction
     logger.info("")
     logger.info("STAGE 5: FDR Correction")
@@ -423,13 +480,17 @@ def main():
     logger.info("Calculating hypergeometric scores for significant associations...")
     significant_indices = np.where(significant)[0]
 
-    # Export significant associations with hypergeometric scores
+    # Export significant associations with hypergeometric scores and domain types
     output_file = args.output_dir / "domain_go_associations_significant.tsv"
     with open(output_file, "w") as f:
-        f.write("domain\tgo_term\tp_value\tadj_p_value\todds_ratio\thyper_score\n")
+        f.write(
+            "domain\tgo_term\tp_value\tadj_p_value\todds_ratio\thyper_score\t"
+            "domain_type\tconstituent_domains\tn_observations\n"
+        )
         for idx in significant_indices:
             domain_idx = idx // len(go_list)
             go_idx = idx % len(go_list)
+            domain_id = domain_list[domain_idx]
 
             # Get contingency table values for hypergeometric score
             table = tables[idx]
@@ -437,24 +498,33 @@ def main():
             c, d = int(table[1, 0]), int(table[1, 1])
             hyper_score = calculate_hypergeometric_score(a, b, c, d)
 
+            # Get domain metadata
+            meta = domain_metadata[domain_id]
+            constituents = (
+                ",".join(meta.constituent_domains) if meta.constituent_domains else "-"
+            )
+
             f.write(
-                f"{domain_list[domain_idx]}\t{go_list[go_idx]}\t"
-                f"{pvalues[idx]:.6e}\t{adjusted_pvalues[idx]:.6e}\t{odds_ratios[idx]:.4f}\t{hyper_score:.2f}\n"
+                f"{domain_id}\t{go_list[go_idx]}\t"
+                f"{pvalues[idx]:.6e}\t{adjusted_pvalues[idx]:.6e}\t{odds_ratios[idx]:.4f}\t{hyper_score:.2f}\t"
+                f"{meta.domain_type.value}\t{constituents}\t{meta.observation_count}\n"
             )
 
     logger.info(f"✓ Exported significant associations to: {output_file}")
     logger.info(f"  {n_significant:,} associations (FDR < {args.fdr_threshold})")
 
-    # Export top associations with hypergeometric scores
+    # Export top associations with hypergeometric scores and domain types
     top_file = args.output_dir / "domain_go_associations_top100.tsv"
     top_indices = np.argsort(pvalues)[:100]
     with open(top_file, "w") as f:
         f.write(
-            "rank\tdomain\tgo_term\tp_value\tadj_p_value\todds_ratio\thyper_score\n"
+            "rank\tdomain\tgo_term\tp_value\tadj_p_value\todds_ratio\thyper_score\t"
+            "domain_type\tconstituent_domains\tn_observations\n"
         )
         for rank, idx in enumerate(top_indices, 1):
             domain_idx = idx // len(go_list)
             go_idx = idx % len(go_list)
+            domain_id = domain_list[domain_idx]
 
             # Get contingency table values for hypergeometric score
             table = tables[idx]
@@ -462,9 +532,16 @@ def main():
             c, d = int(table[1, 0]), int(table[1, 1])
             hyper_score = calculate_hypergeometric_score(a, b, c, d)
 
+            # Get domain metadata
+            meta = domain_metadata[domain_id]
+            constituents = (
+                ",".join(meta.constituent_domains) if meta.constituent_domains else "-"
+            )
+
             f.write(
-                f"{rank}\t{domain_list[domain_idx]}\t{go_list[go_idx]}\t"
-                f"{pvalues[idx]:.6e}\t{adjusted_pvalues[idx]:.6e}\t{odds_ratios[idx]:.4f}\t{hyper_score:.2f}\n"
+                f"{rank}\t{domain_id}\t{go_list[go_idx]}\t"
+                f"{pvalues[idx]:.6e}\t{adjusted_pvalues[idx]:.6e}\t{odds_ratios[idx]:.4f}\t{hyper_score:.2f}\t"
+                f"{meta.domain_type.value}\t{constituents}\t{meta.observation_count}\n"
             )
 
     logger.info(f"✓ Exported top 100 associations to: {top_file}")
