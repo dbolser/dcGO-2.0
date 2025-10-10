@@ -8,12 +8,12 @@ The key insight: A supra-domain's association with a GO term should be informed
 by how well its constituent domains associate with that same GO term.
 """
 
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 import numpy as np
 from loguru import logger
 
-from src.sparse_fisher import DomainMetadata, DomainType
+from src.sparse_fisher import DomainMetadata
 
 
 class HierarchicalInferenceEngine:

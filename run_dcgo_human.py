@@ -48,10 +48,8 @@ from src.goa_parser import parse_goa_human
 from src.hierarchical_inference import HierarchicalInferenceEngine
 from src.ontology_processor import OntologyProcessor
 from src.sparse_fisher import (
-    DomainMetadata,
     build_sparse_matrices,
     compute_contingency_tables_sparse,
-    parse_domain_id,
 )
 from src.vectorized_fisher import benjamini_hochberg_correction, fisher_exact_parallel
 
