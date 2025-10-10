@@ -10,13 +10,13 @@ InterPro2GO mappings, analyzing:
 - Single vs multi-domain protein contributions
 """
 
-import pandas as pd
-from pathlib import Path
 from collections import defaultdict
+from pathlib import Path
+
 import matplotlib.pyplot as plt
+import pandas as pd
 import seaborn as sns
 from loguru import logger
-import sys
 
 logger.remove()
 logger.add(sys.stderr, level="INFO")
