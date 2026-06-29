@@ -68,7 +68,6 @@ class HierarchicalInferenceEngine:
         """
         logger.info("Applying hierarchical shrinkage to supra-domain p-values...")
 
-        n_domains = len(domain_list)
         n_go = len(go_list)
         shrunk_pvalues = pvalues.copy()
 
