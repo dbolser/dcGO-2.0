@@ -5,13 +5,14 @@ This module contains all configuration settings and parameters for the dcGO pipe
 including data sources, processing parameters, and file paths using Python 3.12 features.
 """
 
+import logging
 import os
-import psutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Self, Union
 from urllib.parse import urlparse
-import logging
+
+import psutil
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,14 @@ class ProcessingParameters:
     timeout: int = 30
     evidence_filter: str = "manual"  # 'all', 'manual' (no IEA), or 'experimental'
 
+    # Supra-domain configuration
+    enable_supra_domains: bool = True
+    supra_domain_min_count: int = 3
+    hierarchical_shrinkage_strength: float = 0.5  # 0-1, higher = more shrinkage
+    supra_domain_weighting: str = (
+        "empirical_bayes"  # 'none', 'empirical_bayes', 'hierarchical_fdr'
+    )
+
     def __post_init__(self) -> None:
         """Validate processing parameters."""
         if not (0 < self.fdr_threshold < 1):
@@ -106,6 +115,26 @@ class ProcessingParameters:
 
         if self.timeout <= 0:
             raise ConfigurationError(f"Timeout must be positive, got {self.timeout}")
+
+        if self.supra_domain_min_count <= 0:
+            raise ConfigurationError(
+                f"Minimum supra-domain count must be positive, got {self.supra_domain_min_count}"
+            )
+
+        if not (0 <= self.hierarchical_shrinkage_strength <= 1):
+            raise ConfigurationError(
+                f"Hierarchical shrinkage strength must be between 0 and 1, got {self.hierarchical_shrinkage_strength}"
+            )
+
+        if self.supra_domain_weighting not in {
+            "none",
+            "empirical_bayes",
+            "hierarchical_fdr",
+        }:
+            raise ConfigurationError(
+                f"Invalid supra-domain weighting method: {self.supra_domain_weighting}. "
+                f"Must be one of: none, empirical_bayes, hierarchical_fdr"
+            )
 
 
 @dataclass(frozen=True)

@@ -42,7 +42,7 @@ class TestBuildSparseMatrices:
         """Test that matrices have correct dimensions."""
         protein_domains, protein_go, domain_list, go_list = sample_data
 
-        domain_matrix, go_matrix = build_sparse_matrices(
+        domain_matrix, go_matrix, _ = build_sparse_matrices(
             protein_domains, protein_go, domain_list, go_list
         )
 
@@ -57,7 +57,7 @@ class TestBuildSparseMatrices:
         """Test that matrices contain only 0s and 1s."""
         protein_domains, protein_go, domain_list, go_list = sample_data
 
-        domain_matrix, go_matrix = build_sparse_matrices(
+        domain_matrix, go_matrix, _ = build_sparse_matrices(
             protein_domains, protein_go, domain_list, go_list
         )
 
@@ -72,7 +72,7 @@ class TestBuildSparseMatrices:
         """Test that matrices are actually sparse."""
         protein_domains, protein_go, domain_list, go_list = sample_data
 
-        domain_matrix, go_matrix = build_sparse_matrices(
+        domain_matrix, go_matrix, _ = build_sparse_matrices(
             protein_domains, protein_go, domain_list, go_list
         )
 
@@ -91,7 +91,7 @@ class TestBuildSparseMatrices:
         """Test that matrices encode the correct protein annotations."""
         protein_domains, protein_go, domain_list, go_list = sample_data
 
-        domain_matrix, go_matrix = build_sparse_matrices(
+        domain_matrix, go_matrix, _ = build_sparse_matrices(
             protein_domains, protein_go, domain_list, go_list
         )
 
@@ -123,7 +123,7 @@ class TestBuildSparseMatrices:
         domain_list = ["IPR001", "IPR002"]
         go_list = ["GO:0001", "GO:0002"]
 
-        domain_matrix, go_matrix = build_sparse_matrices(
+        domain_matrix, go_matrix, _ = build_sparse_matrices(
             protein_domains, protein_go, domain_list, go_list
         )
 
@@ -138,7 +138,7 @@ class TestBuildSparseMatrices:
         domain_list = []
         go_list = []
 
-        domain_matrix, go_matrix = build_sparse_matrices(
+        domain_matrix, go_matrix, _ = build_sparse_matrices(
             protein_domains, protein_go, domain_list, go_list
         )
 
@@ -319,7 +319,7 @@ class TestIntegration:
         )
 
         # Build matrices
-        domain_matrix, go_matrix = build_sparse_matrices(
+        domain_matrix, go_matrix, _ = build_sparse_matrices(
             protein_domains, protein_go, all_domains, all_go_terms
         )
 

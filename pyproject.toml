@@ -27,6 +27,8 @@ dependencies = [
     "numpy>=1.26.0",
     "pandas>=2.1.0",
     "scipy>=1.11.0",
+    # Fast vectorized Fisher's exact tests (Cython) — replaces per-test scipy loop
+    "fisher>=0.1.14",
     # Logging (required)
     "loguru>=0.7.0",
     # Parallel processing (required for Fisher's exact tests)
