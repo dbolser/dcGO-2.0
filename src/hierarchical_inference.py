@@ -105,9 +105,10 @@ class HierarchicalInferenceEngine:
 
             # Compute geometric mean as prior
             # Use geometric mean because p-values are multiplicative (not additive)
-            # Add small epsilon to avoid log(0)
-            epsilon = 1e-300
-            log_pvalues = np.log(constituent_array + epsilon)
+            # Clamp to the float64 subnormal floor to avoid log(0) without
+            # shifting genuinely tiny p-values (additive epsilon would distort
+            # values below ~1e-300, which are common and meaningful here).
+            log_pvalues = np.log(np.maximum(constituent_array, 1e-323))
             log_mean = np.mean(log_pvalues, axis=0)
             prior_pvalues = np.exp(log_mean)
 
@@ -122,8 +123,8 @@ class HierarchicalInferenceEngine:
             end_idx = (d_idx + 1) * n_go
 
             observed_pvalues = pvalues[start_idx:end_idx]
-            log_observed = np.log(observed_pvalues + epsilon)
-            log_prior = np.log(prior_pvalues + epsilon)
+            log_observed = np.log(np.maximum(observed_pvalues, 1e-323))
+            log_prior = np.log(np.maximum(prior_pvalues, 1e-323))
             log_shrunk = (1 - alpha) * log_observed + alpha * log_prior
             shrunk_pvalues[start_idx:end_idx] = np.exp(log_shrunk)
 
@@ -211,8 +212,13 @@ class HierarchicalInferenceEngine:
             100 * n_increased / len(supra_original) if len(supra_original) > 0 else 0
         )
 
-        # Median change
-        pvalue_ratio = supra_shrunk / (supra_original + 1e-300)
+        # Median change. Divide only where the original p-value is non-zero so
+        # an additive epsilon doesn't distort ratios of tiny p-values; exact
+        # zeros (no shrinkage to measure) contribute a ratio of 1.0.
+        with np.errstate(divide="ignore", invalid="ignore"):
+            pvalue_ratio = np.where(
+                supra_original > 0, supra_shrunk / supra_original, 1.0
+            )
         median_ratio = np.median(pvalue_ratio)
 
         # Significance changes
