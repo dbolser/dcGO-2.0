@@ -210,7 +210,7 @@ class TestDomainAnnotationParser:
     def test_get_protein_domain_map(self, sample_protein2ipr_file):
         """Test getting simple protein-domain mapping."""
         parser = DomainAnnotationParser(max_supra_domain_length=2)
-        architectures = parser.parse_protein2ipr_file(sample_protein2ipr_file)
+        parser.parse_protein2ipr_file(sample_protein2ipr_file)
 
         protein_domain_map = parser.get_protein_domain_map()
 
@@ -228,7 +228,7 @@ class TestDomainAnnotationParser:
     def test_get_domain_statistics(self, sample_protein2ipr_file):
         """Test getting domain statistics."""
         parser = DomainAnnotationParser()
-        architectures = parser.parse_protein2ipr_file(sample_protein2ipr_file)
+        parser.parse_protein2ipr_file(sample_protein2ipr_file)
 
         stats = parser.get_domain_statistics()
 

@@ -153,7 +153,6 @@ class GOAParser:
                         continue
 
                     # Extract relevant fields (GAF 2.2 format)
-                    db = fields[0]
                     db_object_id = fields[1]
                     qualifier = fields[3]
                     go_id = fields[4]
