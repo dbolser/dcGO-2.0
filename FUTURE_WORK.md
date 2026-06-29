@@ -40,7 +40,9 @@
    - Support OBO, OWL, and JSON formats via `obonet`/`owlready`/`rdflib` parsers.
    - Normalize ontology metadata (ID, label, synonyms, definition) into a shared graph schema.
 2. **Annotation Harvesting Layer**
-   - Define standard annotation schema: `{protein_id, ontology_id, evidence_code, source_db, reference, taxon}`.
+   - Define standard annotation schema: `{protein_id, subject_type, ontology_id, relation_type, evidence_code, source_db, reference, taxon, mapping_method, inferred_from}`.
+     - `subject_type` / `relation_type`: keep direct, cross-referenced, and cross-species annotations distinguishable (e.g. a direct gene–phenotype assertion vs. a protein–disease cross-reference) rather than collapsing them into one shape.
+     - `mapping_method` / `inferred_from`: record how each annotation was derived (e.g. ortholog projection from a mouse MP term), so inferred annotations stay auditable and separable from direct evidence — see §4 Versioning & Provenance.
    - Build source-specific adapters:
      - UniProt REST API & FTP for DO/HPO/EC/Reactome cross-references.
      - HPOA TSV parser mapping HGNC → UniProt (via precomputed mapping table from UniProt or Ensembl BioMart).
