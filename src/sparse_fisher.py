@@ -273,30 +273,23 @@ def compute_contingency_tables_sparse(
         np.array(protein_go_matrix.sum(axis=0)).flatten().astype(np.int32)
     )  # Proteins per GO term
 
-    # Build all contingency tables
+    # Build all contingency tables via NumPy broadcasting (no Python loop).
+    # b, c, d follow from a and the marginals; ravel() in C-order keeps the
+    # domain-major / GO-minor ordering the rest of the pipeline expects.
     logger.info("  Building contingency table array...")
     n_tests = n_domains * n_go_terms
-    tables = np.zeros((n_tests, 2, 2), dtype=np.int32)
 
-    idx = 0
-    for d_idx in range(n_domains):
-        n_with_domain = domain_counts[d_idx]
+    b_matrix = domain_counts[:, np.newaxis] - a_matrix  # Domain but not GO
+    c_matrix = go_counts[np.newaxis, :] - a_matrix  # GO but not domain
+    d_matrix = (  # Neither
+        n_proteins - domain_counts[:, np.newaxis] - go_counts[np.newaxis, :] + a_matrix
+    )
 
-        for g_idx in range(n_go_terms):
-            n_with_go = go_counts[g_idx]
-
-            # Fill contingency table
-            a = a_matrix[d_idx, g_idx]  # Both domain and GO
-            b = n_with_domain - a  # Domain but not GO
-            c = n_with_go - a  # GO but not domain
-            d = n_proteins - a - b - c  # Neither
-
-            tables[idx] = [[a, b], [c, d]]
-            idx += 1
-
-        # Progress logging
-        if (d_idx + 1) % 1000 == 0:
-            logger.info(f"    Processed {d_idx + 1:,} / {n_domains:,} domains")
+    tables = np.empty((n_tests, 2, 2), dtype=np.int32)
+    tables[:, 0, 0] = a_matrix.ravel()
+    tables[:, 0, 1] = b_matrix.ravel()
+    tables[:, 1, 0] = c_matrix.ravel()
+    tables[:, 1, 1] = d_matrix.ravel()
 
     logger.info(f"✓ Built {n_tests:,} contingency tables")
 

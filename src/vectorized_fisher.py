@@ -1,15 +1,14 @@
 """
 Vectorized Fisher's exact test implementation for dcGO pipeline.
 
-This module provides efficient batch processing of Fisher's exact tests
-using NumPy arrays and parallel processing.
+This module provides efficient batch processing of Fisher's exact tests using
+the Cython ``fisher`` package (``fisher.pvalue_npy``), which evaluates an entire
+array of 2x2 tables in one compiled call instead of looping ``scipy`` per test.
 """
 
 import numpy as np
-from scipy import stats
 from typing import Tuple
-from concurrent.futures import ProcessPoolExecutor
-import multiprocessing as mp
+from fisher import pvalue_npy
 
 
 def fisher_exact_vectorized_batch(
@@ -25,29 +24,33 @@ def fisher_exact_vectorized_batch(
     Returns:
         Tuple of (odds_ratios, pvalues) arrays of shape (n,)
     """
-    n_tests = contingency_tables.shape[0]
-    odds_ratios = np.zeros(n_tests, dtype=np.float64)
-    pvalues = np.zeros(n_tests, dtype=np.float64)
+    # fisher.pvalue_npy requires C-contiguous uint32 input arrays.
+    a = np.ascontiguousarray(contingency_tables[:, 0, 0], dtype=np.uint32)
+    b = np.ascontiguousarray(contingency_tables[:, 0, 1], dtype=np.uint32)
+    c = np.ascontiguousarray(contingency_tables[:, 1, 0], dtype=np.uint32)
+    d = np.ascontiguousarray(contingency_tables[:, 1, 1], dtype=np.uint32)
 
-    # Process each contingency table
-    for i in range(n_tests):
-        table = contingency_tables[i]
-        try:
-            odds_ratio, pvalue = stats.fisher_exact(table, alternative=alternative)
-            odds_ratios[i] = odds_ratio
-            pvalues[i] = pvalue
-        except (ValueError, ZeroDivisionError):
-            # Handle edge cases (e.g., all zeros)
-            odds_ratios[i] = np.nan
-            pvalues[i] = 1.0
+    # Returns a (left_tail, right_tail, two_tail) tuple of p-value arrays.
+    left_tail, right_tail, two_tail = pvalue_npy(a, b, c, d)
+    if alternative == "greater":
+        pvalues = right_tail
+    elif alternative == "less":
+        pvalues = left_tail
+    elif alternative == "two-sided":
+        pvalues = two_tail
+    else:
+        raise ValueError(
+            f"alternative must be 'greater', 'less', or 'two-sided', got {alternative!r}"
+        )
+
+    # Sample odds ratio (a*d)/(b*c), matching scipy.stats.fisher_exact.
+    # float64 avoids overflow; b*c == 0 yields inf (or nan for 0/0), as in scipy.
+    numerator = a.astype(np.float64) * d.astype(np.float64)
+    denominator = b.astype(np.float64) * c.astype(np.float64)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        odds_ratios = numerator / denominator
 
     return odds_ratios, pvalues
-
-
-def _fisher_batch_wrapper(args):
-    """Wrapper for parallel processing (must be top-level function for pickling)."""
-    batch, alternative = args
-    return fisher_exact_vectorized_batch(batch, alternative)
 
 
 def fisher_exact_parallel(
@@ -58,47 +61,37 @@ def fisher_exact_parallel(
     progress_callback=None,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Compute Fisher's exact test in parallel for large arrays of contingency tables.
+    Compute Fisher's exact test for a large array of contingency tables.
+
+    The heavy lifting now runs in compiled Cython (``fisher.pvalue_npy``), which
+    is fast enough that no multiprocessing is needed; tables are processed in
+    in-process chunks purely so ``progress_callback`` can report incremental
+    progress. ``n_jobs`` is accepted for backward compatibility but unused.
 
     Args:
         contingency_tables: Array of shape (n, 2, 2)
         alternative: 'greater', 'less', or 'two-sided'
-        n_jobs: Number of parallel jobs (-1 for all CPUs)
-        batch_size: Number of tests per batch
+        n_jobs: Unused; retained for API compatibility
+        batch_size: Number of tests per progress chunk
         progress_callback: Optional callback function(completed, total) for progress updates
 
     Returns:
         Tuple of (odds_ratios, pvalues) arrays of shape (n,)
     """
     n_tests = contingency_tables.shape[0]
+    odds_ratios = np.empty(n_tests, dtype=np.float64)
+    pvalues = np.empty(n_tests, dtype=np.float64)
 
-    if n_jobs == -1:
-        n_jobs = mp.cpu_count()
+    for start in range(0, n_tests, batch_size):
+        end = min(start + batch_size, n_tests)
+        chunk_odds, chunk_pvalues = fisher_exact_vectorized_batch(
+            contingency_tables[start:end], alternative
+        )
+        odds_ratios[start:end] = chunk_odds
+        pvalues[start:end] = chunk_pvalues
 
-    # Split into batches
-    batches = []
-    for i in range(0, n_tests, batch_size):
-        end_idx = min(i + batch_size, n_tests)
-        batches.append((contingency_tables[i:end_idx], alternative))
-
-    # Process batches in parallel with progress tracking
-    all_results = []
-    completed = 0
-
-    with ProcessPoolExecutor(max_workers=n_jobs) as executor:
-        futures = [executor.submit(_fisher_batch_wrapper, batch) for batch in batches]
-
-        for future in futures:
-            result = future.result()
-            all_results.append(result)
-            completed += len(result[0])
-
-            if progress_callback:
-                progress_callback(completed, n_tests)
-
-    # Concatenate results
-    odds_ratios = np.concatenate([r[0] for r in all_results])
-    pvalues = np.concatenate([r[1] for r in all_results])
+        if progress_callback:
+            progress_callback(end, n_tests)
 
     return odds_ratios, pvalues
 
