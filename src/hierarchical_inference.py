@@ -204,6 +204,19 @@ class HierarchicalInferenceEngine:
         supra_original = np.array(supra_original)
         supra_shrunk = np.array(supra_shrunk)
 
+        # No supra-domains to summarize (e.g. baseline / no-supra runs). Return a
+        # stable zeroed result instead of letting np.median([]) emit nan. A ratio
+        # of 1.0 denotes "no change", the neutral value for an empty comparison.
+        if supra_original.size == 0:
+            return {
+                "n_supra_tests": 0,
+                "n_pvalues_increased": 0,
+                "pct_pvalues_increased": 0.0,
+                "median_pvalue_ratio": 1.0,
+                "lost_significance": 0,
+                "gained_significance": 0,
+            }
+
         # Compute statistics
         pvalue_increases = supra_shrunk > supra_original
         n_increased = np.sum(pvalue_increases)
