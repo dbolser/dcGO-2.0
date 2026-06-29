@@ -102,6 +102,9 @@ Thumbs.db
 data/interim/human_proteins.txt
 results*/domain_go_associations_significant.tsv
 
+# Generated analysis output directories
+results_*/
+
 data/raw/interpro_mappings/interpro2go
 
 validation*_path/*
