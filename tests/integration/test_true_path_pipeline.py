@@ -195,9 +195,6 @@ class TestPipelineIntegration:
         # Check annotation types if we have results
         if propagated:
             direct_anns = [ann for ann in propagated if ann.annotation_type == "direct"]
-            propagated_anns = [
-                ann for ann in propagated if ann.annotation_type == "propagated"
-            ]
 
             assert len(direct_anns) > 0
             # May or may not have propagated annotations depending on term depth
@@ -254,7 +251,6 @@ class TestPipelineIntegration:
         for domain in domains:
             domain_anns = [ann for ann in propagated if ann.domain == domain]
             direct = [ann for ann in domain_anns if ann.annotation_type == "direct"]
-            prop = [ann for ann in domain_anns if ann.annotation_type == "propagated"]
 
             assert len(direct) >= 1
             # May or may not have propagated depending on term depth
@@ -532,9 +528,6 @@ class TestPipelineOutputFormat:
             AssociationResult("IPR001", "GO:0098655", 1e-20, 1e-17, 99.5, 35, 5, 5, 55)
         ]
 
-        # Without True Path Rule: just the original associations
-        without_tpr = len(associations)
-
         # With True Path Rule: filter + propagate
         filtered = ontology_processor.apply_optimal_level_filter(
             associations,
@@ -544,10 +537,8 @@ class TestPipelineOutputFormat:
             alpha_threshold=0.05,
         )
 
-        with_tpr = 0
         if filtered:
             propagated = ontology_processor.propagate_annotations(filtered)
-            with_tpr = len(propagated)
 
         # With True Path Rule:
         # - May produce more annotations (due to propagation)
