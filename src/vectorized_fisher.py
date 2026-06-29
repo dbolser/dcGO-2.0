@@ -122,63 +122,6 @@ def build_contingency_table(
     )
 
 
-def build_contingency_tables_vectorized(
-    domains: np.ndarray, go_terms: np.ndarray, protein_domains: dict, protein_go: dict
-) -> np.ndarray:
-    """
-    Build contingency tables for all domain-GO combinations.
-
-    Args:
-        domains: Array of domain IDs
-        go_terms: Array of GO term IDs
-        protein_domains: Dict mapping protein_id -> set of domain IDs
-        protein_go: Dict mapping protein_id -> set of GO term IDs
-
-    Returns:
-        Array of shape (n_domains * n_go_terms, 2, 2)
-    """
-    n_domains = len(domains)
-    n_go_terms = len(go_terms)
-    n_tests = n_domains * n_go_terms
-
-    # Get all proteins
-    all_proteins = set(protein_domains.keys()) | set(protein_go.keys())
-    n_total_proteins = len(all_proteins)
-
-    # Pre-allocate result array
-    tables = np.zeros((n_tests, 2, 2), dtype=np.int32)
-
-    # Build each table
-    idx = 0
-    for domain in domains:
-        # Get proteins with this domain
-        proteins_with_domain = {
-            p for p, doms in protein_domains.items() if domain in doms
-        }
-        n_with_domain = len(proteins_with_domain)
-        n_without_domain = n_total_proteins - n_with_domain
-
-        for go_term in go_terms:
-            # Get proteins with this GO term
-            proteins_with_go = {p for p, gos in protein_go.items() if go_term in gos}
-            n_with_go = len(proteins_with_go)
-
-            # Count overlaps
-            n_domain_and_go = len(proteins_with_domain & proteins_with_go)
-            n_domain_not_go = n_with_domain - n_domain_and_go
-            n_go_not_domain = n_with_go - n_domain_and_go
-            n_neither = (
-                n_total_proteins - n_domain_and_go - n_domain_not_go - n_go_not_domain
-            )
-
-            tables[idx] = build_contingency_table(
-                n_domain_and_go, n_domain_not_go, n_go_not_domain, n_neither
-            )
-            idx += 1
-
-    return tables
-
-
 def benjamini_hochberg_correction(
     pvalues: np.ndarray, alpha: float = 0.05
 ) -> Tuple[np.ndarray, float]:

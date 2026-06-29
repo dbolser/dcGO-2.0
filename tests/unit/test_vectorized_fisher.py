@@ -4,14 +4,12 @@ Unit tests for vectorized Fisher's exact test and FDR correction.
 Tests the parallel statistical testing implementation.
 """
 
-import pytest
 import numpy as np
 
 from src.vectorized_fisher import (
     fisher_exact_vectorized_batch,
     fisher_exact_parallel,
     build_contingency_table,
-    build_contingency_tables_vectorized,
     benjamini_hochberg_correction,
 )
 
@@ -205,71 +203,6 @@ class TestFisherExactParallel:
         # Results should be identical
         np.testing.assert_array_almost_equal(or_batch, or_parallel)
         np.testing.assert_array_almost_equal(pval_batch, pval_parallel)
-
-
-class TestBuildContingencyTablesVectorized:
-    """Test suite for building contingency tables from protein annotations."""
-
-    @pytest.fixture
-    def sample_annotations(self):
-        """Create sample protein annotations."""
-        protein_domains = {
-            "P1": {"D1", "D2"},
-            "P2": {"D1"},
-            "P3": {"D2", "D3"},
-            "P4": {"D3"},
-        }
-
-        protein_go = {
-            "P1": {"GO1", "GO2"},
-            "P2": {"GO1"},
-            "P3": {"GO2", "GO3"},
-            "P4": {"GO3"},
-        }
-
-        domains = np.array(["D1", "D2", "D3"])
-        go_terms = np.array(["GO1", "GO2", "GO3"])
-
-        return domains, go_terms, protein_domains, protein_go
-
-    def test_table_count(self, sample_annotations):
-        """Test that correct number of tables is generated."""
-        domains, go_terms, protein_domains, protein_go = sample_annotations
-
-        tables = build_contingency_tables_vectorized(
-            domains, go_terms, protein_domains, protein_go
-        )
-
-        expected_count = len(domains) * len(go_terms)
-        assert tables.shape[0] == expected_count
-
-    def test_table_values(self, sample_annotations):
-        """Test specific contingency table values."""
-        domains, go_terms, protein_domains, protein_go = sample_annotations
-
-        tables = build_contingency_tables_vectorized(
-            domains, go_terms, protein_domains, protein_go
-        )
-
-        # Test D1-GO1 table (both in P1 and P2)
-        # D1: P1, P2 (2 proteins)
-        # GO1: P1, P2 (2 proteins)
-        # Both: P1, P2 (2)
-        table_d1_go1 = tables[0]  # First domain × first GO term
-        assert table_d1_go1[0, 0] == 2  # both
-
-    def test_all_tables_sum_to_total(self, sample_annotations):
-        """Test that all tables sum to total protein count."""
-        domains, go_terms, protein_domains, protein_go = sample_annotations
-
-        tables = build_contingency_tables_vectorized(
-            domains, go_terms, protein_domains, protein_go
-        )
-
-        n_proteins = len(set(protein_domains.keys()) | set(protein_go.keys()))
-
-        for table in tables:
-            assert table.sum() == n_proteins
 
 
 class TestBenjaminiHochbergCorrection:
