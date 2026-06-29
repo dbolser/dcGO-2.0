@@ -12,7 +12,7 @@
      - UniProtKB "Disease" section with DO and Mondo cross-references.
      - DisGeNET gene-disease associations (map to proteins via UniProt/Ensembl).
 2. **Human Phenotype Ontology (HPO)**
-   - *Ontology*: HPO OBO/OWL.
+   - *Ontology*: `HPO OBO/OWL`.
    - *Annotations*:
      - HPOA gene-phenotype annotation files (official releases) keyed by HGNC, OMIM, Ensembl.
      - Monarch Initiative phenogrid exports (for cross-species phenotype integration).
@@ -37,7 +37,7 @@
 ## Acquisition & Harmonization Strategy
 1. **Ontology Harvesting Layer**
    - Extend existing ontology ingestion module to accept a registry of sources (URL, format, update cadence).
-   - Support OBO, OWL, and JSON formats via `obonet`/`owlready`/`rdflib` parsers.
+   - Support OBO, OWL, and JSON formats via `obonet`, `owlready`, and `rdflib` parsers.
    - Normalize ontology metadata (ID, label, synonyms, definition) into a shared graph schema.
 2. **Annotation Harvesting Layer**
    - Define standard annotation schema: `{protein_id, subject_type, ontology_id, relation_type, evidence_code, source_db, reference, taxon, mapping_method, inferred_from}`.
