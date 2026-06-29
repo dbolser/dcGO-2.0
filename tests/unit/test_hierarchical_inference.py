@@ -32,15 +32,10 @@ class TestShrinkageStatistics:
         assert stats["n_supra_tests"] == 0
         assert stats["median_pvalue_ratio"] == 1.0
         assert np.isfinite(stats["median_pvalue_ratio"])
-        assert all(
-            stats[key] == 0
-            for key in (
-                "n_pvalues_increased",
-                "pct_pvalues_increased",
-                "lost_significance",
-                "gained_significance",
-            )
-        )
+        assert stats["n_pvalues_increased"] == 0
+        assert stats["pct_pvalues_increased"] == 0.0
+        assert stats["lost_significance"] == 0
+        assert stats["gained_significance"] == 0
 
     def test_with_supra_domains_reports_finite_stats(self):
         """The normal path still produces finite stats and counts supra tests."""
