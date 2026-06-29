@@ -37,6 +37,8 @@ class HierarchicalInferenceEngine:
             raise ValueError(
                 f"Shrinkage strength must be in [0, 1], got {shrinkage_strength}"
             )
+        if min_observations <= 0:
+            raise ValueError(f"min_observations must be > 0, got {min_observations}")
 
         self.shrinkage_strength = shrinkage_strength
         self.min_observations = min_observations
