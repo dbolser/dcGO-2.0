@@ -4,172 +4,132 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-dcGOspeed is a production-ready bioinformatics pipeline implementing the domain-centric Gene Ontology (dcGO) methodology for protein function prediction. The pipeline transforms protein-level functional annotations into statistically validated domain-level associations using rigorous statistical inference.
+dcGO-2.0 is a bioinformatics pipeline implementing the domain-centric Gene Ontology (dcGO) methodology for protein function prediction. It transforms protein-level GO annotations into statistically validated domain-level associations using Fisher's exact tests, FDR correction, and hypergeometric scoring.
+
+The supported entry point today is the **human analysis path** (`run_dcgo_human.py`). It consumes **pre-computed InterPro domain annotations** (`protein2ipr.dat`) — it does not run InterProScan or scan sequences itself. There is no general `main_pipeline` orchestrator yet; a multi-organism version is future work (see `FUTURE_WORK.md`).
 
 ## Core Architecture
 
-The codebase follows a modular pipeline architecture with five main processing stages:
+The human path runs as a sequence of scripts backed by modules in `src/`:
 
-1. **Data Acquisition** (`src/data_acquisition.py`) - Downloads and manages UniProt, GOA, Pfam, and GO ontology datasets
-2. **Domain Scanning** (`src/domain_scanning.py`) - Integrates with InterProScan to identify protein domain architectures and generates supra-domains
-3. **Statistical Inference** (`src/statistical_inference.py`) - Performs Fisher's exact tests with FDR correction and hypergeometric scoring
-4. **Ontology Processing** (`src/ontology_processor.py`) - Implements the True Path Rule with optimal level filtering and annotation propagation
-5. **Database Management** (`src/database_manager.py`) - SQLite backend with performance optimization and export capabilities
+1. **Download** (`scripts/download_data.py`) - Fetches required datasets (GOA, GO ontology, InterPro `protein2ipr`) from source into `data/raw/<source>/`. Reads URLs from `config/settings.py`.
+2. **Extract** (`extract_human_interpro.py`) - Filters the ~20 GB `protein2ipr.dat.gz` down to human proteins found in GOA, writing `data/interim/protein2ipr_human.dat.gz`.
+3. **Run** (`run_dcgo_human.py`) - Orchestrates the analysis using the `src/` modules below.
 
-The main orchestrator (`src/main_pipeline.py`) coordinates all modules with checkpoint/resume functionality for long-running HPC jobs.
+Key `src/` modules:
+- `goa_parser.py` - Parses GOA GAF files (protein → GO), with evidence-code filtering.
+- `domain_annotation_parser.py` - Parses `protein2ipr` domain mappings and builds domain architectures.
+- `sparse_fisher.py` - Sparse contingency-table construction for domain × GO.
+- `vectorized_fisher.py` - Vectorized Fisher's exact tests (Cython `fisher`) + Benjamini–Hochberg FDR.
+- `hierarchical_inference.py` - Supra-domain generation and optional empirical-Bayes shrinkage.
+- `ontology_processor.py` - True Path Rule / GO DAG propagation (opt-in).
+- `database_manager.py` - SQLite storage/export helpers.
+- `data_acquisition.py` - Older async (aiohttp) downloader library; **not** on the supported path (use `scripts/download_data.py`).
 
 ## Development Commands
 
 ### Environment Setup
 ```bash
-# Setup with uv (recommended)
-uv sync
-uv sync --group dev  # Include development dependencies
-
-# Alternative with pip
-pip install -e .
-pip install -e ".[dev]"
+uv sync              # runtime deps
+uv sync --group dev  # + dev deps (pytest, ruff, mypy)
 ```
 
 ### Code Quality
+CI (`.github/workflows/ci.yml`) uses ruff:
 ```bash
-# Format code
-black src/ tests/
-isort src/ tests/
-
-# Lint
-flake8 src/ tests/
-
-# Type check
-mypy src/
-
-# Run all quality checks
-black src/ tests/ && isort src/ tests/ && flake8 src/ tests/ && mypy src/
+uv run ruff check src/ tests/
+uv run ruff format --check
 ```
+`mypy` is available via the dev group (`uv run mypy src/`) but is not enforced in CI.
 
 ### Testing
 ```bash
-# Run all tests
-pytest
-
-# Run specific test categories
-pytest -m unit          # Unit tests only
-pytest -m integration   # Integration tests only
-pytest -m e2e           # End-to-end tests only
-
-# Run with coverage
-pytest --cov=src/dcgo_pipeline --cov-report=html
-
-# Run single test file
-pytest tests/test_statistical_inference.py -v
-
-# Run specific test
-pytest tests/test_domain_scanning.py::TestDomainScanner::test_supra_domain_generation -v
+uv run pytest                          # all tests (113, ~3 s)
+uv run pytest tests/unit -v            # unit tests
+uv run pytest tests/integration -v     # integration tests
+uv run pytest --cov=src --cov-report=html
+uv run pytest tests/unit/test_vectorized_fisher.py -v   # single file
 ```
 
-### Pipeline Execution
+### Pipeline Execution (human path)
 ```bash
-# Run complete pipeline (requires large datasets and InterProScan)
-python -m src.main_pipeline --num-cores 8 --output-dir results/
+uv run python scripts/download_data.py        # download required datasets
+uv run python extract_human_interpro.py       # one-time human subset extraction
+uv run python run_dcgo_human.py --num-cores 8 # statistical inference
 
-# Run with custom configuration
-python -m src.main_pipeline --config config/custom.yaml
+# With True Path Rule propagation
+uv run python run_dcgo_human.py --num-cores 8 \
+    --enable-true-path --go-ontology data/raw/go_ontology/go-basic.obo
 
-# HPC execution
+# HPC batch script
 sbatch scripts/run_dcgo_hpc.sh
-
-# Install InterProScan and dependencies
-bash scripts/install.sh
 ```
 
-## Module Dependencies and Data Flow
+## Data Flow
 
-**External Dependencies:**
-- InterProScan 5.67+ (domain scanning)
-- UniProt datasets (protein sequences)
-- GOA annotations (protein-GO mappings)
-- Pfam HMM profiles (domain definitions)
-- GO ontology (hierarchical structure)
+**External inputs** (downloaded by `scripts/download_data.py`):
+- GOA annotations — protein → GO mappings (GAF 2.2)
+- GO ontology — `go-basic.obo` (only needed for `--enable-true-path`)
+- InterPro mappings — pre-computed `protein2ipr.dat.gz` domain annotations
 
-**Internal Data Flow:**
+**Internal flow:**
 ```
-DataAcquisition → DomainScanner → StatisticalInference
-                      ↓               ↓
-        OntologyProcessor ← DatabaseManager
+download_data.py → extract_human_interpro.py → run_dcgo_human.py
+    goa_parser + domain_annotation_parser
+        → sparse_fisher → vectorized_fisher (+ hierarchical_inference)
+        → ontology_processor (optional)
+        → results TSV / database_manager
 ```
-
-**Key Data Structures:**
-- `AssociationResult` - Statistical test results with contingency table data
-- `Annotation` - Final domain-GO associations with propagation info
-- `DomainArchitecture` - Protein domain arrangements including supra-domains
-- `PipelineCheckpoint` - State management for long-running processes
 
 ## Configuration System
 
-The pipeline uses a centralized configuration system (`config/settings.py`) with:
-- Data source URLs and paths
-- Statistical thresholds (FDR < 0.01)
-- Processing parameters (cores, batch sizes)
-- Database settings and paths
-
-Key configuration points:
+`config/settings.py` centralizes dataset URLs and parameters. Note that the
+supported `run_dcgo_human.py` path takes most parameters via CLI flags rather
+than from `Config`. Key defaults:
 - `FDR_THRESHOLD = 0.01` - False discovery rate cutoff
 - `MIN_PROTEINS_PER_ASSOCIATION = 3` - Minimum evidence requirement
 - `MAX_SUPRA_DOMAIN_LENGTH = 3` - Maximum contiguous domain combinations
-- `NUM_CORES = 8` - Parallel processing setting
+- `NUM_CORES = 8` - Parallel processing default
 
 ## Testing Architecture
 
-The test suite is organized by scope:
-- `tests/unit/` - Individual component tests
-- `tests/integration/` - Multi-component workflow tests  
-- `tests/e2e/` - Full pipeline tests with mock data
-
-Critical test markers:
-- `@pytest.mark.slow` - Computationally intensive tests
-- `@pytest.mark.integration` - Cross-module tests
-- `@pytest.mark.unit` - Isolated component tests
+- `tests/unit/` - Individual component tests (Fisher, parsers, ontology, supra-domains)
+- `tests/integration/` - Multi-component workflow tests (e.g. True Path pipeline)
+- `tests/e2e/` - Reserved for full-pipeline tests
 
 ## Performance Considerations
 
-The pipeline is designed for HPC environments processing millions of proteins:
-- **Memory**: Peak ~200GB during InterProScan execution
-- **Runtime**: 3-7 days on HPC cluster depending on dataset size
-- **Storage**: ~500GB for intermediate files, ~10GB for final database
-- **Parallelization**: Scales linearly with available cores for domain scanning
+For the human path (single machine):
+- **Extraction**: streams the ~20 GB `protein2ipr.dat.gz` once (~10 min).
+- **Inference**: ~300M Fisher tests in ~50 min on 8 cores (~100k tests/s).
+- **Bottlenecks**: (1) contingency-table construction (memory), (2) Fisher tests
+  on millions of domain–GO pairs (CPU).
 
-Critical performance bottlenecks:
-1. InterProScan domain scanning (most compute-intensive)
-2. Correspondence matrix construction (memory-intensive)
-3. Fisher's exact tests on millions of domain-GO pairs
+A full multi-organism run would be substantially heavier and is not yet implemented.
 
-## Production Deployment
+## Known Limitations
 
-The pipeline includes production-ready features:
-- Checkpoint/resume functionality for HPC job interruptions
-- Comprehensive logging with structured output
-- Error recovery and validation at each stage
-- SQLite database with proper indexing for performance
-- Docker containerization support
-
-For HPC deployment, use `scripts/run_dcgo_hpc.sh` with appropriate SLURM parameters adjusted for your cluster specifications.
+- No local domain scanning — only pre-computed InterPro annotations are consumed.
+- True Path Rule is opt-in (`--enable-true-path`), not part of the default run.
+- Validation is against InterPro2GO only; no CAFA / temporal benchmark or
+  comparison to the original dcGO results yet. See `VALIDATION_PLAN.md`.
 
 ## Package Structure
 
 ```
+run_dcgo_human.py            # Main entry point
+extract_human_interpro.py    # Human subset extraction
+scripts/download_data.py     # Dataset downloader
 src/
-├── dcgo_pipeline/           # Main package (future modular components)
-│   ├── core/               # Core pipeline functionality
-│   ├── utils/              # Utility functions
-│   ├── validation/         # Validation utilities
-│   ├── integration/        # External tool integrations
-│   └── visualization/      # Plotting and visualization
-├── data_acquisition.py     # Dataset download and management
-├── domain_scanning.py      # InterProScan integration
-├── statistical_inference.py # Fisher's tests and FDR correction
-├── ontology_processor.py   # True Path Rule implementation
-├── database_manager.py     # SQLite operations
-└── main_pipeline.py        # Pipeline orchestration
+├── goa_parser.py            # GOA GAF parsing
+├── domain_annotation_parser.py  # protein2ipr parsing
+├── sparse_fisher.py         # Sparse contingency tables
+├── vectorized_fisher.py     # Fisher's exact tests + BH-FDR
+├── hierarchical_inference.py    # Supra-domains + shrinkage
+├── ontology_processor.py    # True Path Rule
+├── database_manager.py      # SQLite operations
+└── data_acquisition.py      # Legacy async downloader (unused by supported path)
+config/settings.py           # Dataset URLs + configuration
 ```
 
-The codebase uses modern Python 3.12 features including dataclasses, type hints, pathlib, and context managers throughout. All modules include comprehensive error handling, logging, and documentation.
+The codebase targets Python 3.12 and uses dataclasses, type hints, pathlib, and context managers throughout.

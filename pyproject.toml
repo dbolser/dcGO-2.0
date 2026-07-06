@@ -7,7 +7,7 @@ name = "dcgo-pipeline"
 version = "0.1.0"
 description = "A comprehensive pipeline for protein function prediction using dcGO"
 authors = [
-    {name = "Your Name", email = "your.email@example.com"}
+    {name = "Dan Bolser", email = "dan.bolser@outsee.co.uk"}
 ]
 readme = "README.md"
 license = {file = "LICENSE"}
@@ -29,6 +29,10 @@ dependencies = [
     "scipy>=1.11.0",
     # Fast vectorized Fisher's exact tests (Cython) — replaces per-test scipy loop
     "fisher>=0.1.14",
+    # Dataset downloads (scripts/download_data.py)
+    "requests>=2.31.0",
+    # System resource detection (config/settings.py)
+    "psutil>=5.9.0",
     # Logging (required)
     "loguru>=0.7.0",
     # Parallel processing (required for Fisher's exact tests)
@@ -67,10 +71,9 @@ jupyter = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/dcgo-pipeline"
-Repository = "https://github.com/yourusername/dcgo-pipeline"
-Documentation = "https://dcgo-pipeline.readthedocs.io"
-"Bug Tracker" = "https://github.com/yourusername/dcgo-pipeline/issues"
+Homepage = "https://github.com/dbolser/dcGO-2.0"
+Repository = "https://github.com/dbolser/dcGO-2.0"
+"Bug Tracker" = "https://github.com/dbolser/dcGO-2.0/issues"
 
 [project.scripts]
 dcgo = "run_dcgo_human:main"
