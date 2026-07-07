@@ -1,494 +1,375 @@
 #!/usr/bin/env python3
 """
-Validation Script - Compare dcGO predictions against InterPro gold standard
+Validation Script - Compare dcGO predictions against the InterPro2GO reference.
 
-This script validates dcGO domain-GO associations against manually curated
-InterPro2GO mappings, analyzing:
-- Precision/Recall at various thresholds
-- Overlap statistics
-- Novel predictions
-- Single vs multi-domain protein contributions
+InterPro2GO is a *manually curated, deliberately incomplete, positive-only*
+mapping. It is therefore a reference for **recall / coverage**, not a source of
+truth for precision: a predicted (domain, GO) pair that is absent from
+InterPro2GO is a *candidate*, not a demonstrated false positive.
+
+This script reflects that. It:
+  * propagates BOTH predictions and the reference up the GO DAG to their
+    ancestor closure before comparing (True-Path-aware matching), so a prediction
+    of a specific term is credited against a more general curated term and vice
+    versa;
+  * restricts the comparison to the domains present in BOTH sets (a domain absent
+    from InterPro2GO can only add noise);
+  * reports **reference coverage (recall)** as the headline metric and labels the
+    remainder as *candidate* predictions (not "false positives");
+  * de-duplicates the threshold sweep.
+
+See VALIDATION_PLAN.md §1.
 """
 
-from collections import defaultdict
+import sys
 from pathlib import Path
+from typing import Callable, Iterable
 
-import matplotlib.pyplot as plt
 import pandas as pd
-import seaborn as sns
 from loguru import logger
 
 logger.remove()
 logger.add(sys.stderr, level="INFO")
 
+Pair = tuple[str, str]  # (domain_id, go_term)
 
-def parse_interpro2go(interpro2go_file: Path) -> dict:
+
+# --------------------------------------------------------------------------- #
+# Pure, unit-testable core                                                     #
+# --------------------------------------------------------------------------- #
+def propagate_pairs(
+    pairs: Iterable[Pair], get_ancestors: Callable[[str], set[str]]
+) -> set[Pair]:
+    """Expand each (domain, go) to include (domain, ancestor) for every ancestor.
+
+    The original term is always retained. ``get_ancestors`` returns the set of
+    more-general ancestor terms for a GO id (excluding the term itself); a
+    no-propagation run can pass ``lambda _go: set()``.
     """
-    Parse InterPro2GO gold standard file.
+    out: set[Pair] = set()
+    for domain, go in pairs:
+        out.add((domain, go))
+        for ancestor in get_ancestors(go):
+            out.add((domain, ancestor))
+    return out
 
-    Returns:
-        dict: {(domain_id, go_term): go_name}
+
+def restrict_to_shared_domains(
+    pred_set: set[Pair], ref_set: set[Pair]
+) -> tuple[set[Pair], set[Pair], set[str]]:
+    """Keep only pairs whose domain appears in both the prediction and reference.
+
+    A domain that InterPro2GO does not cover at all cannot inform precision, so
+    including it only depresses the metric artificially.
     """
-    logger.info(f"Parsing InterPro gold standard: {interpro2go_file}")
+    shared = {d for d, _ in pred_set} & {d for d, _ in ref_set}
+    pred = {(d, g) for d, g in pred_set if d in shared}
+    ref = {(d, g) for d, g in ref_set if d in shared}
+    return pred, ref, shared
 
-    gold_standard = {}
+
+def compute_metrics(pred_set: set[Pair], ref_set: set[Pair], name: str) -> dict:
+    """Coverage-first metrics for one prediction set against the reference.
+
+    ``pred_set`` and ``ref_set`` are expected to be already propagated and
+    restricted to the shared domain space.
+    """
+    recovered = pred_set & ref_set
+    candidates = pred_set - ref_set  # NOT false positives — curation gaps
+    reference_coverage = len(recovered) / len(ref_set) if ref_set else 0.0
+    # A precision *lower bound*: fraction of predictions confirmed by curation,
+    # on the shared domain space. Real precision is higher (curation is partial).
+    precision_lower_bound = len(recovered) / len(pred_set) if pred_set else 0.0
+    return {
+        "threshold": name,
+        "n_predictions": len(pred_set),
+        "n_reference": len(ref_set),
+        "recovered": len(recovered),
+        "reference_coverage": reference_coverage,
+        "candidate_predictions": len(candidates),
+        "precision_lower_bound": precision_lower_bound,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# I/O                                                                          #
+# --------------------------------------------------------------------------- #
+def parse_interpro2go(interpro2go_file: Path) -> set[Pair]:
+    """Parse the InterPro2GO reference into a set of (domain_id, go_id) pairs.
+
+    Line format:
+        InterPro:IPR000003 Retinoid X receptor > GO:DNA binding ; GO:0003677
+    """
+    logger.info(f"Parsing InterPro2GO reference: {interpro2go_file}")
+    reference: set[Pair] = set()
 
     with open(interpro2go_file, "r") as f:
         for line in f:
-            # Skip comments
             if line.startswith("!"):
                 continue
-
-            # Format: InterPro:IPR000003 Retinoid X receptor/HNF4 > GO:DNA binding ; GO:0003677
+            parts = line.strip().split(">")
+            if len(parts) != 2:
+                continue
             try:
-                parts = line.strip().split(">")
-                if len(parts) != 2:
-                    continue
-
-                # Extract InterPro ID
-                interpro_part = parts[0].strip()
-                interpro_id = interpro_part.split()[0].replace("InterPro:", "")
-
-                # Extract GO term
-                go_part = parts[1].strip()
-                go_name, go_id = go_part.split(";")
-                go_id = go_id.strip()
-
-                gold_standard[(interpro_id, go_id)] = go_name.strip()
-
-            except Exception:
+                interpro_id = parts[0].split()[0].replace("InterPro:", "")
+                _go_name, go_id = parts[1].rsplit(";", 1)
+                reference.add((interpro_id, go_id.strip()))
+            except (ValueError, IndexError):
                 logger.debug(f"Skipping malformed line: {line.strip()}")
                 continue
 
-    logger.info(f"✓ Loaded {len(gold_standard):,} gold standard domain-GO associations")
-
-    # Count unique domains and GO terms
-    domains = set(d for d, g in gold_standard.keys())
-    go_terms = set(g for d, g in gold_standard.keys())
-    logger.info(f"  Unique domains: {len(domains):,}")
-    logger.info(f"  Unique GO terms: {len(go_terms):,}")
-
-    return gold_standard
+    domains = {d for d, _ in reference}
+    go_terms = {g for _, g in reference}
+    logger.info(f"✓ Loaded {len(reference):,} reference pairs")
+    logger.info(
+        f"  Unique domains: {len(domains):,}; unique GO terms: {len(go_terms):,}"
+    )
+    return reference
 
 
 def load_dcgo_predictions(predictions_file: Path) -> pd.DataFrame:
     """Load dcGO predicted associations."""
     logger.info(f"Loading dcGO predictions: {predictions_file}")
-
     df = pd.read_csv(predictions_file, sep="\t")
-
     logger.info(f"✓ Loaded {len(df):,} predicted associations")
-    logger.info(f"  Unique domains: {df['domain'].nunique():,}")
-    logger.info(f"  Unique GO terms: {df['go_term'].nunique():,}")
     logger.info(
-        f"  p-value range: {df['p_value'].min():.2e} to {df['p_value'].max():.2e}"
+        f"  Unique domains: {df['domain'].nunique():,}; "
+        f"unique GO terms: {df['go_term'].nunique():,}"
     )
-    logger.info(
-        f"  Hyper score range: {df['hyper_score'].min():.2f} to {df['hyper_score'].max():.2f}"
-    )
-
     return df
 
 
-def load_domain_architectures(protein2ipr_file: Path) -> tuple:
-    """
-    Load protein domain architectures to identify single vs multi-domain proteins.
+def build_get_ancestors(obo_file: Path | None) -> Callable[[str], set[str]]:
+    """Return a get_ancestors(go) function, propagating via the GO DAG if available."""
+    if obo_file is None or not obo_file.exists():
+        logger.warning(
+            "No GO ontology available — comparing without propagation. "
+            "Pass a go-basic.obo to enable True-Path-aware matching."
+        )
+        return lambda _go: set()
 
-    Returns:
-        (protein_domains, domain_protein_counts)
-    """
-    logger.info(f"Loading protein domain architectures: {protein2ipr_file}")
+    # Imported lazily so the metric helpers don't require obonet/networkx.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import networkx as nx
 
-    from src.domain_annotation_parser import DomainAnnotationParser
+    from src.ontology_processor import OntologyProcessor
 
-    parser = DomainAnnotationParser(max_supra_domain_length=1, min_domain_length=10)
-    architectures = parser.parse_protein2ipr_file(protein2ipr_file)
+    logger.info(f"Loading GO ontology for propagation: {obo_file}")
+    processor = OntologyProcessor(obo_file)
+    graph = processor.go_graph
 
-    # Build domain -> protein count mapping (only single domains, not supra-domains)
-    domain_proteins = defaultdict(set)
+    # obonet builds edges child -> parent (verified empirically), so the more
+    # GENERAL ancestor terms of a node are reachable *forward* from it:
+    # nx.descendants(graph, term). NOTE: do NOT use OntologyProcessor.get_ancestors
+    # here — with this edge direction it returns descendants (see issue tracker,
+    # the True-Path direction bug). Memoize since we propagate repeatedly.
+    cache: dict[str, set[str]] = {}
 
-    for protein_id, arch in architectures.items():
-        for domain in arch.single_domains:
-            domain_proteins[domain].add(protein_id)
+    def general_ancestors(go: str) -> set[str]:
+        if go not in cache:
+            cache[go] = nx.descendants(graph, go) if go in graph else set()
+        return cache[go]
 
-    # Count single-domain proteins per domain
-    domain_stats = {}
-    for domain, proteins in domain_proteins.items():
-        single_domain_proteins = []
-        for protein in proteins:
-            if len(architectures[protein].single_domains) == 1:
-                single_domain_proteins.append(protein)
+    return general_ancestors
 
-        domain_stats[domain] = {
-            "total_proteins": len(proteins),
-            "single_domain_proteins": len(single_domain_proteins),
-            "multi_domain_proteins": len(proteins) - len(single_domain_proteins),
-            "fraction_single": len(single_domain_proteins) / len(proteins)
-            if proteins
-            else 0,
-        }
 
-    logger.info(f"✓ Analyzed {len(domain_stats):,} domain architectures")
-
-    return domain_proteins, domain_stats
+# --------------------------------------------------------------------------- #
+# Sweep                                                                        #
+# --------------------------------------------------------------------------- #
+def _pairs_from_df(df: pd.DataFrame) -> set[Pair]:
+    return set(zip(df["domain"], df["go_term"]))
 
 
 def calculate_overlap_at_thresholds(
-    predictions: pd.DataFrame, gold_standard: dict, thresholds: dict
+    predictions: pd.DataFrame,
+    reference: set[Pair],
+    thresholds: dict,
+    get_ancestors: Callable[[str], set[str]],
 ) -> pd.DataFrame:
+    """Coverage/precision-lower-bound across a de-duplicated threshold sweep.
+
+    The reference is propagated once. The shared domain space is fixed by the
+    *full* prediction set so the coverage denominator is stable across thresholds
+    (a domain we never predict is outside the testable universe).
     """
-    Calculate precision, recall, F1 at various thresholds.
+    logger.info("Calculating coverage at various thresholds (propagated)...")
 
-    Args:
-        predictions: dcGO predictions DataFrame
-        gold_standard: Gold standard dict {(domain, go): name}
-        thresholds: dict of threshold lists for different metrics
-
-    Returns:
-        DataFrame with performance metrics
-    """
-    logger.info("Calculating performance metrics at various thresholds...")
-
-    results = []
-
-    # Test p-value thresholds
-    for pval in thresholds["p_value"]:
-        filtered = predictions[predictions["p_value"] <= pval]
-        metrics = calculate_metrics(filtered, gold_standard, f"p_value≤{pval:.2e}")
-        results.append(metrics)
-
-    # Test adjusted p-value thresholds
-    for adj_pval in thresholds["adj_p_value"]:
-        filtered = predictions[predictions["adj_p_value"] <= adj_pval]
-        metrics = calculate_metrics(filtered, gold_standard, f"adj_p≤{adj_pval:.2e}")
-        results.append(metrics)
-
-    # Test hyper score thresholds
-    for score in thresholds["hyper_score"]:
-        filtered = predictions[predictions["hyper_score"] >= score]
-        metrics = calculate_metrics(filtered, gold_standard, f"score≥{score}")
-        results.append(metrics)
-
-    df = pd.DataFrame(results)
-    return df
-
-
-def calculate_metrics(
-    predictions: pd.DataFrame, gold_standard: dict, threshold_name: str
-) -> dict:
-    """Calculate precision, recall, F1 for a set of predictions."""
-
-    # Create prediction set
-    pred_set = set(zip(predictions["domain"], predictions["go_term"]))
-    gold_set = set(gold_standard.keys())
-
-    # Calculate overlap
-    true_positives = pred_set & gold_set
-    false_positives = pred_set - gold_set
-    false_negatives = gold_set - pred_set
-
-    # Calculate metrics
-    precision = len(true_positives) / len(pred_set) if pred_set else 0
-    recall = len(true_positives) / len(gold_set) if gold_set else 0
-    f1 = (
-        2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+    ref_prop = propagate_pairs(reference, get_ancestors)
+    full_pred_prop = propagate_pairs(_pairs_from_df(predictions), get_ancestors)
+    _, ref_fixed, shared = restrict_to_shared_domains(full_pred_prop, ref_prop)
+    logger.info(
+        f"  Shared domains: {len(shared):,}; reference pairs on shared domains "
+        f"(propagated): {len(ref_fixed):,}"
     )
 
-    return {
-        "threshold": threshold_name,
-        "n_predictions": len(pred_set),
-        "n_gold_standard": len(gold_set),
-        "true_positives": len(true_positives),
-        "false_positives": len(false_positives),
-        "false_negatives": len(false_negatives),
-        "precision": precision,
-        "recall": recall,
-        "f1_score": f1,
-    }
-
-
-def analyze_novel_predictions(
-    predictions: pd.DataFrame, gold_standard: dict, top_n: int = 100
-) -> pd.DataFrame:
-    """Identify novel high-confidence predictions not in gold standard."""
-
-    logger.info(f"Analyzing top {top_n} novel predictions...")
-
-    # Filter to predictions not in gold standard
-    pred_set = set(zip(predictions["domain"], predictions["go_term"]))
-    gold_set = set(gold_standard.keys())
-    novel_pairs = pred_set - gold_set
-
-    # Get top novel predictions by hyper score
-    novel_df = predictions[
-        predictions.apply(
-            lambda row: (row["domain"], row["go_term"]) in novel_pairs, axis=1
-        )
-    ].copy()
-
-    novel_df = novel_df.sort_values("hyper_score", ascending=False).head(top_n)
-
-    logger.info(f"✓ Found {len(novel_pairs):,} novel predictions")
-    logger.info(f"  Top novel prediction score: {novel_df['hyper_score'].max():.2f}")
-
-    return novel_df
-
-
-def analyze_domain_architecture_contribution(
-    predictions: pd.DataFrame, gold_standard: dict, domain_stats: dict
-) -> pd.DataFrame:
-    """Analyze how single vs multi-domain proteins contribute to predictions."""
-
-    logger.info("Analyzing domain architecture contributions...")
-
     results = []
 
-    # Get overlapping predictions
-    pred_set = set(zip(predictions["domain"], predictions["go_term"]))
-    gold_set = set(gold_standard.keys())
-    overlapping = pred_set & gold_set
+    def sweep(column: str, values: Iterable[float], op: str, label: str):
+        for v in sorted(set(values)):  # de-dup + stable order
+            if op == "le":
+                filtered = predictions[predictions[column] <= v]
+                name = f"{label}≤{v:.2e}"
+            else:
+                filtered = predictions[predictions[column] >= v]
+                name = f"{label}≥{v:g}"
+            pred_prop = propagate_pairs(_pairs_from_df(filtered), get_ancestors)
+            pred_shared = {(d, g) for d, g in pred_prop if d in shared}
+            results.append(compute_metrics(pred_shared, ref_fixed, name))
 
-    for domain, go_term in overlapping:
-        if domain in domain_stats:
-            stats = domain_stats[domain]
-            results.append(
-                {
-                    "domain": domain,
-                    "go_term": go_term,
-                    "total_proteins": stats["total_proteins"],
-                    "single_domain_proteins": stats["single_domain_proteins"],
-                    "multi_domain_proteins": stats["multi_domain_proteins"],
-                    "fraction_single": stats["fraction_single"],
-                }
-            )
+    sweep("p_value", thresholds["p_value"], "le", "p_value")
+    sweep("adj_p_value", thresholds["adj_p_value"], "le", "adj_p")
+    sweep("hyper_score", thresholds["hyper_score"], "ge", "score")
 
-    df = pd.DataFrame(results)
-
-    if not df.empty:
-        logger.info(f"✓ Analyzed {len(df)} overlapping associations")
-        logger.info(f"  Avg fraction single-domain: {df['fraction_single'].mean():.2%}")
-        logger.info(
-            f"  Median proteins per association: {df['total_proteins'].median():.0f}"
-        )
-
-    return df
+    return pd.DataFrame(results)
 
 
-def create_visualizations(
-    metrics_df: pd.DataFrame, architecture_df: pd.DataFrame, output_dir: Path
-):
-    """Create validation visualizations."""
+def analyze_candidate_predictions(
+    predictions: pd.DataFrame,
+    reference: set[Pair],
+    get_ancestors: Callable[[str], set[str]],
+    top_n: int = 100,
+) -> pd.DataFrame:
+    """Top candidate predictions: high-confidence pairs not in the (propagated) reference.
 
+    These are curation-gap candidates, not errors. Only pairs on the shared
+    domain space are considered (a domain absent from the reference can't be
+    called 'novel' relative to it).
+    """
+    logger.info(f"Selecting top {top_n} candidate predictions (not in reference)...")
+
+    ref_prop = propagate_pairs(reference, get_ancestors)
+    ref_domains = {d for d, _ in ref_prop}
+    ref_lookup = ref_prop  # membership test on propagated reference
+
+    def is_candidate(row) -> bool:
+        d, g = row["domain"], row["go_term"]
+        if d not in ref_domains:
+            return False  # outside shared domain space
+        if (d, g) in ref_lookup:
+            return False
+        # Also not covered by propagating this prediction up to a curated ancestor
+        return not any((d, anc) in ref_lookup for anc in get_ancestors(g))
+
+    mask = predictions.apply(is_candidate, axis=1)
+    candidates = (
+        predictions[mask].sort_values("hyper_score", ascending=False).head(top_n).copy()
+    )
+    logger.info(f"✓ {int(mask.sum()):,} candidate pairs on shared domains")
+    return candidates
+
+
+def create_visualizations(metrics_df: pd.DataFrame, output_dir: Path) -> None:
+    """Coverage-focused validation plots."""
     logger.info("Creating visualizations...")
+    # Lazy import: metric computation must not require a plotting backend.
+    import matplotlib.pyplot as plt
+    import seaborn as sns
 
     sns.set_style("whitegrid")
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
-    # 1. Precision-Recall curve
-    fig, axes = plt.subplots(2, 2, figsize=(14, 12))
-
-    # Precision vs Recall
-    ax = axes[0, 0]
-    ax.scatter(metrics_df["recall"], metrics_df["precision"], alpha=0.6, s=100)
-    ax.plot([0, 1], [0, 1], "k--", alpha=0.3)
-    ax.set_xlabel("Recall", fontsize=12)
-    ax.set_ylabel("Precision", fontsize=12)
-    ax.set_title(
-        "Precision vs Recall at Different Thresholds", fontsize=14, fontweight="bold"
-    )
-    ax.grid(True, alpha=0.3)
-
-    # F1 Score by number of predictions
-    ax = axes[0, 1]
+    ax = axes[0]
     ax.scatter(
         metrics_df["n_predictions"],
-        metrics_df["f1_score"],
-        alpha=0.6,
-        s=100,
-        c=metrics_df["precision"],
+        metrics_df["reference_coverage"],
+        c=metrics_df["precision_lower_bound"],
         cmap="viridis",
+        s=90,
+        alpha=0.8,
     )
-    ax.set_xlabel("Number of Predictions", fontsize=12)
-    ax.set_ylabel("F1 Score", fontsize=12)
-    ax.set_title("F1 Score vs Prediction Count", fontsize=14, fontweight="bold")
     ax.set_xscale("log")
+    ax.set_xlabel("Predictions (propagated, shared domains)")
+    ax.set_ylabel("Reference coverage (recall)")
+    ax.set_title("Coverage of InterPro2GO vs prediction count", fontweight="bold")
     ax.grid(True, alpha=0.3)
 
-    # True Positives vs False Positives
-    ax = axes[1, 0]
+    ax = axes[1]
     ax.scatter(
-        metrics_df["false_positives"], metrics_df["true_positives"], alpha=0.6, s=100
+        metrics_df["reference_coverage"],
+        metrics_df["precision_lower_bound"],
+        s=90,
+        alpha=0.8,
     )
-    ax.set_xlabel("False Positives", fontsize=12)
-    ax.set_ylabel("True Positives", fontsize=12)
-    ax.set_title("True Positives vs False Positives", fontsize=14, fontweight="bold")
-    ax.set_xscale("log")
-    ax.set_yscale("log")
+    ax.set_xlabel("Reference coverage (recall)")
+    ax.set_ylabel("Precision lower bound")
+    ax.set_title(
+        "Coverage vs precision lower bound\n(true precision is higher — curation is partial)",
+        fontweight="bold",
+    )
     ax.grid(True, alpha=0.3)
-
-    # Architecture contribution
-    if not architecture_df.empty:
-        ax = axes[1, 1]
-        ax.hist(
-            architecture_df["fraction_single"], bins=20, alpha=0.7, edgecolor="black"
-        )
-        ax.axvline(
-            architecture_df["fraction_single"].median(),
-            color="red",
-            linestyle="--",
-            linewidth=2,
-            label=f"Median: {architecture_df['fraction_single'].median():.2%}",
-        )
-        ax.set_xlabel("Fraction Single-Domain Proteins", fontsize=12)
-        ax.set_ylabel("Number of Associations", fontsize=12)
-        ax.set_title(
-            "Single-Domain Protein Contribution", fontsize=14, fontweight="bold"
-        )
-        ax.legend()
-        ax.grid(True, alpha=0.3, axis="y")
 
     plt.tight_layout()
-    plt.savefig(output_dir / "validation_metrics.png", dpi=300, bbox_inches="tight")
-    logger.info(f"✓ Saved visualization: {output_dir / 'validation_metrics.png'}")
+    out = output_dir / "validation_metrics.png"
+    plt.savefig(out, dpi=200, bbox_inches="tight")
     plt.close()
+    logger.info(f"✓ Saved visualization: {out}")
 
 
-def main():
-    """Run validation analysis."""
-
+# --------------------------------------------------------------------------- #
+# Entry point                                                                  #
+# --------------------------------------------------------------------------- #
+def main() -> None:
     logger.info("=" * 70)
-    logger.info("dcGO VALIDATION - InterPro Gold Standard Comparison")
+    logger.info("dcGO VALIDATION — InterPro2GO coverage (propagated, reframed)")
     logger.info("=" * 70)
 
-    # Setup paths
-    gold_standard_file = Path("data/raw/interpro_mappings/interpro2go")
-    predictions_file = Path(
-        "results_no_true_path/domain_go_associations_significant.tsv"
-    )
-    protein2ipr_file = Path("data/interim/protein2ipr_human.dat.gz")
+    reference_file = Path("data/raw/interpro2go/interpro2go")
+    # Back-compat: older layout kept it under interpro_mappings/
+    if not reference_file.exists():
+        alt = Path("data/raw/interpro_mappings/interpro2go")
+        if alt.exists():
+            reference_file = alt
+    predictions_file = Path("results/domain_go_associations_significant.tsv")
+    obo_file = Path("data/raw/go_ontology/go-basic.obo")
     output_dir = Path("validation")
     output_dir.mkdir(exist_ok=True)
 
-    # 1. Load data
-    logger.info("")
-    logger.info("STEP 1: Loading Data")
-    logger.info("─" * 70)
+    if not reference_file.exists() or not predictions_file.exists():
+        logger.error(
+            "Missing inputs. Need the InterPro2GO reference "
+            f"({reference_file}) and predictions ({predictions_file}). "
+            "Download the reference with: "
+            "uv run python scripts/download_data.py --datasets interpro2go"
+        )
+        sys.exit(1)
 
-    gold_standard = parse_interpro2go(gold_standard_file)
+    reference = parse_interpro2go(reference_file)
     predictions = load_dcgo_predictions(predictions_file)
-
-    # 2. Calculate basic overlap
-    logger.info("")
-    logger.info("STEP 2: Basic Overlap Analysis")
-    logger.info("─" * 70)
-
-    pred_set = set(zip(predictions["domain"], predictions["go_term"]))
-    gold_set = set(gold_standard.keys())
-
-    overlap = pred_set & gold_set
-    novel = pred_set - gold_set
-    missed = gold_set - pred_set
-
-    logger.info(f"Predictions: {len(pred_set):,}")
-    logger.info(f"Gold standard: {len(gold_set):,}")
-    logger.info(
-        f"✓ Overlap: {len(overlap):,} ({len(overlap) / len(pred_set) * 100:.2f}% of predictions)"
-    )
-    logger.info(
-        f"  Novel predictions: {len(novel):,} ({len(novel) / len(pred_set) * 100:.2f}%)"
-    )
-    logger.info(
-        f"  Missed gold standard: {len(missed):,} ({len(missed) / len(gold_set) * 100:.2f}%)"
-    )
-
-    # 3. Performance at thresholds
-    logger.info("")
-    logger.info("STEP 3: Performance at Various Thresholds")
-    logger.info("─" * 70)
+    get_ancestors = build_get_ancestors(obo_file)
 
     thresholds = {
-        "p_value": [1e-10, 1e-8, 1e-6, 1e-4, 1e-2, 0.05],
-        "adj_p_value": [1e-6, 1e-4, 1e-2, 0.01, 0.05, 0.1],
+        "p_value": [1e-10, 1e-8, 1e-6, 1e-4, 1e-2],
+        "adj_p_value": [1e-6, 1e-4, 1e-2, 0.05, 0.1],
         "hyper_score": [90, 80, 70, 60, 50, 40, 30, 20],
     }
-
-    metrics_df = calculate_overlap_at_thresholds(predictions, gold_standard, thresholds)
-
-    # Find best F1 score
-    best_row = metrics_df.loc[metrics_df["f1_score"].idxmax()]
-    logger.info(
-        f"✓ Best F1 score: {best_row['f1_score']:.4f} at {best_row['threshold']}"
+    metrics_df = calculate_overlap_at_thresholds(
+        predictions, reference, thresholds, get_ancestors
     )
-    logger.info(f"  Precision: {best_row['precision']:.4f}")
-    logger.info(f"  Recall: {best_row['recall']:.4f}")
-    logger.info(f"  True positives: {best_row['true_positives']:,.0f}")
-
-    # Save metrics
     metrics_df.to_csv(output_dir / "performance_metrics.tsv", sep="\t", index=False)
     logger.info(f"✓ Saved metrics: {output_dir / 'performance_metrics.tsv'}")
 
-    # 4. Novel predictions
-    logger.info("")
-    logger.info("STEP 4: Novel High-Confidence Predictions")
-    logger.info("─" * 70)
-
-    novel_df = analyze_novel_predictions(predictions, gold_standard, top_n=100)
-    novel_df.to_csv(output_dir / "novel_predictions_top100.tsv", sep="\t", index=False)
+    best = metrics_df.loc[metrics_df["reference_coverage"].idxmax()]
     logger.info(
-        f"✓ Saved novel predictions: {output_dir / 'novel_predictions_top100.tsv'}"
+        f"✓ Best reference coverage: {best['reference_coverage']:.3f} "
+        f"at {best['threshold']} (recovered {best['recovered']:,.0f} pairs)"
     )
 
-    # 5. Domain architecture analysis
-    if protein2ipr_file.exists():
-        logger.info("")
-        logger.info("STEP 5: Domain Architecture Analysis")
-        logger.info("─" * 70)
-
-        domain_proteins, domain_stats = load_domain_architectures(protein2ipr_file)
-        architecture_df = analyze_domain_architecture_contribution(
-            predictions, gold_standard, domain_stats
-        )
-
-        if not architecture_df.empty:
-            architecture_df.to_csv(
-                output_dir / "architecture_contribution.tsv", sep="\t", index=False
-            )
-            logger.info(
-                f"✓ Saved architecture analysis: {output_dir / 'architecture_contribution.tsv'}"
-            )
-    else:
-        logger.warning(f"Protein2IPR file not found: {protein2ipr_file}")
-        logger.warning("Skipping domain architecture analysis")
-        architecture_df = pd.DataFrame()
-
-    # 6. Visualizations
-    logger.info("")
-    logger.info("STEP 6: Creating Visualizations")
-    logger.info("─" * 70)
-
-    create_visualizations(metrics_df, architecture_df, output_dir)
-
-    # 7. Summary report
-    logger.info("")
-    logger.info("=" * 70)
-    logger.info("VALIDATION COMPLETE!")
-    logger.info("=" * 70)
-    logger.info("Summary:")
-    logger.info(
-        f"  Overlap with gold standard: {len(overlap):,} / {len(pred_set):,} ({len(overlap) / len(pred_set) * 100:.2f}%)"
+    candidates = analyze_candidate_predictions(predictions, reference, get_ancestors)
+    candidates.to_csv(
+        output_dir / "candidate_predictions_top100.tsv", sep="\t", index=False
     )
-    logger.info(f"  Best F1 score: {best_row['f1_score']:.4f}")
-    logger.info(f"  Novel high-confidence predictions: {len(novel):,}")
-    if not architecture_df.empty:
-        logger.info(
-            f"  Avg single-domain contribution: {architecture_df['fraction_single'].mean():.2%}"
-        )
-    logger.info("")
-    logger.info("Output files:")
-    logger.info(f"  {output_dir / 'performance_metrics.tsv'}")
-    logger.info(f"  {output_dir / 'novel_predictions_top100.tsv'}")
-    if not architecture_df.empty:
-        logger.info(f"  {output_dir / 'architecture_contribution.tsv'}")
-    logger.info(f"  {output_dir / 'validation_metrics.png'}")
+    logger.info(
+        f"✓ Saved candidates: {output_dir / 'candidate_predictions_top100.tsv'}"
+    )
+
+    create_visualizations(metrics_df, output_dir)
+
+    logger.info("=" * 70)
+    logger.info("VALIDATION COMPLETE")
+    logger.info(
+        "Reminder: 'candidate_predictions' are curation-gap candidates, not "
+        "false positives. Coverage is the defensible metric against InterPro2GO."
+    )
 
 
 if __name__ == "__main__":
