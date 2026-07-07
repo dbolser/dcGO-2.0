@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.unit
+
 # validation/ is not a package; load validate_results.py by path.
 _VALIDATION = Path(__file__).resolve().parents[2] / "validation" / "validate_results.py"
 _spec = importlib.util.spec_from_file_location("validate_results", _VALIDATION)

@@ -103,7 +103,7 @@ def parse_interpro2go(interpro2go_file: Path) -> set[Pair]:
     logger.info(f"Parsing InterPro2GO reference: {interpro2go_file}")
     reference: set[Pair] = set()
 
-    with open(interpro2go_file, "r") as f:
+    with open(interpro2go_file, "r", encoding="utf-8") as f:
         for line in f:
             if line.startswith("!"):
                 continue
@@ -131,6 +131,10 @@ def load_dcgo_predictions(predictions_file: Path) -> pd.DataFrame:
     """Load dcGO predicted associations."""
     logger.info(f"Loading dcGO predictions: {predictions_file}")
     df = pd.read_csv(predictions_file, sep="\t")
+    required = {"domain", "go_term", "p_value", "adj_p_value", "hyper_score"}
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f"Predictions file is missing required columns: {missing}")
     logger.info(f"✓ Loaded {len(df):,} predicted associations")
     logger.info(
         f"  Unique domains: {df['domain'].nunique():,}; "
@@ -149,7 +153,9 @@ def build_get_ancestors(obo_file: Path | None) -> Callable[[str], set[str]]:
         return lambda _go: set()
 
     # Imported lazily so the metric helpers don't require obonet/networkx.
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    project_root = str(Path(__file__).resolve().parents[1])
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
     import networkx as nx
 
     from src.ontology_processor import OntologyProcessor
@@ -194,9 +200,13 @@ def calculate_overlap_at_thresholds(
     """
     logger.info("Calculating coverage at various thresholds (propagated)...")
 
-    ref_prop = propagate_pairs(reference, get_ancestors)
-    full_pred_prop = propagate_pairs(_pairs_from_df(predictions), get_ancestors)
-    _, ref_fixed, shared = restrict_to_shared_domains(full_pred_prop, ref_prop)
+    # Propagation only adds ancestor GO terms; it never changes the domain set.
+    # So compute the shared domain space from the RAW domains and filter to it
+    # *before* propagating — propagating non-shared domains would be wasted work.
+    shared = set(predictions["domain"]) & {d for d, _ in reference}
+    ref_fixed = propagate_pairs(
+        {pair for pair in reference if pair[0] in shared}, get_ancestors
+    )
     logger.info(
         f"  Shared domains: {len(shared):,}; reference pairs on shared domains "
         f"(propagated): {len(ref_fixed):,}"
@@ -212,8 +222,8 @@ def calculate_overlap_at_thresholds(
             else:
                 filtered = predictions[predictions[column] >= v]
                 name = f"{label}≥{v:g}"
-            pred_prop = propagate_pairs(_pairs_from_df(filtered), get_ancestors)
-            pred_shared = {(d, g) for d, g in pred_prop if d in shared}
+            pred_pairs = {p for p in _pairs_from_df(filtered) if p[0] in shared}
+            pred_shared = propagate_pairs(pred_pairs, get_ancestors)
             results.append(compute_metrics(pred_shared, ref_fixed, name))
 
     sweep("p_value", thresholds["p_value"], "le", "p_value")
@@ -237,12 +247,14 @@ def analyze_candidate_predictions(
     """
     logger.info(f"Selecting top {top_n} candidate predictions (not in reference)...")
 
-    ref_prop = propagate_pairs(reference, get_ancestors)
-    ref_domains = {d for d, _ in ref_prop}
-    ref_lookup = ref_prop  # membership test on propagated reference
+    # Filter the reference to domains we actually predict before propagating.
+    pred_domains = set(predictions["domain"])
+    ref_lookup = propagate_pairs(
+        {pair for pair in reference if pair[0] in pred_domains}, get_ancestors
+    )
+    ref_domains = {d for d, _ in ref_lookup}
 
-    def is_candidate(row) -> bool:
-        d, g = row["domain"], row["go_term"]
+    def is_candidate(d: str, g: str) -> bool:
         if d not in ref_domains:
             return False  # outside shared domain space
         if (d, g) in ref_lookup:
@@ -250,11 +262,15 @@ def analyze_candidate_predictions(
         # Also not covered by propagating this prediction up to a curated ancestor
         return not any((d, anc) in ref_lookup for anc in get_ancestors(g))
 
-    mask = predictions.apply(is_candidate, axis=1)
+    # Vectorized over columns — pandas apply(axis=1) is far slower here.
+    mask = [
+        is_candidate(d, g)
+        for d, g in zip(predictions["domain"], predictions["go_term"])
+    ]
     candidates = (
         predictions[mask].sort_values("hyper_score", ascending=False).head(top_n).copy()
     )
-    logger.info(f"✓ {int(mask.sum()):,} candidate pairs on shared domains")
+    logger.info(f"✓ {sum(mask):,} candidate pairs on shared domains")
     return candidates
 
 
@@ -324,12 +340,17 @@ def main() -> None:
     output_dir = Path("validation")
     output_dir.mkdir(exist_ok=True)
 
-    if not reference_file.exists() or not predictions_file.exists():
+    # The GO ontology is REQUIRED here: the whole point of §1 is a propagated
+    # comparison. Without it build_get_ancestors would silently fall back to
+    # no-propagation and reproduce the unpropagated comparison this fixes.
+    missing_inputs = [
+        str(p) for p in (reference_file, predictions_file, obo_file) if not p.exists()
+    ]
+    if missing_inputs:
         logger.error(
-            "Missing inputs. Need the InterPro2GO reference "
-            f"({reference_file}) and predictions ({predictions_file}). "
-            "Download the reference with: "
-            "uv run python scripts/download_data.py --datasets interpro2go"
+            "Missing required inputs: " + ", ".join(missing_inputs) + ". Download "
+            "the reference and ontology with: uv run python scripts/download_data.py "
+            "--datasets interpro2go --datasets go_ontology"
         )
         sys.exit(1)
 
