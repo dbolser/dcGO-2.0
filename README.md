@@ -95,10 +95,14 @@ proteins found in the GOA file, writing
 
 ## Example output
 
+The ranked TSV has the full header
+`rank, domain, go_term, p_value, adj_p_value, odds_ratio, hyper_score, domain_type, constituent_domains, n_observations`
+(the unranked export is identical without the leading `rank` column):
+
 ```
-rank  domain      go_term      p_value        adj_p_value    odds_ratio  hyper_score
-1     IPR015812   GO:0005178   2.894064e-307  8.791816e-299  inf         100.00
-2     IPR000471   GO:0005125   4.869485e-294  7.396453e-286  inf         100.00
+rank  domain      go_term      p_value        adj_p_value    odds_ratio  hyper_score  domain_type  constituent_domains  n_observations
+1     IPR015812   GO:0005178   2.894064e-307  8.791816e-299  inf         100.00       single       -                    42
+2     IPR000471   GO:0005125   4.869485e-294  7.396453e-286  inf         100.00       single       -                    35
 ```
 
 ---

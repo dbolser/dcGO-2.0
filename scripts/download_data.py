@@ -84,26 +84,37 @@ def download_one(url: str, dest: Path, *, force: bool, timeout: int) -> bool:
     tmp = dest.with_suffix(dest.suffix + ".part")
     print(f"  ↓ {url}\n    → {dest}")
 
-    with requests.get(url, stream=True, timeout=timeout) as resp:
-        resp.raise_for_status()
-        total = int(resp.headers.get("Content-Length", 0))
-        downloaded = 0
-        with open(tmp, "wb") as fh:
-            for chunk in resp.iter_content(chunk_size=CHUNK_SIZE):
-                if not chunk:
-                    continue
-                fh.write(chunk)
-                downloaded += len(chunk)
-                if total:
-                    pct = downloaded / total * 100
-                    print(
-                        f"\r    {_human_size(downloaded)} / {_human_size(total)} ({pct:5.1f}%)",
-                        end="",
-                        flush=True,
-                    )
-                else:
-                    print(f"\r    {_human_size(downloaded)}", end="", flush=True)
-        print()
+    # Clean up the partial file on any interruption (network drop, Ctrl-C, disk
+    # full) so a failed ~20 GB download doesn't silently linger. We re-raise so
+    # the caller still sees the failure.
+    try:
+        with requests.get(url, stream=True, timeout=timeout) as resp:
+            resp.raise_for_status()
+            # Content-Length may be absent or malformed; treat as "unknown size".
+            try:
+                total = int(resp.headers.get("Content-Length") or 0)
+            except ValueError:
+                total = 0
+            downloaded = 0
+            with open(tmp, "wb") as fh:
+                for chunk in resp.iter_content(chunk_size=CHUNK_SIZE):
+                    if not chunk:
+                        continue
+                    fh.write(chunk)
+                    downloaded += len(chunk)
+                    if total:
+                        pct = downloaded / total * 100
+                        print(
+                            f"\r    {_human_size(downloaded)} / {_human_size(total)} ({pct:5.1f}%)",
+                            end="",
+                            flush=True,
+                        )
+                    else:
+                        print(f"\r    {_human_size(downloaded)}", end="", flush=True)
+            print()
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
 
     tmp.replace(dest)
     print(f"  ✔ done: {dest} ({_human_size(dest.stat().st_size)})")
