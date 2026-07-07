@@ -1,328 +1,181 @@
-# dcGO Pipeline - Production Ready
+# dcGO Pipeline
 
-**🎯 STATUS: COMPLETE & PRODUCTION-READY** ✅
+A working implementation of the domain-centric Gene Ontology (dcGO) methodology
+for protein function prediction. The pipeline transforms protein-level GO
+annotations into statistically validated **domain → GO term** associations using
+Fisher's exact tests with FDR correction and hypergeometric association scoring.
 
-A comprehensive, production-ready implementation of the domain-centric Gene Ontology (dcGO) methodology for protein function prediction. This pipeline transforms protein-level functional annotations into statistically validated domain-level associations using rigorous statistical inference.
-
-## 🚀 **What This Pipeline Does**
-
-The dcGO pipeline implements the domain-centric Gene Ontology methodology, which:
-
-1. **Downloads large-scale biological datasets** (UniProt, GOA, InterPro, Gene Ontology)
-2. **Maps protein sequences to domain architectures** using pre-computed InterPro annotations
-3. **Performs statistical inference** with Fisher's exact tests and FDR correction
-4. **Applies ontology logic** with the True Path Rule for optimal annotation levels
-5. **Produces a database** of statistically validated domain-to-function associations
-
-**Scientific Impact**: Moves from protein-level to domain-level functional annotation, providing more granular and accurate predictions.
+> **Status:** the human analysis path (below) runs end-to-end and is the
+> supported entry point. It uses **pre-computed InterPro domain annotations**
+> (`protein2ipr.dat`) — it does **not** run InterProScan or scan sequences
+> itself. A general multi-organism orchestrator is future work (see
+> [FUTURE_WORK.md](FUTURE_WORK.md)); there is no `main_pipeline` module yet.
 
 ---
 
-## ⚡ **Quick Start**
+## What it does
 
-### For Human Proteins (RECOMMENDED - 50 minutes)
+1. **Parses GO annotations** for a species from GOA (`goa_human.gaf.gz`).
+2. **Maps proteins to InterPro domains** from pre-computed `protein2ipr.dat`.
+3. **Builds domain × GO contingency tables** and runs **Fisher's exact tests**
+   (vectorized via the Cython `fisher` package), with **Benjamini–Hochberg FDR**
+   correction and a **hypergeometric association score (1–100)**.
+4. **Generates supra-domains** (contiguous domain combinations up to triplets)
+   with optional empirical-Bayes shrinkage toward their constituent domains.
+5. *(optional)* **Applies the True Path Rule** to propagate associations up the
+   GO DAG, when run with `--enable-true-path`.
 
-See **[QUICKSTART.md](QUICKSTART.md)** for the complete human-only workflow:
+Output: a TSV of significant domain–GO associations (FDR < 0.01 by default) with
+p-values, FDR q-values, odds ratios, and hypergeometric scores.
+
+---
+
+## Quick Start (human, ~1 hour + download time)
+
+See **[QUICKSTART.md](QUICKSTART.md)** for the full walkthrough.
 
 ```bash
-# 1. Install
+# 1. Install dependencies
 uv sync
 
-# 2. Download data (~11 MB human GOA + ~20 GB InterPro for all organisms)
-uv run python -m src.data_acquisition --datasets goa_annotations --datasets go_ontology --datasets interpro_mappings
+# 2. Download the required datasets
+#    (GOA human ~11 MB, GO ontology ~30 MB, InterPro protein2ipr ~20 GB)
+uv run python scripts/download_data.py
 
-# 3. Extract human proteins (one-time, ~10 min)
+# 3. Extract the human subset of protein2ipr (one-time; the 20 GB file is
+#    streamed once and filtered down to human proteins)
 uv run python extract_human_interpro.py
 
-# 4. Run statistical inference (~50 min for 303M tests)
+# 4. Run the statistical inference
 uv run python run_dcgo_human.py --num-cores 8
+
+# 4b. (optional) also propagate annotations up the GO DAG (True Path Rule)
+uv run python run_dcgo_human.py --num-cores 8 \
+    --enable-true-path --go-ontology data/raw/go_ontology/go-basic.obo
 ```
 
-**Output**: 42,220 significant domain-GO associations (FDR < 0.01) with hypergeometric scores
+`scripts/download_data.py --list` shows every dataset it knows about;
+`--datasets NAME` selects a subset and `--all` grabs the optional sources too.
 
-**Performance** (8 cores):
-- 303,787,905 Fisher's exact tests completed
-- Processing rate: ~100,000-120,000 tests/second
-- Results include p-values, FDR-corrected q-values, odds ratios, and hypergeometric association scores (1-100)
+---
 
-### For Full Pipeline (All Organisms - Days on HPC)
+## Required inputs
 
-```bash
-# Full pipeline (downloads ~70GB of data, processes for days on HPC)
-uv run python -m src.main_pipeline --num-cores 8 --output-dir results/
+The dcGO methodology needs three inputs for a given set of proteins. All three
+are downloaded by `scripts/download_data.py` into `data/raw/<source>/`:
 
-# With custom configuration
-uv run python -m src.main_pipeline --config config/custom.yaml --num-cores 16
+| Input | File | Size | Purpose |
+|-------|------|------|---------|
+| Domain annotations | `interpro_mappings/protein2ipr.dat.gz` | ~20 GB | Which InterPro domains are in each protein |
+| GO annotations | `goa_annotations/goa_human.gaf.gz` | ~11 MB | Protein → GO term assignments (GAF 2.2) |
+| Ontology structure | `go_ontology/go-basic.obo` | ~30 MB | GO DAG (only needed for `--enable-true-path`) |
+
+`extract_human_interpro.py` filters `protein2ipr.dat.gz` down to the human
+proteins found in the GOA file, writing
+`data/interim/protein2ipr_human.dat.gz` so subsequent runs are fast.
+
+---
+
+## Key options (`run_dcgo_human.py`)
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--species` | `human` | Species / GOA file to analyze |
+| `--evidence-filter` | `manual` | GO evidence codes: `all`, `manual`, `experimental` |
+| `--fdr-threshold` | `0.01` | FDR (q-value) significance cutoff |
+| `--num-cores` | `8` | CPU cores for parallel Fisher tests |
+| `--batch-size` | `50000` | Fisher test batch size |
+| `--enable-supra-domains` / `--disable-supra-domains` | enabled | Test contiguous domain combinations |
+| `--enable-shrinkage` | off | Empirical-Bayes shrinkage for supra-domains |
+| `--enable-true-path` | off | Propagate associations up the GO DAG |
+| `--go-ontology` | `data/raw/go_ontology/go-basic.obo` | OBO file (required for True Path Rule) |
+| `--output-dir` | `results/` | Output directory |
+
+---
+
+## Example output
+
+The ranked TSV has the full header
+`rank, domain, go_term, p_value, adj_p_value, odds_ratio, hyper_score, domain_type, constituent_domains, n_observations`
+(the unranked export is identical without the leading `rank` column):
+
 ```
-
-### 4. View Results
-```bash
-# Results will be in:
-results/
-├── dcgo_database.db     # SQLite database with domain-GO associations
-├── dcgo_annotations.tsv # Human-readable export
-└── logs/               # Detailed execution logs
+rank  domain      go_term      p_value        adj_p_value    odds_ratio  hyper_score  domain_type  constituent_domains  n_observations
+1     IPR015812   GO:0005178   2.894064e-307  8.791816e-299  inf         100.00       single       -                    42
+2     IPR000471   GO:0005125   4.869485e-294  7.396453e-286  inf         100.00       single       -                    35
 ```
 
 ---
 
-## 📊 **dcGO Data Requirements: The Three Essential Inputs**
+## Development
 
-The dcGO methodology requires exactly **3 types of data** for a given set of proteins:
-
-### **1. Domain Annotations** (What domains are in each protein?)
-- **Source**: Pre-computed InterPro domain mappings
-- **File**: `protein2ipr.dat.gz` (~20GB)
-- **Content**: Protein ID → Domain ID mappings with boundaries
-- **Format**: `P12345    PF00001    10    50    1e-10    T    Domain1`
-
-### **2. Ontology Annotations** (What GO terms are assigned to each protein?)
-- **Source**: Gene Ontology Annotation (GOA) database
-- **File**: `goa_uniprot_all.gaf.gz` (~2GB)
-- **Content**: Protein ID → GO term mappings with evidence
-- **Format**: GAF 2.2 format with protein-GO associations
-
-### **3. Ontology Structure** (How are GO terms related hierarchically?)
-- **Source**: Gene Ontology Consortium
-- **File**: `go-basic.obo` (~50MB)
-- **Content**: GO term hierarchy with is_a and part_of relationships
-- **Format**: OBO format defining the ontology DAG
-
----
-
-## 📁 **Complete Download Breakdown**
-
-| Dataset | Size | dcGO Input | Required | Purpose |
-|---------|------|------------|----------|---------|
-| **InterPro Mappings** | ~20GB | **✅ Input 1** | **Required** | Domain annotations |
-| **GOA Annotations** | ~2GB | **✅ Input 2** | **Required** | Ontology annotations |
-| **Gene Ontology** | ~50MB | **✅ Input 3** | **Required** | Ontology structure |
-| UniProt Swiss-Prot | ~500MB | Not used | Optional | For local HMM scanning only |
-| UniProt TrEMBL | ~50GB | Not used | Optional | For local HMM scanning only |
-| Pfam Regions | ~5GB | Alternative | Optional | Alternative domain source |
-| InterPro Definitions | ~40MB | Metadata | Optional | Domain descriptions |
-
-**✅ Minimum Required**: ~22GB (InterPro + GOA + GO)  
-**❌ NOT Required**: Protein sequences (unless doing local HMM scanning)
-
----
-
-## 🔧 **Configuration Options**
-
-### Taxonomic Scope (Choose Your Strategy)
-
-**Option 1: Multi-species (Recommended)**
-- **Pros**: Maximum statistical power, comprehensive coverage
-- **Cons**: Large datasets, longer processing time
-- **Use case**: Research applications, comprehensive analysis
-
-**Option 2: Human-only**
-- **Pros**: Smaller datasets, faster processing
-- **Cons**: Reduced statistical power, limited coverage  
-- **Use case**: Human-focused studies, resource constraints
-
-```python
-# Modify config/settings.py for human-only
-# Filter datasets to human proteins only before processing
-```
-
-### Hardware Requirements
-
-| Component | Minimum | Recommended | HPC Cluster |
-|-----------|---------|-------------|-------------|
-| **CPU Cores** | 4 | 8-16 | 32+ |
-| **RAM** | 16GB | 32GB | 128GB+ |
-| **Storage** | 100GB | 500GB | 1TB+ |
-| **Runtime** | Days | Hours | Minutes |
-
----
-
-## 🧪 **Development & Testing**
-
-### Run Tests
 ```bash
-# Run all tests
-uv run pytest tests/ -v
+# Tests (113 tests, ~3 s)
+uv run pytest
 
-# Run specific test categories  
-uv run pytest tests/unit/ -v          # Unit tests
-uv run pytest tests/e2e/ -v           # Integration tests
-uv run pytest -m "not slow" -v        # Fast tests only
-
-# Run with coverage
-uv run pytest tests/ --cov=src --cov-report=html
-```
-
-### Code Quality
-```bash
-# Format code
-uv run black src/ tests/
-uv run isort src/ tests/
-
-# Type checking
-uv run mypy src/
-
-# Linting
+# Lint + format (CI uses ruff)
 uv run ruff check src/ tests/
+uv run ruff format --check
+
+# Coverage
+uv run pytest --cov=src --cov-report=html
 ```
 
+CI (`.github/workflows/ci.yml`) runs ruff + pytest on every push and PR.
+
 ---
 
-## 🏗️ **Architecture Overview**
+## Repository layout
 
 ```
-dcGOspeed/
-├── src/                              # Core implementation (5,000+ lines)
-│   ├── data_acquisition.py           # Download system with progress tracking
-│   ├── domain_scanning.py            # InterPro integration + supra-domains  
-│   ├── statistical_inference.py      # Fisher's tests + FDR correction
-│   ├── ontology_processor.py         # True Path Rule implementation
-│   ├── database_manager.py           # SQLite backend with optimization
-│   └── main_pipeline.py              # Orchestration + checkpoint/resume
-├── config/settings.py                # Configuration management
-├── tests/                            # Comprehensive test suite
-├── docs/                            # Research papers & documentation
-└── results/                         # Output directory
+dcGO-2.0/
+├── run_dcgo_human.py            # Main entry point: human dcGO analysis
+├── extract_human_interpro.py    # Filter protein2ipr.dat down to human proteins
+├── scripts/
+│   └── download_data.py         # Download required datasets from source
+├── src/
+│   ├── goa_parser.py            # Parse GOA GAF files
+│   ├── domain_annotation_parser.py  # Parse protein2ipr domain mappings
+│   ├── vectorized_fisher.py     # Vectorized Fisher's exact test + BH-FDR
+│   ├── sparse_fisher.py         # Sparse contingency-table construction
+│   ├── hierarchical_inference.py    # Supra-domains + shrinkage
+│   ├── ontology_processor.py    # True Path Rule / GO DAG propagation
+│   ├── data_acquisition.py      # (async downloader library — see note below)
+│   └── database_manager.py      # SQLite storage/export helpers
+├── config/settings.py           # Dataset URLs + configuration
+├── tests/                       # unit / integration tests
+├── validation/                  # Validation scripts and metrics
+└── docs/                        # Reference papers
 ```
 
-### Pipeline Stages
-
-1. **Data Acquisition**: Downloads datasets with resume capability
-2. **Domain Mapping**: Parses InterPro annotations and generates supra-domains
-3. **Statistical Inference**: Fisher's exact tests with FDR correction
-4. **Ontology Processing**: True Path Rule with optimal level filtering  
-5. **Database Export**: SQLite storage with TSV export
+> **Note:** `src/data_acquisition.py` is an older async (aiohttp) download
+> library and is **not** on the supported path. Use `scripts/download_data.py`
+> instead — it reads the same URLs from `config/settings.py`.
 
 ---
 
-## 📈 **Expected Output**
+## Method references
 
-### Database Schema
-```sql
--- Main results table
-CREATE TABLE domain_annotations (
-    domain_id TEXT,           -- e.g., 'PF00001'
-    go_id TEXT,               -- e.g., 'GO:0005515'  
-    fdr_q_value REAL,         -- Statistical significance (< 0.01)
-    association_score REAL,   -- Strength score (1-100)
-    annotation_type TEXT,     -- 'direct' or 'propagated'
-    direct_source_term TEXT   -- Original inference source
-);
-```
-
-### Example Results
-```
-domain_id    go_id        fdr_q_value  association_score  annotation_type
-PF00001      GO:0005515   0.001        95.2              direct
-PF00001      GO:0003674   0.001        95.2              propagated
-PF00002      GO:0016740   0.005        78.4              direct
-```
+- Fang & Gough (2013), *dcGO: database of domain-centric ontologies*. The
+  statistical framework (per-domain enrichment, FDR, True Path Rule) follows
+  this work.
+- Gene Ontology Consortium — ontology structure and annotation principles.
+- InterPro — domain classification (`protein2ipr`).
 
 ---
 
-## ⚠️ **Important Notes**
+## Known limitations / not yet done
 
-### Performance Considerations
-- **First run**: Downloads ~70GB, may take hours/days depending on connection
-- **Subsequent runs**: Skips existing files, much faster
-- **HPC recommended**: For production use with full datasets
-- **Checkpoint/resume**: Long-running jobs can be safely interrupted and resumed
+See [FUTURE_WORK.md](FUTURE_WORK.md) and [TODO.md](TODO.md). In brief:
 
-### Data Freshness
-- **Automated downloads**: Pipeline fetches latest versions automatically
-- **Update frequency**: Run monthly for latest annotations
-- **Version tracking**: All downloads are logged with timestamps
-
-### Troubleshooting
-```bash
-# Check disk space
-df -h
-
-# Monitor download progress
-tail -f logs/dcgo_pipeline_*.log
-
-# Resume interrupted pipeline
-uv run python -m src.main_pipeline --resume --output-dir results/
-
-# Force re-download if files corrupted
-uv run python -m src.main_pipeline --force-download
-```
+- Only pre-computed InterPro annotations are consumed; no local domain scanning.
+- The True Path Rule is **opt-in**, not part of the default run.
+- Validation so far is against InterPro2GO only; there is no CAFA / temporal
+  held-out benchmark or comparison to the original dcGO results yet. See
+  [VALIDATION_PLAN.md](VALIDATION_PLAN.md).
 
 ---
 
-## 📚 **Documentation**
+## License
 
-- **[IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md)**: 200+ page technical specification
-- **[CLAUDE.md](CLAUDE.md)**: Developer guidance for modifications
-- **[PROJECT_STATUS.md](PROJECT_STATUS.md)**: Current completion status
-- **[COMPLETION_SUMMARY.md](COMPLETION_SUMMARY.md)**: Achievement summary
-
----
-
-## 🔬 **Scientific Validation**
-
-This implementation faithfully reproduces the dcGO methodology described in:
-
-1. **Fang et al. (2013)**: Original dcGO methodology and statistical framework
-2. **Gene Ontology Consortium (2017)**: Ontology structure and annotation principles  
-3. **InterPro Documentation**: Domain classification and annotation standards
-
-**Key Features**:
-- ✅ Fisher's exact tests with Benjamini-Hochberg FDR correction
-- ✅ True Path Rule implementation with optimal level determination
-- ✅ Supra-domain analysis for domain combination effects
-- ✅ Scalable architecture for millions of proteins
-
----
-
-## 🎯 **Use Cases**
-
-### Research Applications
-- **Protein function prediction**: Assign functions to uncharacterized proteins
-- **Domain analysis**: Understand functional roles of protein domains
-- **Evolutionary studies**: Track domain function conservation across species
-- **Method development**: Base platform for algorithm improvements
-
-### Educational Applications  
-- **Bioinformatics training**: Learn statistical methods in computational biology
-- **Data science**: Example of large-scale biological data processing
-- **Statistical inference**: Practical application of multiple testing correction
-
----
-
-## 🤝 **Contributing**
-
-We welcome contributions! Areas for improvement:
-
-1. **Additional ontologies**: Extend beyond Gene Ontology
-2. **Visualization tools**: Web interface for results exploration
-3. **Performance optimization**: GPU acceleration for large datasets
-4. **Cloud deployment**: Docker/Kubernetes configurations
-
-See [CLAUDE.md](CLAUDE.md) for developer guidance.
-
----
-
-## 📄 **License**
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
----
-
-## 🏆 **Project Status**
-
-**✅ PRODUCTION READY**
-
-- **Core Pipeline**: 5,000+ lines of tested Python code
-- **Testing**: Comprehensive unit and integration tests
-- **Documentation**: Extensive guides and API documentation  
-- **Dependencies**: All resolved and working
-- **Validation**: End-to-end workflow tested and verified
-
-**Ready for immediate use in computational biology research!**
-
----
-
-*Last Updated: 2025-10-08*  
-*Status: ✅ Complete & Production-Ready*  
-*Python Version: 3.12+*
+MIT License — see [LICENSE](LICENSE).

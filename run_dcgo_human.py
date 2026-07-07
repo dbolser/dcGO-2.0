@@ -17,7 +17,7 @@ Options:
     --output-dir PATH        Output directory for results (default: results/)
     --batch-size INT         Batch size for Fisher tests (default: 50000)
     --enable-true-path       Enable True Path Rule for GO annotation propagation
-    --go-ontology PATH       Path to GO ontology file (default: data/raw/go_ontology/go.obo)
+    --go-ontology PATH       Path to GO ontology file (default: data/raw/go_ontology/go-basic.obo)
 
 Examples:
     # Run for human proteins
@@ -27,7 +27,7 @@ Examples:
     uv run python run_dcgo_human.py --species mouse --evidence-filter experimental
 
     # Run with True Path Rule propagation
-    uv run python run_dcgo_human.py --enable-true-path --go-ontology data/raw/go_ontology/go.obo
+    uv run python run_dcgo_human.py --enable-true-path --go-ontology data/raw/go_ontology/go-basic.obo
 """
 
 import argparse
@@ -153,8 +153,8 @@ def main():
     parser.add_argument(
         "--go-ontology",
         type=Path,
-        default=Path("data/raw/go_ontology/go.obo"),
-        help="Path to GO ontology file (default: data/raw/go_ontology/go.obo)",
+        default=Path("data/raw/go_ontology/go-basic.obo"),
+        help="Path to GO ontology file (default: data/raw/go_ontology/go-basic.obo)",
     )
     parser.add_argument(
         "--enable-supra-domains",

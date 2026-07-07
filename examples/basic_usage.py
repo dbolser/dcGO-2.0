@@ -40,12 +40,15 @@ def main():
         print(f"  {source}: {url[:60]}...")
     print()
 
-    print("To run the complete pipeline:")
-    print("  uv run python -m src.main_pipeline")
+    print("To run the human dcGO analysis (see README / QUICKSTART.md):")
+    print("  1. uv run python scripts/download_data.py")
+    print("  2. uv run python extract_human_interpro.py")
+    print("  3. uv run python run_dcgo_human.py --num-cores 8")
     print()
-    print("Or with custom parameters:")
+    print("Enable GO annotation propagation (True Path Rule):")
     print(
-        "  uv run python -m src.main_pipeline --num-cores 16 --output-dir /path/to/results"
+        "  uv run python run_dcgo_human.py --enable-true-path "
+        "--go-ontology data/raw/go_ontology/go-basic.obo"
     )
 
 
