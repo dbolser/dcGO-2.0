@@ -256,6 +256,15 @@ def compute_contingency_tables_sparse(
         f"Computing contingency tables for {n_domains:,} × {n_go_terms:,} = {n_domains * n_go_terms:,} pairs"
     )
 
+    # The indicator matrices are stored as int8 to save memory, but int8
+    # *accumulation* overflows at 127. A common domain/GO pair co-occurs in far
+    # more than 127 proteins, and marginal counts run to the whole proteome, so
+    # both the overlap matmul and the marginal sums must accumulate in a wider
+    # dtype. Upcast to int32 BEFORE any accumulation. (Casting the int8 product
+    # afterwards is too late — the overflow has already happened.)
+    protein_domain_matrix = protein_domain_matrix.astype(np.int32)
+    protein_go_matrix = protein_go_matrix.astype(np.int32)
+
     # Compute a: proteins with both (domain AND GO)
     # This is the dot product of transposed matrices
     logger.info("  Computing overlap counts (a)...")

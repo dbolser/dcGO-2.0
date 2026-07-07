@@ -293,6 +293,38 @@ class TestComputeContingencyTables:
         # Verify all values non-negative
         assert np.all(tables >= 0)
 
+    def test_high_cooccurrence_no_int8_overflow(self):
+        """Regression: co-occurrence counts above 127 must not overflow int8.
+
+        The indicator matrices are stored as int8; if the overlap matmul or the
+        marginal sums accumulate in int8, a common domain/GO pair (co-occurring
+        in >127 proteins) wraps around and corrupts the contingency table. With
+        300 proteins all carrying the one domain and the one GO term, the true
+        table is a=300, b=c=0, d=0.
+        """
+        n = 300  # > 127, and > 256 wrap point is 300 -> 44 if it overflows
+        col = np.zeros(n, dtype=int)
+        rows = np.arange(n)
+        protein_domain = sparse.csr_matrix(
+            (np.ones(n, dtype=np.int8), (rows, col)), shape=(n, 1), dtype=np.int8
+        )
+        protein_go = sparse.csr_matrix(
+            (np.ones(n, dtype=np.int8), (rows, col)), shape=(n, 1), dtype=np.int8
+        )
+
+        tables = compute_contingency_tables_sparse(protein_domain, protein_go)
+
+        assert tables.shape == (1, 2, 2)
+        a, b, c, d = (
+            tables[0, 0, 0],
+            tables[0, 0, 1],
+            tables[0, 1, 0],
+            tables[0, 1, 1],
+        )
+        assert a == n, f"overlap count corrupted by int8 overflow: {a} != {n}"
+        assert (b, c, d) == (0, 0, 0)
+        assert tables[0].sum() == n
+
 
 class TestIntegration:
     """Integration tests for the complete sparse matrix workflow."""
