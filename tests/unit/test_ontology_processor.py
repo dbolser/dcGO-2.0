@@ -170,27 +170,28 @@ class TestAncestorsDescendants:
     """Test suite for ancestor and descendant queries."""
 
     def test_get_ancestors_specific_term(self, ontology_processor):
-        """Test getting ancestors for a specific GO term."""
-        # Test that we can query ancestors (direction depends on how obonet parses graph)
-        # GO:0006812 (cation transport) is a specific term that should have some ancestors
+        """Ancestors of a specific term are its more-general parents (issue #13)."""
+        # GO:0006812 (cation transport) chain: 0006812 -> 0006811 -> 0006810
+        # -> 0009987 -> 0008150 (root).
         ancestors = ontology_processor.get_ancestors("GO:0006812")
-
-        # Should return a set (may be empty if graph is directed differently)
-        assert isinstance(ancestors, set)
+        assert ancestors == {
+            "GO:0006811",
+            "GO:0006810",
+            "GO:0009987",
+            "GO:0008150",
+        }
 
     def test_get_ancestors_root_term(self, ontology_processor):
-        """Test querying ancestors for a root-level term."""
-        ancestors = ontology_processor.get_ancestors("GO:0008150")
-        # Should return a set (graph direction determines if root has ancestors or descendants)
-        assert isinstance(ancestors, set)
+        """A root term has no ancestors."""
+        assert ontology_processor.get_ancestors("GO:0008150") == set()
 
     def test_get_descendants(self, ontology_processor):
-        """Test getting descendants for a GO term."""
-        # GO:0006810 (transport) should have some descendants if they exist in the ontology
-        descendants = ontology_processor.get_descendants("GO:0006810")
-
-        # Check that function works (may or may not have descendants depending on ontology)
-        assert isinstance(descendants, set)
+        """Descendants of a term are its more-specific children (issue #13)."""
+        # GO:0006810 (transport) descendants: ion transport + cation transport.
+        assert ontology_processor.get_descendants("GO:0006810") == {
+            "GO:0006811",
+            "GO:0006812",
+        }
 
     def test_ancestors_caching(self, ontology_processor):
         """Test that ancestor queries are cached for performance."""

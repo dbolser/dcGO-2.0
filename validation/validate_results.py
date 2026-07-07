@@ -156,27 +156,13 @@ def build_get_ancestors(obo_file: Path | None) -> Callable[[str], set[str]]:
     project_root = str(Path(__file__).resolve().parents[1])
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
-    import networkx as nx
 
     from src.ontology_processor import OntologyProcessor
 
     logger.info(f"Loading GO ontology for propagation: {obo_file}")
     processor = OntologyProcessor(obo_file)
-    graph = processor.go_graph
-
-    # obonet builds edges child -> parent (verified empirically), so the more
-    # GENERAL ancestor terms of a node are reachable *forward* from it:
-    # nx.descendants(graph, term). NOTE: do NOT use OntologyProcessor.get_ancestors
-    # here — with this edge direction it returns descendants (see issue tracker,
-    # the True-Path direction bug). Memoize since we propagate repeatedly.
-    cache: dict[str, set[str]] = {}
-
-    def general_ancestors(go: str) -> set[str]:
-        if go not in cache:
-            cache[go] = nx.descendants(graph, go) if go in graph else set()
-        return cache[go]
-
-    return general_ancestors
+    # get_ancestors returns the more-general ancestor terms and is memoized.
+    return processor.get_ancestors
 
 
 # --------------------------------------------------------------------------- #
