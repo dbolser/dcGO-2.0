@@ -218,7 +218,7 @@ class Config:
             ),
             "go_ontology": DataSource(
                 name="go_ontology",
-                url="http://current.geneontology.org/ontology/go-basic.obo",
+                url="https://current.geneontology.org/ontology/go-basic.obo",
                 description="Gene Ontology basic ontology file",
                 required=True,
             ),
@@ -239,6 +239,13 @@ class Config:
                 name="interpro_definitions",
                 url="https://ftp.ebi.ac.uk/pub/databases/interpro/current_release/interpro.xml.gz",
                 description="InterPro entry definitions and metadata",
+                required=False,
+            ),
+            # Curated InterPro->GO mapping used as a validation reference (§1)
+            "interpro2go": DataSource(
+                name="interpro2go",
+                url="https://current.geneontology.org/ontology/external2go/interpro2go",
+                description="Manually curated InterPro2GO mappings (validation reference)",
                 required=False,
             ),
             # Optional: Local computation tools
