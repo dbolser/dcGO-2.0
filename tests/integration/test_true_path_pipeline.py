@@ -176,6 +176,10 @@ class TestPipelineIntegration:
         )
         filtered_terms = {a.go_term for a in filtered}
         assert child in filtered_terms  # specific association retained
+        # The parent association is universal within its own background (every
+        # protein carrying the child also carries the parent), so the
+        # optimal-level filter must drop it as redundant.
+        assert parent not in filtered_terms
 
         # Stage 2: propagate — UP to the ancestors, never sideways/down.
         propagated = ontology_processor.propagate_annotations(filtered)
