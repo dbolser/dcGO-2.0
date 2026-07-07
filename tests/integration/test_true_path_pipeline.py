@@ -131,50 +131,42 @@ class TestPipelineIntegration:
     """Integration tests for True Path Rule in production pipeline."""
 
     def test_pipeline_data_flow(self, ontology_processor):
-        """Test complete data flow from significant associations to propagated annotations."""
-        # Simulate protein data from pipeline
+        """Test complete data flow from significant associations to propagated annotations.
+
+        True-Path-consistent fixture: proteins annotated to a specific term also
+        carry all its ancestors (as in propagated GOA). The specific association
+        is enriched within its parent's background and must survive the filter;
+        the redundant parent association (universal within its own background)
+        should not.
+        """
+        child = "GO:0098655"  # cation transmembrane transport (specific)
+        parent = "GO:0006812"  # cation transport
+        unrelated = "GO:0043169"  # cation binding (other branch)
+        # Full ancestor closures (True Path Rule).
+        child_ann = {child} | ontology_processor.get_ancestors(child)
+        parent_ann = {parent} | ontology_processor.get_ancestors(parent)
+        unrelated_ann = {unrelated} | ontology_processor.get_ancestors(unrelated)
+
+        # P0000-P0049 carry the domain; P0000-P0039 also have the child term.
         protein_domain_map = {
             f"P{i:04d}": ["IPR012345"] if i < 50 else [] for i in range(100)
         }
+        protein_go_map = {}
+        for i in range(100):
+            p = f"P{i:04d}"
+            if i < 40:  # domain + child (+ ancestors)
+                protein_go_map[p] = set(child_ann)
+            elif i < 90:  # parent background (with domain for 40-49, without for 50-89)
+                protein_go_map[p] = set(parent_ann)
+            else:  # unrelated branch
+                protein_go_map[p] = set(unrelated_ann)
 
-        protein_go_map = {
-            f"P{i:04d}": {"GO:0098655"}
-            if i < 40  # Very specific term
-            else (
-                {"GO:0006812"}
-                if i < 50  # Parent term
-                else {"GO:0051179"}
-            )  # Unrelated term
-            for i in range(100)
-        }
-
-        # Simulate significant associations from Fisher tests
         significant_associations = [
-            AssociationResult(
-                domain="IPR012345",
-                go_term="GO:0098655",  # cation transmembrane transport (very specific)
-                p_value=1e-20,
-                q_value=1e-17,
-                hyper_score=99.5,
-                a=40,
-                b=10,
-                c=0,
-                d=50,
-            ),
-            AssociationResult(
-                domain="IPR012345",
-                go_term="GO:0006812",  # cation transport (parent)
-                p_value=1e-18,
-                q_value=1e-15,
-                hyper_score=98.0,
-                a=50,
-                b=0,
-                c=0,
-                d=50,
-            ),
+            AssociationResult("IPR012345", child, 1e-20, 1e-17, 99.5, 40, 10, 0, 50),
+            AssociationResult("IPR012345", parent, 1e-18, 1e-15, 98.0, 50, 0, 0, 50),
         ]
 
-        # Stage 1: Apply optimal level filter
+        # Stage 1: optimal level filter — keeps the specific association.
         filtered = ontology_processor.apply_optimal_level_filter(
             significant_associations,
             protein_domain_map,
@@ -182,57 +174,57 @@ class TestPipelineIntegration:
             min_background_size=3,
             alpha_threshold=0.05,
         )
+        filtered_terms = {a.go_term for a in filtered}
+        assert child in filtered_terms  # specific association retained
 
-        # Should retain at least the most specific association
-        assert len(filtered) >= 1
-
-        # Stage 2: Propagate annotations
+        # Stage 2: propagate — UP to the ancestors, never sideways/down.
         propagated = ontology_processor.propagate_annotations(filtered)
+        direct = {a.go_term for a in propagated if a.annotation_type == "direct"}
+        propagated_up = {
+            a.go_term for a in propagated if a.annotation_type == "propagated"
+        }
 
-        # Verify output structure
-        assert len(propagated) >= 0  # May be empty if all filtered out
-
-        # Check annotation types if we have results
-        if propagated:
-            direct_anns = [ann for ann in propagated if ann.annotation_type == "direct"]
-
-            assert len(direct_anns) > 0
-            # May or may not have propagated annotations depending on term depth
-
-        # Verify hierarchical propagation if results exist
-        if propagated:
-            go_terms = {ann.go_term for ann in propagated}
-            direct_anns = [ann for ann in propagated if ann.annotation_type == "direct"]
-
-            # Verify that if specific terms are kept, hierarchy is respected
-            # (actual terms depend on filtering results)
-            assert len(go_terms) >= 1
+        assert child in direct
+        # Child's ancestors (parent .. root) must appear as propagated annotations.
+        assert {parent, "GO:0008150"} <= propagated_up
+        # Never propagate into an unrelated branch.
+        assert unrelated not in (direct | propagated_up)
 
     def test_pipeline_with_multiple_domains(self, ontology_processor):
-        """Test pipeline with multiple domains and terms."""
-        # Realistic multi-domain scenario
-        protein_domain_map = {
-            f"P{i:04d}": ["IPR001"]
-            if i < 30
-            else (["IPR002"] if 30 <= i < 60 else ["IPR003"])
-            for i in range(100)
-        }
-
-        protein_go_map = {
-            f"P{i:04d}": {"GO:0098655"}
-            if i < 30
-            else ({"GO:0043169"} if 30 <= i < 60 else {"GO:0051179"})
-            for i in range(100)
-        }
-
-        # Multiple significant associations
-        associations = [
-            AssociationResult("IPR001", "GO:0098655", 1e-15, 1e-12, 98.0, 28, 2, 2, 68),
-            AssociationResult("IPR002", "GO:0043169", 1e-14, 1e-11, 97.0, 28, 2, 2, 68),
-            AssociationResult("IPR003", "GO:0051179", 1e-10, 1e-8, 92.0, 35, 5, 5, 55),
+        """Test pipeline with multiple domains, each enriched for a distinct term."""
+        # Each domain is associated with a distinct specific term; each term's
+        # proteins carry the term's full ancestor closure (True Path Rule), and
+        # a domain-free background carries the parent term so the association is
+        # genuinely enriched and survives filtering.
+        specs = [
+            ("IPR001", "GO:0098655"),  # cation transmembrane transport
+            ("IPR002", "GO:0043169"),  # cation binding
+            ("IPR003", "GO:0006810"),  # transport
         ]
 
-        # Apply True Path Rule
+        protein_domain_map = {}
+        protein_go_map = {}
+        idx = 0
+
+        def add(count, domain, terms):
+            nonlocal idx
+            for _ in range(count):
+                p = f"P{idx:04d}"
+                idx += 1
+                protein_domain_map[p] = [domain] if domain else []
+                protein_go_map[p] = set(terms)
+
+        associations = []
+        for domain, term in specs:
+            term_ann = {term} | ontology_processor.get_ancestors(term)
+            (parent,) = tuple(ontology_processor.go_graph.predecessors(term))
+            parent_ann = {parent} | ontology_processor.get_ancestors(parent)
+            add(30, domain, term_ann)  # domain + specific term (+ ancestors)
+            add(20, "", parent_ann)  # background: parent term, no domain
+            associations.append(
+                AssociationResult(domain, term, 1e-15, 1e-12, 98.0, 30, 0, 0, 20)
+            )
+
         filtered = ontology_processor.apply_optimal_level_filter(
             associations,
             protein_domain_map,
@@ -240,20 +232,21 @@ class TestPipelineIntegration:
             min_background_size=3,
             alpha_threshold=0.05,
         )
-
         propagated = ontology_processor.propagate_annotations(filtered)
 
-        # Should have annotations for multiple domains
-        domains = {ann.domain for ann in propagated}
-        assert len(domains) >= 1
-
-        # Each domain should have both direct and propagated annotations
-        for domain in domains:
-            domain_anns = [ann for ann in propagated if ann.domain == domain]
-            direct = [ann for ann in domain_anns if ann.annotation_type == "direct"]
-
-            assert len(direct) >= 1
-            # May or may not have propagated depending on term depth
+        # All three domain-specific associations should survive and be direct.
+        direct_by_domain = {
+            (a.domain, a.go_term) for a in propagated if a.annotation_type == "direct"
+        }
+        for domain, term in specs:
+            assert (domain, term) in direct_by_domain
+            # Each specific term propagates up to exactly its ancestor closure.
+            up = {
+                a.go_term
+                for a in propagated
+                if a.domain == domain and a.annotation_type == "propagated"
+            }
+            assert ontology_processor.get_ancestors(term) <= up
 
     def test_pipeline_threshold_sensitivity(self, ontology_processor):
         """Test that alpha_threshold affects filtering results."""

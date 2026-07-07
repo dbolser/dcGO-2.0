@@ -120,6 +120,16 @@ class OntologyProcessor:
             self.go_graph.remove_nodes_from(obsolete_terms)
             logger.info(f"Removed {len(obsolete_terms)} obsolete GO terms")
 
+        # obonet emits edges child -> parent (each term points to its is_a
+        # target). Reverse so edges run parent -> child, which is the direction
+        # the rest of this module assumes: predecessors() are parents,
+        # nx.ancestors() are the more-general terms, nx.descendants() the more
+        # specific, and in_degree == 0 nodes are the roots. Without this the True
+        # Path Rule walks the DAG backwards — get_ancestors() returns
+        # descendants and the optimal-level filter tests against children. See
+        # tests/unit/test_ontology_direction.py.
+        self.go_graph = self.go_graph.reverse(copy=True)
+
         # Validate graph structure
         if not nx.is_directed_acyclic_graph(self.go_graph):
             logger.warning(
