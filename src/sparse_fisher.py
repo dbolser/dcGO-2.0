@@ -100,10 +100,13 @@ def build_domain_metadata(
 
     metadata = {}
 
-    # Count observations for each domain
+    # Count the number of distinct PROTEINS carrying each domain. The per-protein
+    # domain list contains repeats (one entry per member signature), so dedupe
+    # within each protein — otherwise observation_count is an occurrence count
+    # that can exceed the number of proteins.
     domain_counts: Dict[str, int] = {}
     for domains in protein_domains.values():
-        for domain in domains:
+        for domain in set(domains):
             domain_counts[domain] = domain_counts.get(domain, 0) + 1
 
     # Build metadata for each domain
@@ -195,6 +198,13 @@ def build_sparse_matrices(
         shape=(n_proteins, n_domains),
         dtype=np.int8,
     )
+    # A (protein, InterPro entry) pair is listed once per supporting member
+    # signature in protein2ipr, so the same pair appears many times and the CSR
+    # constructor SUMS the duplicates (cells reach values like 125). The
+    # contingency analysis is presence/absence, so collapse to 1 — otherwise
+    # overlap counts are inflated and a domain's "count" can exceed the number
+    # of proteins, driving the `d` cell negative.
+    protein_domain_matrix.data[:] = 1
 
     # Build protein-GO matrix
     rows_g, cols_g = [], []
@@ -212,6 +222,9 @@ def build_sparse_matrices(
         shape=(n_proteins, n_go_terms),
         dtype=np.int8,
     )
+    # Same presence/absence guard as the domain matrix (defensive; GO maps are
+    # usually already de-duplicated).
+    protein_go_matrix.data[:] = 1
 
     logger.info(
         f"Protein-domain matrix: {protein_domain_matrix.nnz:,} non-zero entries"
@@ -255,6 +268,15 @@ def compute_contingency_tables_sparse(
     logger.info(
         f"Computing contingency tables for {n_domains:,} × {n_go_terms:,} = {n_domains * n_go_terms:,} pairs"
     )
+
+    # The indicator matrices are stored as int8 to save memory, but int8
+    # *accumulation* overflows at 127. A common domain/GO pair co-occurs in far
+    # more than 127 proteins, and marginal counts run to the whole proteome, so
+    # both the overlap matmul and the marginal sums must accumulate in a wider
+    # dtype. Upcast to int32 BEFORE any accumulation. (Casting the int8 product
+    # afterwards is too late — the overflow has already happened.)
+    protein_domain_matrix = protein_domain_matrix.astype(np.int32)
+    protein_go_matrix = protein_go_matrix.astype(np.int32)
 
     # Compute a: proteins with both (domain AND GO)
     # This is the dot product of transposed matrices

@@ -68,6 +68,44 @@ class TestBuildSparseMatrices:
         assert np.all((domain_dense == 0) | (domain_dense == 1))
         assert np.all((go_dense == 0) | (go_dense == 1))
 
+    def test_matrix_binarizes_duplicate_domains(self):
+        """Regression: duplicate (protein, domain) entries must collapse to 1.
+
+        The real parser yields a *list* of domains per protein with repeats (a
+        (protein, InterPro) pair is listed once per supporting member signature
+        in protein2ipr). If the CSR constructor's summed duplicates aren't
+        binarized, a domain's protein count can exceed the number of proteins
+        and the contingency `d` cell goes negative.
+        """
+        protein_domains = {
+            "P001": ["IPR001"] * 200,  # same domain listed 200x
+            "P002": ["IPR001", "IPR002", "IPR002"],
+        }
+        protein_go = {"P001": ["GO:0001"], "P002": ["GO:0001", "GO:0001"]}
+        domain_list = ["IPR001", "IPR002"]
+        go_list = ["GO:0001"]
+
+        dmat, gmat, _ = build_sparse_matrices(
+            protein_domains, protein_go, domain_list, go_list
+        )
+        assert dmat.max() == 1, "protein-domain matrix not binarized"
+        assert gmat.max() == 1, "protein-GO matrix not binarized"
+        # IPR001 is in 2 proteins, never more, despite 200 duplicate listings.
+        assert int(np.asarray(dmat.sum(axis=0)).flatten()[0]) == 2
+
+    def test_observation_count_is_distinct_proteins(self):
+        """observation_count must count distinct proteins, not domain occurrences."""
+        protein_domains = {
+            "P001": ["IPR001"] * 50,  # 50 duplicate listings, 1 protein
+            "P002": ["IPR001", "IPR002"],
+        }
+        protein_go = {"P001": ["GO:0001"], "P002": ["GO:0001"]}
+        _, _, meta = build_sparse_matrices(
+            protein_domains, protein_go, ["IPR001", "IPR002"], ["GO:0001"]
+        )
+        assert meta["IPR001"].observation_count == 2  # P001, P002 — not 51
+        assert meta["IPR002"].observation_count == 1
+
     def test_matrix_sparsity(self, sample_data):
         """Test that matrices are actually sparse."""
         protein_domains, protein_go, domain_list, go_list = sample_data
@@ -292,6 +330,38 @@ class TestComputeContingencyTables:
 
         # Verify all values non-negative
         assert np.all(tables >= 0)
+
+    def test_high_cooccurrence_no_int8_overflow(self):
+        """Regression: co-occurrence counts above 127 must not overflow int8.
+
+        The indicator matrices are stored as int8; if the overlap matmul or the
+        marginal sums accumulate in int8, a common domain/GO pair (co-occurring
+        in >127 proteins) wraps around and corrupts the contingency table. With
+        300 proteins all carrying the one domain and the one GO term, the true
+        table is a=300, b=c=0, d=0.
+        """
+        n = 300  # > 127, and > 256 wrap point is 300 -> 44 if it overflows
+        col = np.zeros(n, dtype=int)
+        rows = np.arange(n)
+        protein_domain = sparse.csr_matrix(
+            (np.ones(n, dtype=np.int8), (rows, col)), shape=(n, 1), dtype=np.int8
+        )
+        protein_go = sparse.csr_matrix(
+            (np.ones(n, dtype=np.int8), (rows, col)), shape=(n, 1), dtype=np.int8
+        )
+
+        tables = compute_contingency_tables_sparse(protein_domain, protein_go)
+
+        assert tables.shape == (1, 2, 2)
+        a, b, c, d = (
+            tables[0, 0, 0],
+            tables[0, 0, 1],
+            tables[0, 1, 0],
+            tables[0, 1, 1],
+        )
+        assert a == n, f"overlap count corrupted by int8 overflow: {a} != {n}"
+        assert (b, c, d) == (0, 0, 0)
+        assert tables[0].sum() == n
 
 
 class TestIntegration:
