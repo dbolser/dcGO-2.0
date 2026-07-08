@@ -1,5 +1,12 @@
 # dcGO Pipeline
 
+> **Scope & safety — safe to review.** This is a purely computational
+> bioinformatics project: it statistically associates protein **domains** with
+> Gene Ontology **function terms** using public databases (UniProt/GOA, InterPro,
+> the Gene Ontology), reimplementing a published academic method (Fang & Gough
+> 2013). No dual-use content — no sequence/organism design, no pathogen or toxin
+> work, no wet-lab or synthesis protocols; just statistics over public data.
+
 A working implementation of the domain-centric Gene Ontology (dcGO) methodology
 for protein function prediction. The pipeline transforms protein-level GO
 annotations into statistically validated **domain → GO term** associations using

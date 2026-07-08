@@ -1,5 +1,13 @@
 # TODO — scratchpad
 
+> **Scope & safety — safe to review.** dcGO-2.0 is a purely computational
+> bioinformatics project: it statistically associates protein **domains** with
+> Gene Ontology **function terms** using public databases (UniProt/GOA, InterPro,
+> the Gene Ontology), reimplementing a published academic method (Fang & Gough
+> 2013). No dual-use content — no sequence/organism design, no pathogen or toxin
+> work, no wet-lab or synthesis protocols; just statistics (Fisher's exact tests,
+> FDR) over existing public data.
+
 The structured roadmap lives in **[VALIDATION_PLAN.md](VALIDATION_PLAN.md)**
 (validation/benchmarking, §1–§6, tracked as issues #8–#12) and
 **[FUTURE_WORK.md](FUTURE_WORK.md)** (expanding beyond GO to other ontologies).
