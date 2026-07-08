@@ -68,6 +68,31 @@ class TestBuildSparseMatrices:
         assert np.all((domain_dense == 0) | (domain_dense == 1))
         assert np.all((go_dense == 0) | (go_dense == 1))
 
+    def test_matrix_binarizes_duplicate_domains(self):
+        """Regression: duplicate (protein, domain) entries must collapse to 1.
+
+        The real parser yields a *list* of domains per protein with repeats (a
+        (protein, InterPro) pair is listed once per supporting member signature
+        in protein2ipr). If the CSR constructor's summed duplicates aren't
+        binarized, a domain's protein count can exceed the number of proteins
+        and the contingency `d` cell goes negative.
+        """
+        protein_domains = {
+            "P001": ["IPR001"] * 200,  # same domain listed 200x
+            "P002": ["IPR001", "IPR002", "IPR002"],
+        }
+        protein_go = {"P001": ["GO:0001"], "P002": ["GO:0001", "GO:0001"]}
+        domain_list = ["IPR001", "IPR002"]
+        go_list = ["GO:0001"]
+
+        dmat, gmat, _ = build_sparse_matrices(
+            protein_domains, protein_go, domain_list, go_list
+        )
+        assert dmat.max() == 1, "protein-domain matrix not binarized"
+        assert gmat.max() == 1, "protein-GO matrix not binarized"
+        # IPR001 is in 2 proteins, never more, despite 200 duplicate listings.
+        assert int(np.asarray(dmat.sum(axis=0)).flatten()[0]) == 2
+
     def test_matrix_sparsity(self, sample_data):
         """Test that matrices are actually sparse."""
         protein_domains, protein_go, domain_list, go_list = sample_data

@@ -195,6 +195,13 @@ def build_sparse_matrices(
         shape=(n_proteins, n_domains),
         dtype=np.int8,
     )
+    # A (protein, InterPro entry) pair is listed once per supporting member
+    # signature in protein2ipr, so the same pair appears many times and the CSR
+    # constructor SUMS the duplicates (cells reach values like 125). The
+    # contingency analysis is presence/absence, so collapse to 1 — otherwise
+    # overlap counts are inflated and a domain's "count" can exceed the number
+    # of proteins, driving the `d` cell negative.
+    protein_domain_matrix.data[:] = 1
 
     # Build protein-GO matrix
     rows_g, cols_g = [], []
@@ -212,6 +219,9 @@ def build_sparse_matrices(
         shape=(n_proteins, n_go_terms),
         dtype=np.int8,
     )
+    # Same presence/absence guard as the domain matrix (defensive; GO maps are
+    # usually already de-duplicated).
+    protein_go_matrix.data[:] = 1
 
     logger.info(
         f"Protein-domain matrix: {protein_domain_matrix.nnz:,} non-zero entries"
