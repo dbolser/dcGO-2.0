@@ -100,10 +100,13 @@ def build_domain_metadata(
 
     metadata = {}
 
-    # Count observations for each domain
+    # Count the number of distinct PROTEINS carrying each domain. The per-protein
+    # domain list contains repeats (one entry per member signature), so dedupe
+    # within each protein — otherwise observation_count is an occurrence count
+    # that can exceed the number of proteins.
     domain_counts: Dict[str, int] = {}
     for domains in protein_domains.values():
-        for domain in domains:
+        for domain in set(domains):
             domain_counts[domain] = domain_counts.get(domain, 0) + 1
 
     # Build metadata for each domain

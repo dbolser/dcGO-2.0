@@ -93,6 +93,19 @@ class TestBuildSparseMatrices:
         # IPR001 is in 2 proteins, never more, despite 200 duplicate listings.
         assert int(np.asarray(dmat.sum(axis=0)).flatten()[0]) == 2
 
+    def test_observation_count_is_distinct_proteins(self):
+        """observation_count must count distinct proteins, not domain occurrences."""
+        protein_domains = {
+            "P001": ["IPR001"] * 50,  # 50 duplicate listings, 1 protein
+            "P002": ["IPR001", "IPR002"],
+        }
+        protein_go = {"P001": ["GO:0001"], "P002": ["GO:0001"]}
+        _, _, meta = build_sparse_matrices(
+            protein_domains, protein_go, ["IPR001", "IPR002"], ["GO:0001"]
+        )
+        assert meta["IPR001"].observation_count == 2  # P001, P002 — not 51
+        assert meta["IPR002"].observation_count == 1
+
     def test_matrix_sparsity(self, sample_data):
         """Test that matrices are actually sparse."""
         protein_domains, protein_go, domain_list, go_list = sample_data
