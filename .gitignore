@@ -109,3 +109,8 @@ data/raw/interpro_mappings/interpro2go
 
 validation*_path/*
 results*_path/*
+
+# Downloaded raw datasets (large; fetched via scripts/download_data.py)
+data/raw/
+data/interim/
+*.dat.gz

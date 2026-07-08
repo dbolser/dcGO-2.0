@@ -38,19 +38,48 @@ validation design where the numbers *mean* something.
 Treat InterPro2GO as an **incomplete positive reference**, and report only what
 it can legitimately support.
 
-- [ ] De-duplicate the threshold sweep; verify each threshold changes the
+- [x] De-duplicate the threshold sweep; verify each threshold changes the
       prediction set (the current file has identical rows — a bug).
-- [ ] **Propagate both** predictions and the reference to their GO ancestor
+- [x] **Propagate both** predictions and the reference to their GO ancestor
       closure before intersecting (use `ontology_processor` + `go-basic.obo`).
-- [ ] Report **recall / coverage of InterPro2GO** as the headline (what fraction
+- [x] Report **recall / coverage of InterPro2GO** as the headline (what fraction
       of curated pairs we recover), and explicitly label "novel" pairs as
       *not-in-reference* rather than *false*.
-- [ ] Restrict the comparison to the **domains actually present in both** sets
+- [x] Restrict the comparison to the **domains actually present in both** sets
       (a domain absent from InterPro2GO contributes only noise).
 
-**Acceptance:** a corrected `performance_metrics.tsv` where recall of
-InterPro2GO rises monotonically as thresholds loosen, and "novel" is framed as
-candidate discoveries, not errors.
+**Status: done** (PRs #14, #15). Implemented in `validation/validate_results.py`
+with unit tests in `tests/unit/test_validation_metrics.py`.
+
+### Results — first human run (2026-07-08, after the contingency-table fixes #17)
+
+> An earlier version of this run reported ~79% coverage over 457,939 significant
+> associations. That was **corrupted** by three contingency-table bugs (int8
+> overflow, non-binary matrices, occurrence-vs-protein counts) caught in review
+> and fixed in #17. The numbers below are the corrected run.
+
+Full human pipeline: 165,823 significant associations (FDR<0.01). InterPro2GO
+reference: 30,190 curated pairs → 47,393 after propagation, on the 2,747 domains
+shared with our predictions.
+
+| Threshold | Reference coverage (recall) | Recovered / 47,393 |
+|-----------|-----------------------------|--------------------|
+| p ≤ 1e-10 | 29.3% | 13,881 |
+| p ≤ 1e-8  | 42.3% | 20,051 |
+| p ≤ 1e-6  | 64.7% | 30,673 |
+| **FDR < 0.01 (significance)** | **64.7%** | 30,673 |
+
+**Headline:** at the FDR<0.01 significance cutoff dcGO recovers ~65% of curated
+InterPro2GO associations (on shared domains, propagated) — versus the old,
+misleading "3–4% precision" that treated InterPro2GO as complete truth without
+propagation. This is the reframing working, not a new result about accuracy.
+
+**Caveats (do not oversell):**
+- `precision_lower_bound` ≈ 22–26% is a *floor*, not precision. The ~107k
+  "candidate" pairs are curation-gap candidates (InterPro2GO is incomplete), not
+  errors. Real precision needs the §2 temporal/CAFA benchmark.
+- The loose end of the sweep plateaus because the input is already FDR<0.01
+  filtered; the informative signal is the *tightening* end (1e-4 → 1e-10).
 
 ---
 
