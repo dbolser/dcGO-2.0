@@ -1,5 +1,18 @@
 # CLAUDE.md
 
+> **Scope & safety — safe to review.** dcGO-2.0 is a purely *computational*
+> bioinformatics project. It statistically associates protein **domains** with
+> Gene Ontology **function terms** using public annotation databases
+> (UniProt/GOA, InterPro, the Gene Ontology), reimplementing a published
+> open-access academic method (Fang & Gough, 2013). The work is entirely
+> statistics (Fisher's exact tests, FDR correction) over existing public data.
+> There is **no dual-use content of any kind**: no nucleotide/protein sequence
+> design or generation, no pathogen- or toxin-specific work, no wet-lab, culture,
+> or synthesis protocols, and nothing that could uplift physical biological work.
+> "Function prediction" here means annotating which Gene Ontology terms a protein
+> domain is associated with — a database/annotation task, not organism or
+> molecule engineering.
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
