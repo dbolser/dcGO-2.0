@@ -51,27 +51,31 @@ it can legitimately support.
 **Status: done** (PRs #14, #15). Implemented in `validation/validate_results.py`
 with unit tests in `tests/unit/test_validation_metrics.py`.
 
-### Results — first human run (2026-07-07)
+### Results — first human run (2026-07-08, after the contingency-table fixes #17)
 
-Full human pipeline: 457,939 significant associations (FDR<0.01) over 36,489
-domains. InterPro2GO reference: 30,190 curated pairs → 89,212 after propagation,
-on the 4,684 domains shared with our predictions (InterPro2GO covers only ~13%
-of the domains we predict for).
+> An earlier version of this run reported ~79% coverage over 457,939 significant
+> associations. That was **corrupted** by three contingency-table bugs (int8
+> overflow, non-binary matrices, occurrence-vs-protein counts) caught in review
+> and fixed in #17. The numbers below are the corrected run.
 
-| Threshold | Reference coverage (recall) | Recovered / 89,212 |
+Full human pipeline: 165,823 significant associations (FDR<0.01). InterPro2GO
+reference: 30,190 curated pairs → 47,393 after propagation, on the 2,747 domains
+shared with our predictions.
+
+| Threshold | Reference coverage (recall) | Recovered / 47,393 |
 |-----------|-----------------------------|--------------------|
-| p ≤ 1e-10 | 49.6% | 44,211 |
-| p ≤ 1e-8  | 57.5% | 51,324 |
-| p ≤ 1e-6  | 74.6% | 66,511 |
-| **FDR < 0.01 (significance)** | **78.8%** | 70,324 |
+| p ≤ 1e-10 | 29.3% | 13,881 |
+| p ≤ 1e-8  | 42.3% | 20,051 |
+| p ≤ 1e-6  | 64.7% | 30,673 |
+| **FDR < 0.01 (significance)** | **64.7%** | 30,673 |
 
-**Headline:** at the FDR<0.01 significance cutoff dcGO recovers ~79% of curated
+**Headline:** at the FDR<0.01 significance cutoff dcGO recovers ~65% of curated
 InterPro2GO associations (on shared domains, propagated) — versus the old,
 misleading "3–4% precision" that treated InterPro2GO as complete truth without
 propagation. This is the reframing working, not a new result about accuracy.
 
 **Caveats (do not oversell):**
-- `precision_lower_bound` ≈ 13% is a *floor*, not precision. The 465k
+- `precision_lower_bound` ≈ 22–26% is a *floor*, not precision. The ~107k
   "candidate" pairs are curation-gap candidates (InterPro2GO is incomplete), not
   errors. Real precision needs the §2 temporal/CAFA benchmark.
 - The loose end of the sweep plateaus because the input is already FDR<0.01
