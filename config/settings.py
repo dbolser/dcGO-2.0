@@ -195,6 +195,11 @@ class Config:
         default_factory=lambda: Path(__file__).parent.parent.resolve()
     )
 
+    # Base URL for dated (archived) human GOA snapshots, one numbered release per
+    # file (e.g. goa_human.gaf.205.gz). Used by scripts/download_data.py
+    # --goa-archive for the temporal benchmark (VALIDATION_PLAN §2/§6).
+    goa_archive_base_url: str = "https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/HUMAN"
+
     # Data sources configuration
     data_sources: Dict[str, DataSource] = field(
         default_factory=lambda: {

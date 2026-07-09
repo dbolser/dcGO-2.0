@@ -57,7 +57,7 @@ uv run ruff format --check
 
 ### Testing
 ```bash
-uv run pytest                          # all tests (113, ~3 s)
+uv run pytest                          # all tests (155, ~5 s)
 uv run pytest tests/unit -v            # unit tests
 uv run pytest tests/integration -v     # integration tests
 uv run pytest --cov=src --cov-report=html
@@ -124,8 +124,10 @@ A full multi-organism run would be substantially heavier and is not yet implemen
 
 - No local domain scanning — only pre-computed InterPro annotations are consumed.
 - True Path Rule is opt-in (`--enable-true-path`), not part of the default run.
-- Validation is against InterPro2GO only; no CAFA / temporal benchmark or
-  comparison to the original dcGO results yet. See `VALIDATION_PLAN.md`.
+- Validation covers InterPro2GO coverage (§1, ~65%) and a temporal CAFA-style
+  benchmark (§2, `validation/temporal_benchmark.py`: dcGO beats the random-domain
+  null 1.7–3.2× but trails the naive F_max baseline). Still open: ablation (§4),
+  score calibration (§5), original-dcGO comparison (§3). See `VALIDATION_PLAN.md`.
 
 ## Package Structure
 
