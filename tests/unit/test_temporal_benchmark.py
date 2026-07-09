@@ -219,6 +219,25 @@ class TestShuffleDeterminism:
         assert set(a) == set(dg)
 
 
+class TestFilterByIC:
+    def test_drops_low_information_terms_from_truth_and_preds(self):
+        ic = {"GO:leaf": 5.0, "GO:mid": 1.0}  # mid is near-universal, low IC
+        true = {"P1": {"GO:leaf", "GO:mid"}}
+        preds = {"P1": {"GO:leaf": 9.0, "GO:mid": 9.0}}
+        assert tb.filter_by_ic(true, ic, min_ic=2.0) == {"P1": {"GO:leaf"}}
+        assert tb.filter_by_ic(preds, ic, min_ic=2.0) == {"P1": {"GO:leaf": 9.0}}
+
+    def test_zero_floor_is_noop(self):
+        ic = {"GO:leaf": 5.0}
+        true = {"P1": {"GO:leaf"}}
+        assert tb.filter_by_ic(true, ic, min_ic=0.0) == true
+
+    def test_protein_emptied_by_filter_is_dropped(self):
+        ic = {"GO:mid": 1.0}
+        true = {"P1": {"GO:mid"}}
+        assert tb.filter_by_ic(true, ic, min_ic=2.0) == {}
+
+
 class TestRestrictToAspect:
     def test_splits_predictions_and_truesets(self):
         term_aspect = {"GO:leaf": "BP", "GO:mf1": "MF"}

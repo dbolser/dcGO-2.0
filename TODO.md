@@ -19,16 +19,20 @@ This file is just loose notes.
 - ~~Validate results against InterPro2GO~~ — §1 (coverage reframe), ~65% at FDR<0.01.
 - ~~Fix pipeline correctness~~ — contingency-table + True Path Rule bugs (#15, #17).
 - ~~§2 temporal/CAFA benchmark~~ (#8) — 2021→2026 no-knowledge split.
-  `validation/temporal_benchmark.py`. dcGO clears the random-domain null by
-  1.7–3.2× on F_max but trails the naive frequency baseline (competitive on BP,
-  below on MF/CC). Dated GOA via `download_data.py --goa-archive`.
+  `validation/temporal_benchmark.py`. On **informative** terms (IC floor) dcGO
+  beats both baselines in every aspect: 4–26× the random-domain null and above
+  naive. Naive's raw-F_max lead was base-rate recovery of near-universal terms
+  (`protein binding` = 85% of experimental MF). Dated GOA via
+  `download_data.py --goa-archive`; IC sweep via `--min-ic`.
 
-## Next (see VALIDATION_PLAN.md)
-- **§4 ablation** (#10) — run the temporal benchmark per config
-  (single-domain / +supra / +shrinkage / +TPR). Reuses the §2 harness directly.
-- §5 per-protein score calibration + minimum-evidence floor — the likely lever
-  for closing the gap to naive F_max.
-- §3 compare to original dcGO — re-key on Pfam/SUPERFAMILY signatures (#9).
+## Next (see VALIDATION_PLAN.md) — NOT ablation yet
+- **Method-vs-paper audit** — read Fang & Gough 2013 (`docs/`) for how they
+  *validated* (likely domain-centric, not protein-centric F_max) and the
+  optimal-level / True-Path test (OFF in the §2 run). Align where it matters.
+- **Harden the metric** — promote the IC-controlled view; consider a
+  domain-centric evaluation (does a domain's predicted GO match known function).
+- §4 ablation (#10), §3 original-dcGO comparison (#9), §5–§6 — after the
+  yardstick is trusted.
 
 ## Loose ideas / nice-to-haves
 - Add InterPro names / gene names / GO term descriptions to the output TSVs

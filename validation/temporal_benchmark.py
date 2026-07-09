@@ -6,13 +6,19 @@ not provide. The idea, following CAFA:
 
   * Train domain->GO associations using only annotations available at an early
     GOA release ``t0``.
-  * Define the evaluation set as annotations that appear in a later release
-    ``t1`` but **not** ``t0`` (newly curated knowledge), restricted to
-    experimental evidence codes and propagated to their GO-DAG ancestor closure.
-  * Transfer the ``t0`` domain associations to each evaluation protein via its
+  * Build a **no-knowledge** benchmark (CAFA-style), per aspect: proteins that
+    had no experimental annotation in that aspect at ``t0`` but gained one by a
+    later release ``t1``. Each such protein's truth is its *full* propagated
+    ``t1`` experimental term set in that aspect — so every scored term is a
+    genuine prediction, never memorised from training.
+  * Transfer the ``t0`` domain associations to each benchmark protein via its
     domains, then score with the CAFA **protein-centric** metrics: ``F_max``,
     ``S_min`` (information-content weighted) and ``AUPRC``, reported separately
     per GO aspect (BP / MF / CC).
+  * Optionally sweep an **information-content floor** (``--min-ic``): excluding
+    near-universal low-IC terms (e.g. GO:0005515 "protein binding", ~85% of human
+    experimental MF annotations) tests whether the naive baseline's F_max lead is
+    just base-rate recovery of generic terms.
 
 Because the domain architectures come from ``protein2ipr`` and are not
 time-varying in our data, only the GOA annotations move in time — the split is
@@ -375,6 +381,30 @@ def restrict_to_aspect(
     return out
 
 
+def filter_by_ic(
+    mapping: Mapping[str, Mapping[str, float] | set[str]],
+    ic: Mapping[str, float],
+    min_ic: float,
+) -> dict:
+    """Drop terms whose information content is below ``min_ic`` (bits).
+
+    Applied identically to truth and to every method's predictions, this removes
+    near-universal, low-information terms (e.g. GO:0005515 "protein binding",
+    which covers ~85% of human experimental MF annotations) so the evaluation
+    rewards *informative* predictions rather than base-rate recovery. Proteins
+    left with no terms are dropped. ``min_ic <= 0`` is a no-op (returns a copy).
+    """
+    out: dict = {}
+    for protein, terms in mapping.items():
+        if isinstance(terms, dict):
+            kept = {t: s for t, s in terms.items() if ic.get(t, 0.0) >= min_ic}
+        else:
+            kept = {t for t in terms if ic.get(t, 0.0) >= min_ic}
+        if kept:
+            out[protein] = kept
+    return out
+
+
 def evaluate_aspect(
     pred_scores: PredScores,
     true_sets: TrueSets,
@@ -505,7 +535,17 @@ def main() -> int:
     )
     parser.add_argument("--output-dir", type=Path, default=Path("validation"))
     parser.add_argument("--seed", type=int, default=0, help="Shuffle-baseline seed")
+    parser.add_argument(
+        "--min-ic",
+        type=float,
+        action="append",
+        metavar="BITS",
+        help="Information-content floor(s): exclude terms below this IC (bits) from "
+        "scoring, for truth and all methods alike. Repeatable to sweep. Default: "
+        "0 (no filter) plus 2 and 4.",
+    )
     args = parser.parse_args()
+    ic_floors = sorted(set(args.min_ic)) if args.min_ic else [0.0, 2.0, 4.0]
 
     for p in (
         args.t0_gaf,
@@ -592,26 +632,36 @@ def main() -> int:
 
     methods = {"dcGO": dcgo_pred, "naive": naive_pred, "random_domain": shuffle_pred}
 
+    logger.info(f"Scoring at IC floors (bits): {ic_floors}")
     rows = []
     for aspect in ("BP", "MF", "CC"):
-        true_a = benchmark[aspect]
-        if not true_a:
+        if not benchmark[aspect]:
             logger.warning(f"No benchmark proteins for aspect {aspect}; skipping.")
             continue
-        for method, preds in methods.items():
-            pred_a = restrict_to_aspect(preds, aspect, term_aspect)
-            metrics = evaluate_aspect(pred_a, true_a, ic)
-            metrics.update({"aspect": aspect, "method": method})
-            rows.append(metrics)
-            logger.info(
-                f"  [{aspect}] {method:14s} F_max={metrics['f_max']:.3f} "
-                f"S_min={metrics['s_min']:.3f} AUPRC={metrics['auprc']:.3f} "
-                f"(n={metrics['n_eval_proteins']})"
-            )
+        # Pre-restrict predictions to this aspect once, then filter per IC floor.
+        aspect_preds = {
+            method: restrict_to_aspect(preds, aspect, term_aspect)
+            for method, preds in methods.items()
+        }
+        for min_ic in ic_floors:
+            true_a = filter_by_ic(benchmark[aspect], ic, min_ic)
+            if not true_a:
+                continue
+            for method, pred_a in aspect_preds.items():
+                pred_f = filter_by_ic(pred_a, ic, min_ic)
+                metrics = evaluate_aspect(pred_f, true_a, ic)
+                metrics.update({"aspect": aspect, "method": method, "min_ic": min_ic})
+                rows.append(metrics)
+                logger.info(
+                    f"  [{aspect} IC≥{min_ic:g}] {method:14s} "
+                    f"F_max={metrics['f_max']:.3f} S_min={metrics['s_min']:.3f} "
+                    f"AUPRC={metrics['auprc']:.3f} (n={metrics['n_eval_proteins']})"
+                )
 
     result_df = pd.DataFrame(rows)[
         [
             "aspect",
+            "min_ic",
             "method",
             "n_eval_proteins",
             "f_max",
@@ -625,18 +675,23 @@ def main() -> int:
     result_df.to_csv(out_file, sep="\t", index=False)
     logger.info(f"✓ Saved metrics: {out_file}")
 
-    # Headline: does dcGO clear the naive floor on F_max?
+    # Headline: does dcGO clear the naive F_max floor, and how does that change
+    # as low-information terms are filtered out?
     logger.info("=" * 70)
-    logger.info("TEMPORAL BENCHMARK COMPLETE — F_max vs naive floor:")
+    logger.info("TEMPORAL BENCHMARK COMPLETE — dcGO vs naive F_max by IC floor:")
     for aspect in ("BP", "MF", "CC"):
-        sub = result_df[result_df["aspect"] == aspect].set_index("method")
-        if "dcGO" in sub.index and "naive" in sub.index:
-            d = sub.loc["dcGO", "f_max"]
-            nf = sub.loc["naive", "f_max"]
-            verdict = "✓ above" if d > nf else "✗ below"
-            logger.info(
-                f"  {aspect}: dcGO {d:.3f} vs naive {nf:.3f}  [{verdict} floor]"
-            )
+        for min_ic in ic_floors:
+            sub = result_df[
+                (result_df["aspect"] == aspect) & (result_df["min_ic"] == min_ic)
+            ].set_index("method")
+            if "dcGO" in sub.index and "naive" in sub.index:
+                d = sub.loc["dcGO", "f_max"]
+                nf = sub.loc["naive", "f_max"]
+                verdict = "✓ above" if d > nf else "✗ below"
+                logger.info(
+                    f"  {aspect} IC≥{min_ic:g}: dcGO {d:.3f} vs naive {nf:.3f} "
+                    f"[{verdict} floor]  (n={int(sub.loc['dcGO', 'n_eval_proteins'])})"
+                )
     return 0
 
 
