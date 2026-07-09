@@ -18,9 +18,16 @@ This file is just loose notes.
 - ~~Download the InterPro→GO mapping~~ — `interpro2go` data source.
 - ~~Validate results against InterPro2GO~~ — §1 (coverage reframe), ~65% at FDR<0.01.
 - ~~Fix pipeline correctness~~ — contingency-table + True Path Rule bugs (#15, #17).
+- ~~§2 temporal/CAFA benchmark~~ (#8) — 2021→2026 no-knowledge split.
+  `validation/temporal_benchmark.py`. dcGO clears the random-domain null by
+  1.7–3.2× on F_max but trails the naive frequency baseline (competitive on BP,
+  below on MF/CC). Dated GOA via `download_data.py --goa-archive`.
 
 ## Next (see VALIDATION_PLAN.md)
-- **§2 temporal/CAFA benchmark** (#8) — the next real milestone.
+- **§4 ablation** (#10) — run the temporal benchmark per config
+  (single-domain / +supra / +shrinkage / +TPR). Reuses the §2 harness directly.
+- §5 per-protein score calibration + minimum-evidence floor — the likely lever
+  for closing the gap to naive F_max.
 - §3 compare to original dcGO — re-key on Pfam/SUPERFAMILY signatures (#9).
 
 ## Loose ideas / nice-to-haves

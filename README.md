@@ -114,10 +114,45 @@ rank  domain      go_term      p_value        adj_p_value    odds_ratio  hyper_s
 
 ---
 
+## Validation
+
+Two independent checks live in `validation/` (see
+[VALIDATION_PLAN.md](VALIDATION_PLAN.md) for the full plan):
+
+- **InterPro2GO coverage (§1)** — treats the curated InterPro2GO map as an
+  incomplete *positive* reference and reports recall on shared domains
+  (propagated). dcGO recovers **~65%** of curated pairs at FDR<0.01.
+  `validation/validate_results.py`.
+- **Temporal CAFA-style benchmark (§2)** — trains on the 2021 GOA and scores
+  protein-centric predictions against **newly-curated, experimentally-supported**
+  2026 annotations (CAFA *no-knowledge* design, per aspect):
+
+  ```bash
+  # fetch a dated GOA snapshot (t0), run the pipeline on it, then score
+  uv run python scripts/download_data.py --goa-archive 205        # 2021-04
+  uv run python validation/temporal_benchmark.py \
+      --t0-gaf data/raw/goa_archive/goa_human.gaf.205.gz \
+      --t1-gaf data/raw/goa_annotations/goa_human.gaf.gz \
+      --predictions results_t0_2021/domain_go_associations_significant.tsv
+  ```
+
+  | Aspect | dcGO F_max | naive | random-domain |
+  |--------|-----------:|------:|--------------:|
+  | BP | 0.276 | 0.289 | 0.144 |
+  | MF | 0.319 | 0.579 | 0.098 |
+  | CC | 0.395 | 0.520 | 0.234 |
+
+  dcGO clears the random-domain null by **1.7–3.2×** (the associations are
+  genuinely informative) but does not beat the CAFA naive frequency baseline on
+  F_max — competitive on BP, below on MF/CC. Honest, precision-capable result;
+  see VALIDATION_PLAN.md §2 for the interpretation and next steps (§4/§5).
+
+---
+
 ## Development
 
 ```bash
-# Tests (113 tests, ~3 s)
+# Tests (155 tests, ~5 s)
 uv run pytest
 
 # Lint + format (CI uses ruff)
@@ -151,7 +186,7 @@ dcGO-2.0/
 │   └── database_manager.py      # SQLite storage/export helpers
 ├── config/settings.py           # Dataset URLs + configuration
 ├── tests/                       # unit / integration tests
-├── validation/                  # Validation scripts and metrics
+├── validation/                  # validate_results.py (§1) + temporal_benchmark.py (§2)
 └── docs/                        # Reference papers
 ```
 
@@ -177,8 +212,9 @@ See [FUTURE_WORK.md](FUTURE_WORK.md) and [TODO.md](TODO.md). In brief:
 
 - Only pre-computed InterPro annotations are consumed; no local domain scanning.
 - The True Path Rule is **opt-in**, not part of the default run.
-- Validation so far is against InterPro2GO only; there is no CAFA / temporal
-  held-out benchmark or comparison to the original dcGO results yet. See
+- Validation covers InterPro2GO coverage (§1) and a temporal CAFA-style benchmark
+  (§2, above); still open are the ablation study (§4), per-protein score
+  calibration (§5), and a comparison to the original dcGO results (§3). See
   [VALIDATION_PLAN.md](VALIDATION_PLAN.md).
 
 ---

@@ -54,6 +54,12 @@ from config.settings import Config  # noqa: E402
 # The datasets a standard human run actually needs.
 DEFAULT_DATASETS = ["goa_annotations", "go_ontology", "interpro_mappings"]
 
+# Dated GOA snapshots for the temporal benchmark (VALIDATION_PLAN §2) live in the
+# EBI archive, one numbered release per file. We save them under a dedicated
+# directory so they never shadow the current-release goa_human.gaf.gz.
+GOA_ARCHIVE_BASE = "https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/HUMAN"
+GOA_ARCHIVE_DIRNAME = "goa_archive"
+
 CHUNK_SIZE = 1 << 20  # 1 MiB
 
 
@@ -148,6 +154,14 @@ def main() -> int:
         help="List available datasets and exit.",
     )
     parser.add_argument(
+        "--goa-archive",
+        action="append",
+        metavar="VERSION",
+        help="Download a dated human GOA snapshot (numbered EBI release, e.g. "
+        "205 = 2021-04) into data/raw/goa_archive/ for the temporal benchmark "
+        "(VALIDATION_PLAN §2). Repeatable.",
+    )
+    parser.add_argument(
         "--force",
         action="store_true",
         help="Re-download even if the file already exists.",
@@ -168,6 +182,32 @@ def main() -> int:
             print(f"  {'':22s}          {ds.url}")
         return 0
 
+    raw_dir = config.DATA_DIR / "raw"
+
+    # Dated GOA snapshots are handled separately from the settings.py sources:
+    # they share one archive URL pattern and land in their own directory.
+    if args.goa_archive:
+        print(f"Saving dated GOA snapshots under: {raw_dir / GOA_ARCHIVE_DIRNAME}\n")
+        archive_failures: list[str] = []
+        for version in args.goa_archive:
+            filename = f"goa_human.gaf.{version}.gz"
+            url = f"{GOA_ARCHIVE_BASE}/{filename}"
+            dest = raw_dir / GOA_ARCHIVE_DIRNAME / filename
+            print(f"[goa_archive {version}] dated human GOA snapshot")
+            try:
+                download_one(url, dest, force=args.force, timeout=args.timeout)
+            except (requests.RequestException, OSError) as exc:
+                print(f"  ✘ FAILED: {exc}")
+                archive_failures.append(version)
+            print()
+        if archive_failures:
+            print(f"GOA archive download errors. Failed: {', '.join(archive_failures)}")
+            return 1
+        if not (args.all or args.datasets):
+            # Only archive snapshots were requested — done.
+            print("All requested GOA snapshots are in place.")
+            return 0
+
     if args.all:
         selected = list(sources.keys())
     elif args.datasets:
@@ -175,7 +215,6 @@ def main() -> int:
     else:
         selected = DEFAULT_DATASETS
 
-    raw_dir = config.DATA_DIR / "raw"
     print(f"Saving datasets under: {raw_dir}\n")
 
     failures: list[str] = []
