@@ -146,6 +146,25 @@ class TestTransferPredictions:
         assert pred["P1"]["GO:leaf"] == 30.0
 
 
+class TestTransferPscore:
+    def test_sums_scores_and_minmax_normalises_per_protein(self):
+        # P1: D1 gives leaf@2 (=> leaf,mid each +2), D2 gives mid@3 (=> mid +3).
+        # sums: leaf=2, mid=5. min-max over {2,5}: leaf->0.0, mid->1.0.
+        protein_domains = {"P1": ["D1", "D2"]}
+        domain_go = {"D1": {"GO:leaf": 2.0}, "D2": {"GO:mid": 3.0}}
+        pred = tb.transfer_predictions_pscore(protein_domains, domain_go, anc)
+        assert pred["P1"]["GO:mid"] == pytest.approx(1.0)
+        assert pred["P1"]["GO:leaf"] == pytest.approx(0.0)
+
+    def test_single_term_normalises_to_one(self):
+        protein_domains = {"P1": ["D1"]}
+        domain_go = {"D1": {"GO:leaf": 7.0}}
+        pred = tb.transfer_predictions_pscore(protein_domains, domain_go, anc)
+        # leaf and mid both get sum 7 (constant) -> all map to 1.0
+        assert pred["P1"]["GO:leaf"] == pytest.approx(1.0)
+        assert pred["P1"]["GO:mid"] == pytest.approx(1.0)
+
+
 class TestPrecisionRecall:
     def test_cafa_averaging_conventions(self):
         # Two eval proteins. P1 predicts {leaf(90), mid(90)}; true {leaf, mid}.

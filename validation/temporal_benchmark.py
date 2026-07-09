@@ -181,6 +181,40 @@ def transfer_predictions(
     return predictions
 
 
+def transfer_predictions_pscore(
+    protein_domains: Mapping[str, Iterable[str]],
+    domain_go_scores: Mapping[str, Mapping[str, float]],
+    get_ancestors: GetAncestors,
+) -> dict[str, dict[str, float]]:
+    """Transfer via the original dcGO Predictor **p-score** (Fang & Gough 2013).
+
+    Two differences from :func:`transfer_predictions`: the per-(protein, term)
+    score is the **sum** of contributing association scores (additive evidence
+    across the protein's domains, propagated to ancestors), and each protein's
+    scores are then **min-max normalised to [0, 1]** — a per-protein calibration
+    so the threshold sweep ranks each protein's own predictions relative to each
+    other. Aspect roots are dropped. Constant vectors normalise to all-1.
+    """
+    predictions: dict[str, dict[str, float]] = {}
+    for protein, domains in protein_domains.items():
+        sums: dict[str, float] = defaultdict(float)
+        for domain in domains:
+            for go, s in domain_go_scores.get(domain, {}).items():
+                for term in (go, *get_ancestors(go)):
+                    if term in ASPECT_ROOTS:
+                        continue
+                    sums[term] += s
+        if not sums:
+            continue
+        lo, hi = min(sums.values()), max(sums.values())
+        span = hi - lo
+        # min-max to [0, 1]; a single/constant score maps to 1.0 (fully supported).
+        predictions[protein] = {
+            t: ((v - lo) / span if span > 0 else 1.0) for t, v in sums.items()
+        }
+    return predictions
+
+
 def naive_predictions(
     eval_proteins: Iterable[str],
     term_frequency: Mapping[str, float],
@@ -536,6 +570,13 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, default=Path("validation"))
     parser.add_argument("--seed", type=int, default=0, help="Shuffle-baseline seed")
     parser.add_argument(
+        "--transfer",
+        choices=["max", "pscore"],
+        default="max",
+        help="Domain->protein transfer: 'max' (max score, propagated) or 'pscore' "
+        "(Fang & Gough: sum of scores, min-max normalised per protein).",
+    )
+    parser.add_argument(
         "--min-ic",
         type=float,
         action="append",
@@ -623,12 +664,19 @@ def main() -> int:
             freq_counts[t] += 1
     term_freq = {t: c / n_t0 for t, c in freq_counts.items()} if n_t0 else {}
 
-    logger.info("Transferring dcGO predictions to benchmark proteins...")
+    logger.info(
+        f"Transferring dcGO predictions to benchmark proteins ({args.transfer})..."
+    )
+    transfer = (
+        transfer_predictions_pscore
+        if args.transfer == "pscore"
+        else transfer_predictions
+    )
     eval_domains = {p: protein_domains[p] for p in eval_proteins}
-    dcgo_pred = transfer_predictions(eval_domains, domain_go_scores, get_ancestors)
+    dcgo_pred = transfer(eval_domains, domain_go_scores, get_ancestors)
     naive_pred = naive_predictions(eval_proteins, term_freq)
     shuffled = shuffle_domain_go(domain_go_scores, seed=args.seed)
-    shuffle_pred = transfer_predictions(eval_domains, shuffled, get_ancestors)
+    shuffle_pred = transfer(eval_domains, shuffled, get_ancestors)
 
     methods = {"dcGO": dcgo_pred, "naive": naive_pred, "random_domain": shuffle_pred}
 

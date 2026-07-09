@@ -132,7 +132,7 @@ snapshots fetched via `scripts/download_data.py --goa-archive <version>`.
 - [x] Obtain two dated GOA snapshots — **t0 = release 205 (2021-04-21)**,
       **t1 = current (2026-06)**, a ~5-year gap. EBI dated GOA archive.
 - [x] Train domain→GO associations using only annotations available at `t0`
-      (ran the standard pipeline on the 2021 GOA → 69,493 significant
+      (ran the standard pipeline on the 2021 GOA → 164,549 significant
       associations at FDR<0.01).
 - [x] Define the benchmark as **no-knowledge proteins per aspect**: proteins with
       *no experimental annotation in that aspect at t0* that gained experimental
