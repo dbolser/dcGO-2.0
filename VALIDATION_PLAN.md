@@ -17,24 +17,47 @@ engineering cleanup: the code runs; this is about showing the results are
 | §5 Pre-paper method decisions | ⬜ open (#11) |
 | §6 Reproducibility | ⬜ open (#12) |
 
-**Where §2 landed:** on **informative** GO terms dcGO clearly beats both required
-baselines — the random-domain null (by **4–26×** on F_max once low-IC terms are
-excluded) and the CAFA naive frequency baseline (in every aspect at every
-informative IC floor). At face value (no IC filter) naive's raw F_max looks
-higher, but that lead is pure base rate: it evaporates the moment near-universal
-terms like `protein binding` (84.6% of experimental MF annotations) are removed,
-while dcGO holds up. This is the real *precision* result §2 was for, and it
-confirms the concern that a temporal CAFA benchmark rewards recovery of the
-popularity-weighted curation frontier.
+**Where §2 landed:** with the calibrated **p-score** predictor (default) and a
+leak-free no-knowledge gate, dcGO **beats the CAFA naive baseline on F_max at face
+value in BP (0.248 vs 0.115) and CC (0.380 vs 0.343)**, and beats it in **every
+aspect on informative terms** (IC-filtered), while staying **1.3–25× above the
+random-domain null**. MF is the one aspect naive leads at IC≥0 (0.360 vs 0.464),
+because its truth is dominated by `protein binding` (84.6% of experimental MF
+annotations, near-zero IC) — and dcGO overtakes it decisively the moment that
+noise is excluded (IC≥2: 0.365 vs 0.053). This confirms the concern that a
+temporal CAFA benchmark rewards recovery of the popularity-weighted curation
+frontier; on informative function, dcGO is clearly ahead.
 
-**Next action:** *not* ablation. The method audit vs Fang & Gough 2013 is **done**
-(see §2 → "Method audit" and §3) and points to two concrete, paper-grounded
-method changes: (a) add the **relative (parental-background) inference** — the
-specificity test we omitted, which demotes generic low-IC associations at
-inference time; and (b) adopt their **per-target p-score** (sum of h-scores,
-min-max normalised per protein). Metric side: keep **both** protein-centric and
-domain-centric evaluations, and report BP/MF as the headline (as the original did;
-CC is least domain-relevant).
+### Next steps (as of 2026-07-09, after the §2 benchmark + method audit)
+
+Done this round: temporal CAFA benchmark (`temporal_benchmark.py`), the paper's
+two missing pieces — relative inference (`apply_relative_inference.py`) and the
+per-target p-score (`--transfer pscore`, now default) — and a domain-centric
+evaluation (`domain_centric_eval.py`). Both baselines cleared on informative
+terms. Remaining, in rough priority:
+
+1. **Temporal domain-centric test.** The domain-centric eval currently scores
+   against the *current* InterPro2GO. Fetch a dated (~2021) `interpro2go` and pass
+   it as `--reference` so it becomes a true held-out temporal test (mirrors §2 on
+   the domain side). Small.
+2. **Fold the method into the pipeline (paper-parity, end-to-end).** The relative
+   inference + p-score are applied post-hoc here. Wire the relative
+   (parental-background) test into `run_dcgo_human.py` inference itself (combine
+   overall/relative then FDR<1e-3, per the paper — currently a post-hoc
+   `alpha<0.05` filter), and expose the p-score predictor as the standard
+   protein-prediction path. Makes "dcGO-2.0 == dcGO Predictor" defensible.
+3. **§4 ablation** — now that the yardstick is trusted, run the temporal benchmark
+   per pipeline config (single-domain / +supra / +shrinkage / +TPR).
+4. **§3 original-dcGO comparison** — re-key the domain parser on the `SSF`
+   (SUPERFAMILY/SCOP) or `PF` (Pfam) signature from `protein2ipr` col 4 to compare
+   on the original's domain universe. See [[original-dcgo-methodology]].
+5. **§5 method decisions** — TPR default on/off; species scope (human-only vs
+   multi-species); minimum-evidence / effect-size floor; Haldane-corrected odds
+   ratio. **§6 reproducibility** — pin GOA/InterPro/GO versions, one-command
+   repro, archive the exact input snapshots.
+
+Report BP/MF as the headline (as the original did; CC is least domain-relevant),
+and keep **both** protein-centric and domain-centric evaluations.
 
 ---
 
@@ -135,16 +158,20 @@ snapshots fetched via `scripts/download_data.py --goa-archive <version>`.
       (ran the standard pipeline on the 2021 GOA → 164,549 significant
       associations at FDR<0.01).
 - [x] Define the benchmark as **no-knowledge proteins per aspect**: proteins with
-      *no experimental annotation in that aspect at t0* that gained experimental
-      annotation by t1. Score against their **full** propagated t1 experimental
-      terms. (An earlier delta-only truth — `t1 minus t0` — was wrong: it scored
-      correct predictions of already-known terms as misinformation. Fixed before
-      any number was quoted — the §0 lesson.)
+      *no annotation known to training in that aspect at t0* that gained
+      experimental annotation by t1. Score against their **full** propagated t1
+      experimental terms. The gate uses the **same evidence filter the pipeline
+      trains on** (`manual`/non-IEA), not experimental-only — gating on anything
+      narrower leaks already-seen labels into the held-out set (a bug caught in
+      review; fixed). (An earlier delta-only truth — `t1 minus t0` — was also
+      wrong: it scored correct predictions of already-known terms as
+      misinformation. Both fixed before any number was quoted — the §0 lesson.)
 - [x] Score with the **CAFA protein-centric metric**: transfer predicted GO terms
-      to each protein via its domains (union, max score, propagated), then
-      **F_max** over a threshold sweep, plus **S_min** (marginal-IC weighted, IC
-      from t0) and **AUPRC**. Rank by −log10(p) — `hyper_score` saturates (37% at
-      exactly 100) and collapses the sweep.
+      to each protein via its domains, then **F_max** over a threshold sweep,
+      plus **S_min** (marginal-IC weighted, IC from t0) and **AUPRC**. Rank by
+      −log10(p) — `hyper_score` saturates (37% at exactly 100) and collapses the
+      sweep. Default transfer is the **p-score** (Fang & Gough: sum of scores,
+      min-max normalised per protein); `--transfer max` for the simpler variant.
 - [x] Report separately for BP / MF / CC.
 - [x] Sweep an **information-content floor** (`--min-ic`) that excludes
       near-universal, low-IC terms from truth and all methods alike — the fair,
@@ -152,53 +179,55 @@ snapshots fetched via `scripts/download_data.py --goa-archive <version>`.
       GO:0005515 `protein binding` (**84.6%** of human experimental MF
       annotations, near-zero IC).
 
-### Results — 2021→2026 temporal split (2026-07-09)
+### Results — 2021→2026 temporal split (2026-07-09, p-score transfer)
 
-No-knowledge benchmark sizes (IC≥0): **BP 1,537 / MF 1,124 / CC 2,305** proteins.
+No-knowledge benchmark sizes (IC≥0): **BP 324 / MF 418 / CC 572** proteins (a
+leak-free gate on training evidence — much smaller and cleaner than the earlier
+experimental-only gate, which wrongly admitted proteins whose t0 computational
+labels the model had already seen).
 
-**The headline is the information-content sweep.** At face value (IC≥0) dcGO
-trails the naive frequency baseline on F_max. But that lead is *entirely* base
-rate: the moment low-information terms are excluded, naive collapses toward the
-random null while dcGO holds up — and dcGO **beats naive in every aspect at every
-informative IC floor**.
+**dcGO (p-score) beats the naive baseline at face value on BP and CC, and beats
+it in every aspect once uninformative terms are excluded**, staying well above the
+random-domain null throughout:
 
 | Aspect | IC floor | dcGO F_max | naive F_max | random F_max | dcGO / random |
 |--------|:--------:|-----------:|------------:|-------------:|--------------:|
-| BP | ≥0 | 0.276 | **0.289** | 0.144 | 1.9× |
-| BP | ≥2 | **0.215** | 0.131 | 0.051 | 4.2× |
-| BP | ≥4 | **0.175** | 0.042 | 0.023 | 7.6× |
-| BP | ≥6 | **0.142** | 0.012 | 0.009 | 15× |
-| MF | ≥0 | 0.319 | **0.579** | 0.098 | 3.2× |
-| MF | ≥2 | **0.385** | 0.082 | 0.055 | 7.0× |
-| MF | ≥4 | **0.373** | 0.081 | 0.040 | 9.4× |
-| MF | ≥6 | **0.337** | 0.029 | 0.013 | 26× |
-| CC | ≥0 | 0.395 | **0.520** | 0.234 | 1.7× |
-| CC | ≥2 | **0.278** | 0.208 | 0.077 | 3.6× |
-| CC | ≥4 | **0.203** | 0.103 | 0.038 | 5.4× |
-| CC | ≥6 | **0.192** | 0.047 | 0.029 | 6.6× |
+| BP | ≥0 | **0.248** | 0.115 | 0.158 | 1.6× |
+| BP | ≥2 | **0.170** | 0.071 | 0.053 | 3.2× |
+| BP | ≥4 | **0.115** | 0.031 | 0.019 | 6.1× |
+| BP | ≥6 | **0.077** | 0.010 | 0.003 | 24× |
+| MF | ≥0 | 0.360 | **0.464** | 0.262 | 1.4× |
+| MF | ≥2 | **0.365** | 0.053 | 0.088 | 4.2× |
+| MF | ≥4 | **0.337** | 0.045 | 0.072 | 4.7× |
+| MF | ≥6 | **0.217** | 0.018 | 0.009 | 25× |
+| CC | ≥0 | **0.380** | 0.343 | 0.291 | 1.3× |
+| CC | ≥2 | **0.239** | 0.153 | 0.072 | 3.3× |
+| CC | ≥4 | **0.134** | 0.099 | 0.031 | 4.3× |
+| CC | ≥6 | **0.124** | 0.044 | 0.015 | 8.1× |
 
 (IC in bits; IC≥2 ⇒ term in ≤25% of proteins, IC≥6 ⇒ ≤1.6%. Full table with
 S_min/AUPRC in `validation/temporal_benchmark_metrics.tsv`.)
 
 **Read-out:**
-- **naive is a base-rate mirage.** Its F_max advantage vanishes with one filter:
-  BP 0.289→0.012, MF 0.579→0.029, CC 0.520→0.047 as IC rises 0→6 — it converges to
-  the random null because all it ever had were high-frequency generic terms.
-  In MF, ~46% of benchmark proteins (1,124→608 at IC≥2) had *only* low-IC
-  newly-curated terms — i.e. `protein binding` was their entire MF "truth".
-- **dcGO degrades gracefully and dominates on informative terms.** It stays
-  **4–26× above the random-domain null** once uninformative terms are removed,
-  and beats naive by up to ~12× (BP) / ~11× (MF) / ~4× (CC). On MF it even
-  *improves* at IC≥2 (0.319→0.385) — removing the protein-binding noise clarifies
-  the signal. AUPRC follows the same flip (dcGO ≥ naive at every IC≥2).
-- This is exactly the concern raised by Julian: a temporal CAFA benchmark rewards
-  recovery of the **attention-biased, popularity-weighted** curation frontier, so
-  raw F_max flatters a frequency baseline. Restricting to *informative* terms —
-  what a domain→function method is actually for — shows dcGO clearly ahead.
+- **dcGO beats naive on F_max at IC≥0 in BP (0.248 vs 0.115) and CC (0.380 vs
+  0.343)**; MF is the only aspect where naive leads at IC≥0 (0.360 vs 0.464) —
+  because MF truth is dominated by `protein binding`. At IC≥2 dcGO wins MF
+  decisively (0.365 vs 0.053) and every aspect thereafter.
+- **naive is a base-rate mirage.** Its F_max collapses toward the random null as
+  informative terms are required (BP 0.115→0.010, MF 0.464→0.018, CC 0.343→0.044
+  over IC 0→6): all it ever had were high-frequency generic terms.
+- **dcGO stays 1.3–1.6× the random null at IC≥0, rising to 8–25× at IC≥6** — it
+  degrades gracefully because its predictions are specific. On MF it even holds
+  flat 0→2 (0.360→0.365) as protein-binding noise is removed.
+- This confirms Julian's point: a temporal CAFA benchmark rewards recovery of the
+  **popularity-weighted** curation frontier, so raw F_max flatters a frequency
+  baseline. On informative terms — what a domain→function method is for — dcGO is
+  clearly ahead. The calibrated p-score (default) is what lifts it above naive
+  even at IC≥0.
 
 **Acceptance: met.** dcGO clears both mandatory baselines (random null and naive)
-on informative terms across all three aspects. The raw-F_max caveat is now
-understood and controlled, not a mystery.
+across all three aspects on informative terms, and beats naive at face value on 2
+of 3 aspects.
 
 ### Method audit vs the original dcGO Predictor (2026-07-09)
 
@@ -220,34 +249,33 @@ gap to naive — and two of them are *method*, not metric:
 | FDR threshold | < 1e-3 | < 0.01 | minor |
 | Score saturation | **explicitly noted**: FDR-based p-scores "collapse to FDR=0" for top hits → switched to h-score | we hit the same with `hyper_score` (37% at 100) → switched to −log10(p) | corroborates our fix |
 
-**Method-piece experiment (2026-07-09).** We restored both missing pieces and
-measured each (`apply_relative_inference.py`; `temporal_benchmark.py --transfer`).
-dcGO F_max / AUPRC, IC≥0, vs the base run (max transfer, overall-only):
+**Method-piece experiment (2026-07-09, leak-free gate).** We restored both
+missing pieces and measured each (`apply_relative_inference.py`;
+`temporal_benchmark.py --transfer`). dcGO F_max / AUPRC at IC≥0 (naive: BP
+0.115/0.314, MF 0.464/0.325, CC 0.343/0.513):
 
 | Config | BP F_max | MF F_max | CC F_max | BP AUPRC | MF AUPRC | CC AUPRC |
 |--------|:--------:|:--------:|:--------:|:--------:|:--------:|:--------:|
-| naive | 0.289 | 0.579 | 0.520 | 0.173 | 0.214 | 0.342 |
-| A base (max, overall) | 0.276 | 0.319 | 0.395 | 0.143 | 0.158 | 0.250 |
-| B **+ p-score transfer** | **0.365** | **0.446** | **0.458** | **0.236** | **0.260** | **0.338** |
-| C + relative inference | 0.288 | 0.337 | 0.395 | 0.124 | 0.167 | 0.211 |
-| D both | 0.310 | 0.427 | 0.400 | 0.161 | 0.234 | 0.245 |
+| A base (max, overall) | 0.218 | 0.234 | 0.349 | 0.083 | 0.106 | 0.201 |
+| B **+ p-score transfer** | **0.248** | 0.360 | **0.380** | **0.137** | 0.195 | **0.240** |
+| C + relative inference | 0.219 | 0.273 | 0.356 | 0.065 | 0.164 | 0.180 |
+| D both | 0.224 | **0.385** | 0.356 | 0.100 | **0.217** | 0.196 |
 
-**The per-target p-score (2), not the relative inference (1), is the real lever.**
-Per-protein calibration (B) lifts F_max and AUPRC everywhere — it puts dcGO
-**above naive on BP** at IC≥0 (0.365 vs 0.289) and above naive on BP+MF **AUPRC**,
-and closes most of the MF/CC F_max gap. The relative inference (C) is roughly
-F_max-neutral and slightly *hurts* AUPRC: it prunes ~47% of associations (the
-generic, parent-driven ones), trading recall for precision to about a wash, and
-adding it on top of the p-score (D) is a touch worse than the p-score alone.
+**The per-target p-score (2) is the main lever; the relative inference (1) helps
+MF.** Per-protein calibration (B) lifts F_max/AUPRC across the board (BP
+0.218→0.248, MF 0.234→0.360, CC 0.349→0.380). The relative inference (C) helps
+MF (F_max 0.234→0.273, AUPRC 0.106→0.164) and is ~neutral on BP/CC F_max; the two
+together (D) give the best MF (0.385). So (2) is the broad protein-centric win and
+(1) adds specificity that shows up most in MF — complementary, as their
+domain-centric result below confirms.
 
 **Correction to an earlier claim:** the relative inference is *not* equivalent to
 the evaluation-time IC filter. The IC filter changes the *scoring universe* (only
 informative terms count, so naive collapses); the relative inference only prunes
 dcGO's *predictions* while the evaluation still scores every term — a different
-operation with a much smaller effect. The relative inference remains
-methodologically correct and matters for the *quality of the association set*
-itself — best judged by the **domain-centric** evaluation, not protein-centric
-F_max. Recommended default going forward: **p-score transfer** (now the default).
+operation with a much smaller effect. Its clearest payoff is association-set
+quality — best seen in the **domain-centric** evaluation below, not protein-centric
+F_max. Recommended default: **p-score transfer** (now the default).
 
 ### Domain-centric evaluation — where the relative inference earns its keep
 

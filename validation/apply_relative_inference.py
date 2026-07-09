@@ -151,7 +151,13 @@ def main() -> int:
         relative_p.append(p)
         kept_mask.append(p < args.alpha)
 
+    # Match the paper: the reported p-value is the *more conservative* of the
+    # overall and relative tests, so downstream scoring (which ranks on p_value)
+    # reflects both. Untested rows (root/absent/under-powered) keep the overall p.
+    df["overall_p"] = df["p_value"]
     df["relative_p"] = relative_p
+    tested = df["relative_p"].notna()
+    df.loc[tested, "p_value"] = df.loc[tested, ["overall_p", "relative_p"]].max(axis=1)
     kept = df[kept_mask].copy()
     logger.info(
         f"Relative inference: kept {len(kept):,} / {len(df):,} "

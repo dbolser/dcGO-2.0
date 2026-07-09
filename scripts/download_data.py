@@ -55,9 +55,10 @@ from config.settings import Config  # noqa: E402
 DEFAULT_DATASETS = ["goa_annotations", "go_ontology", "interpro_mappings"]
 
 # Dated GOA snapshots for the temporal benchmark (VALIDATION_PLAN §2) live in the
-# EBI archive, one numbered release per file. We save them under a dedicated
-# directory so they never shadow the current-release goa_human.gaf.gz.
-GOA_ARCHIVE_BASE = "https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/HUMAN"
+# EBI archive, one numbered release per file. The base URL is sourced from
+# config/settings.py (single source of truth for dataset locations); we save
+# them under a dedicated directory so they never shadow the current-release
+# goa_human.gaf.gz.
 GOA_ARCHIVE_DIRNAME = "goa_archive"
 
 CHUNK_SIZE = 1 << 20  # 1 MiB
@@ -191,7 +192,7 @@ def main() -> int:
         archive_failures: list[str] = []
         for version in args.goa_archive:
             filename = f"goa_human.gaf.{version}.gz"
-            url = f"{GOA_ARCHIVE_BASE}/{filename}"
+            url = f"{config.goa_archive_base_url}/{filename}"
             dest = raw_dir / GOA_ARCHIVE_DIRNAME / filename
             print(f"[goa_archive {version}] dated human GOA snapshot")
             try:

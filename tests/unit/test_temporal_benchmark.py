@@ -218,6 +218,26 @@ class TestSmin:
         assert smin == pytest.approx(3.0)
 
 
+class TestCandidateThresholds:
+    def test_includes_predict_nothing_sentinel_above_max(self):
+        pred = {"P1": {"GO:leaf": 5.0, "GO:mid": 9.0}}
+        taus = tb._candidate_thresholds(pred)
+        assert max(taus) > 9.0  # a threshold above the max => empty prediction set
+        # every real score appears as a candidate cutoff (small case: all of them)
+        assert 5.0 in taus and 9.0 in taus
+
+    def test_smin_can_choose_predict_nothing(self):
+        # All predictions are high-scoring false positives; the true term is
+        # unpredicted. S_min should be able to pick "predict nothing" (mi=0),
+        # giving ru = IC(true) rather than being forced to carry misinformation.
+        pred = {"P1": {"GO:other": 100.0}}
+        true = {"P1": {"GO:leaf"}}
+        ic = {"GO:leaf": 3.0, "GO:other": 3.0}
+        smin, tau = tb.s_min(pred, true, ic)
+        assert smin == pytest.approx(3.0)  # ru only, no misinformation term
+        assert tau > 100.0  # achieved at the predict-nothing sentinel
+
+
 class TestAUPRC:
     def test_constant_precision(self):
         # precision 1.0 across recall 0->1 => area 1.0

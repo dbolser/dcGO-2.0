@@ -137,19 +137,19 @@ Two independent checks live in `validation/` (see
       --min-ic 0 --min-ic 2 --min-ic 4      # information-content sweep
   ```
 
-  F_max, dcGO vs the two baselines, as an **information-content floor** removes
-  near-universal low-IC terms (e.g. `protein binding`, 85% of experimental MF):
+  F_max, dcGO (p-score) vs the two baselines, as an **information-content floor**
+  removes near-universal low-IC terms (e.g. `protein binding`, 85% of exp. MF):
 
   | Aspect | IC≥0 dcGO/naive | IC≥2 | IC≥4 | dcGO/random @ IC≥4 |
   |--------|:---------------:|:----:|:----:|:------------------:|
-  | BP | 0.276 / **0.289** | **0.215** / 0.131 | **0.175** / 0.042 | 7.6× |
-  | MF | 0.319 / **0.579** | **0.385** / 0.082 | **0.373** / 0.081 | 9.4× |
-  | CC | 0.395 / **0.520** | **0.278** / 0.208 | **0.203** / 0.103 | 5.4× |
+  | BP | **0.248** / 0.115 | **0.170** / 0.071 | **0.115** / 0.031 | 6.1× |
+  | MF | 0.360 / **0.464** | **0.365** / 0.053 | **0.337** / 0.045 | 4.7× |
+  | CC | **0.380** / 0.343 | **0.239** / 0.153 | **0.134** / 0.099 | 4.3× |
 
-  At face value naive's F_max looks higher, but that lead is pure base rate: it
-  collapses toward the random null the moment uninformative terms are excluded,
-  while dcGO holds up and **beats both baselines on informative terms in every
-  aspect** (4–26× the random-domain null). See VALIDATION_PLAN.md §2.
+  dcGO beats naive at face value on BP and CC; MF (whose truth is dominated by
+  `protein binding`) flips to dcGO the moment uninformative terms are excluded.
+  On informative terms dcGO beats both baselines in every aspect, staying
+  1.3–25× above the random-domain null. See VALIDATION_PLAN.md §2.
 
 ---
 

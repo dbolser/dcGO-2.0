@@ -78,7 +78,7 @@ def propagate_terms(terms: Iterable[str], get_ancestors: GetAncestors) -> set[st
 
 
 def build_nk_benchmark_by_aspect(
-    t0_exp_map: Mapping[str, set[str]],
+    t0_known_map: Mapping[str, set[str]],
     t1_exp_map: Mapping[str, set[str]],
     term_aspect: Mapping[str, str],
     get_ancestors: GetAncestors,
@@ -87,18 +87,23 @@ def build_nk_benchmark_by_aspect(
     """CAFA **no-knowledge** benchmark, split by GO aspect.
 
     Returns ``{aspect: {protein: true_terms}}``. For a given aspect a protein is a
-    benchmark ("no-knowledge") target only if it had **no experimental
-    annotation in that aspect at t0** but gained experimental annotation by t1 —
-    so every scored term is a genuine prediction, never memorised from training.
-    Its truth set is then the **full** propagated t1 experimental terms in that
-    aspect (aspect roots excluded), which is the correct scoring reference: a
-    method must not be penalised for correctly predicting a term the protein
-    really has. (An earlier delta-only design, ``t1 minus t0``, wrongly scored
-    correct predictions of already-known terms as misinformation.)
+    benchmark ("no-knowledge") target only if it had **no annotation known at t0
+    in that aspect** but gained experimental annotation by t1 — so every scored
+    term is a genuine prediction, never available to training. Its truth set is
+    then the **full** propagated t1 experimental terms in that aspect (aspect
+    roots excluded), which is the correct scoring reference: a method must not be
+    penalised for correctly predicting a term the protein really has. (An earlier
+    delta-only design, ``t1 minus t0``, wrongly scored correct predictions of
+    already-known terms as misinformation.)
 
-    Both maps hold **experimental-evidence** annotations. ``predictable_proteins``
-    (if given) keeps only proteins a domain method could predict — those with at
-    least one domain; zero-domain proteins would only depress recall.
+    ``t0_known_map`` must be the annotations available to *training* — i.e. under
+    the **same evidence filter the pipeline trained on** (``manual``/non-IEA),
+    not experimental-only. Gating on a narrower set than training would leak: a
+    protein with a computational (e.g. ISS/IBA) t0 label the model already saw
+    could re-enter the held-out set and have that label's later experimental
+    confirmation scored as a fresh prediction. ``t1_exp_map`` holds t1
+    **experimental** annotations (the gold standard). ``predictable_proteins``
+    (if given) keeps only proteins with at least one domain.
     """
     aspects = ("BP", "MF", "CC")
     benchmark: dict[str, dict[str, set[str]]] = {a: {} for a in aspects}
@@ -106,7 +111,7 @@ def build_nk_benchmark_by_aspect(
         if predictable_proteins is not None and protein not in predictable_proteins:
             continue
         t1_closed = propagate_terms(t1_terms, get_ancestors)
-        t0_closed = propagate_terms(t0_exp_map.get(protein, set()), get_ancestors)
+        t0_closed = propagate_terms(t0_known_map.get(protein, set()), get_ancestors)
         t0_aspects = {term_aspect.get(t) for t in t0_closed}
         for aspect in aspects:
             if aspect in t0_aspects:
@@ -286,16 +291,30 @@ def precision_recall_at_threshold(
 
 
 def _candidate_thresholds(pred_scores: PredScores, n_points: int = 51) -> list[float]:
-    """A sweep of thresholds spanning the observed prediction scores."""
+    """Threshold sweep at *observed* score cutoffs, plus a predict-nothing endpoint.
+
+    Cutoffs are drawn from the score distribution (quantiles of the observed
+    scores), not spaced evenly over the value range: for skewed scores like
+    ``-log10(p)`` a value-linspace wastes points in the empty high range and can
+    miss the cutoff that separates a useful term from a slightly lower false one.
+    A sentinel strictly above the maximum is always appended so ``S_min`` (and
+    ``F_max``) can evaluate "predict nothing" when every prediction is a high
+    false positive.
+    """
     all_scores = [s for terms in pred_scores.values() for s in terms.values()]
     if not all_scores:
         return [0.0]
-    lo, hi = min(all_scores), max(all_scores)
-    if lo == hi:
-        return [lo]
-    step = (hi - lo) / (n_points - 1)
-    # include a hair below lo so the most permissive point keeps every prediction
-    return [lo + step * i for i in range(n_points)]
+    hi = max(all_scores)
+    sentinel = hi + (abs(hi) if hi != 0 else 1.0)  # strictly above max => empty set
+    uniq = sorted(set(all_scores))
+    if len(uniq) <= n_points:
+        return uniq + [sentinel]
+    # Quantile sample of the observed scores: each cutoff is a real score, placed
+    # where the mass is. Keeps the sweep cheap while tracking the distribution.
+    xs = sorted(all_scores)
+    step = (len(xs) - 1) / (n_points - 1)
+    sampled = sorted({xs[round(i * step)] for i in range(n_points)})
+    return sampled + [sentinel]
 
 
 def pr_curve(
@@ -480,6 +499,9 @@ def load_domain_go_scores(
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"Predictions file missing columns: {missing}")
+    # Drop rows with NaN in a required column: a NaN score would poison -log10 and
+    # a NaN key breaks lookups (NaN != NaN). Our files are clean; this is a guard.
+    df = df.dropna(subset=list(required))
     out: dict[str, dict[str, float]] = defaultdict(dict)
     for domain, go, raw in zip(df["domain"], df["go_term"], df[score_column]):
         # -log10 with a floor so underflowed p == 0.0 doesn't become +inf.
@@ -607,14 +629,11 @@ def main() -> int:
     get_ancestors = processor.get_ancestors
     term_aspect = build_term_aspect(processor)
 
-    logger.info("Parsing t0 (training) GOA — all non-IEA evidence (for IC + naive)...")
+    logger.info("Parsing t0 (training) GOA — all non-IEA evidence...")
+    # Same evidence filter the pipeline trains on. Used for IC, the naive term
+    # frequencies, AND the no-knowledge gate — gating on anything narrower than
+    # training would leak already-seen labels into the held-out set.
     t0_map = parse_goa_human(args.t0_gaf, evidence_filter="manual")
-
-    logger.info("Parsing t0 GOA — experimental evidence only (no-knowledge gate)...")
-    t0_exp_parser = GOAParser(
-        evidence_codes=EXPERIMENTAL_EVIDENCE, aspects={"P", "F", "C"}
-    )
-    t0_exp_map = t0_exp_parser.parse_gaf_file(args.t0_gaf)
 
     logger.info("Parsing t1 (test) GOA — experimental evidence only...")
     t1_parser = GOAParser(evidence_codes=EXPERIMENTAL_EVIDENCE, aspects={"P", "F", "C"})
@@ -633,7 +652,7 @@ def main() -> int:
 
     logger.info("Building no-knowledge benchmark (per aspect, full t1-exp truth)...")
     benchmark = build_nk_benchmark_by_aspect(
-        t0_exp_map,
+        t0_map,
         t1_exp_map,
         term_aspect,
         get_ancestors,

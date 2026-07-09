@@ -25,14 +25,16 @@ This file is just loose notes.
   (`protein binding` = 85% of experimental MF). Dated GOA via
   `download_data.py --goa-archive`; IC sweep via `--min-ic`.
 
-## Next (see VALIDATION_PLAN.md) — NOT ablation yet
-- **Method-vs-paper audit** — read Fang & Gough 2013 (`docs/`) for how they
-  *validated* (likely domain-centric, not protein-centric F_max) and the
-  optimal-level / True-Path test (OFF in the §2 run). Align where it matters.
-- **Harden the metric** — promote the IC-controlled view; consider a
-  domain-centric evaluation (does a domain's predicted GO match known function).
-- §4 ablation (#10), §3 original-dcGO comparison (#9), §5–§6 — after the
-  yardstick is trusted.
+## Next (see VALIDATION_PLAN.md "Next steps")
+- ~~Method-vs-paper audit~~ done — their validation is protein-centric CAFA
+  PR-RC; restored the two missing pieces (relative inference + p-score) and added
+  a domain-centric eval.
+- **Temporal domain-centric test** — fetch a dated 2021 `interpro2go`, pass as
+  `--reference` to `domain_centric_eval.py`.
+- **Fold method into the pipeline** — wire the relative (parental-background)
+  test into `run_dcgo_human.py` (combine + FDR<1e-3, per paper) and expose the
+  p-score predictor as the standard path.
+- §4 ablation (#10), §3 original-dcGO domain re-keying SSF/PF (#9), §5–§6.
 
 ## Loose ideas / nice-to-haves
 - Add InterPro names / gene names / GO term descriptions to the output TSVs
