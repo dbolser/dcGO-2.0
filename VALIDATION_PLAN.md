@@ -220,13 +220,34 @@ gap to naive — and two of them are *method*, not metric:
 | FDR threshold | < 1e-3 | < 0.01 | minor |
 | Score saturation | **explicitly noted**: FDR-based p-scores "collapse to FDR=0" for top hits → switched to h-score | we hit the same with `hyper_score` (37% at 100) → switched to −log10(p) | corroborates our fix |
 
-**The load-bearing insight:** their *relative (parental-background) inference*
-does at **inference time** what our IC filter does at **evaluation time** — demote
-associations that aren't stronger than their generic parent. We omitted it, so
-our raw predictions are more promiscuous toward low-IC terms, which is exactly
-what let naive look competitive at IC≥0. Adding the relative inference + their
-per-target p-score is the paper-grounded way to close the gap, and is almost
-certainly worth more than any ablation.
+**Method-piece experiment (2026-07-09).** We restored both missing pieces and
+measured each (`apply_relative_inference.py`; `temporal_benchmark.py --transfer`).
+dcGO F_max / AUPRC, IC≥0, vs the base run (max transfer, overall-only):
+
+| Config | BP F_max | MF F_max | CC F_max | BP AUPRC | MF AUPRC | CC AUPRC |
+|--------|:--------:|:--------:|:--------:|:--------:|:--------:|:--------:|
+| naive | 0.289 | 0.579 | 0.520 | 0.173 | 0.214 | 0.342 |
+| A base (max, overall) | 0.276 | 0.319 | 0.395 | 0.143 | 0.158 | 0.250 |
+| B **+ p-score transfer** | **0.365** | **0.446** | **0.458** | **0.236** | **0.260** | **0.338** |
+| C + relative inference | 0.288 | 0.337 | 0.395 | 0.124 | 0.167 | 0.211 |
+| D both | 0.310 | 0.427 | 0.400 | 0.161 | 0.234 | 0.245 |
+
+**The per-target p-score (2), not the relative inference (1), is the real lever.**
+Per-protein calibration (B) lifts F_max and AUPRC everywhere — it puts dcGO
+**above naive on BP** at IC≥0 (0.365 vs 0.289) and above naive on BP+MF **AUPRC**,
+and closes most of the MF/CC F_max gap. The relative inference (C) is roughly
+F_max-neutral and slightly *hurts* AUPRC: it prunes ~47% of associations (the
+generic, parent-driven ones), trading recall for precision to about a wash, and
+adding it on top of the p-score (D) is a touch worse than the p-score alone.
+
+**Correction to an earlier claim:** the relative inference is *not* equivalent to
+the evaluation-time IC filter. The IC filter changes the *scoring universe* (only
+informative terms count, so naive collapses); the relative inference only prunes
+dcGO's *predictions* while the evaluation still scores every term — a different
+operation with a much smaller effect. The relative inference remains
+methodologically correct and matters for the *quality of the association set*
+itself — best judged by the **domain-centric** evaluation (still to add), not
+protein-centric F_max. Recommended default going forward: **p-score transfer**.
 
 ### Baselines
 - [x] **Naive baseline**: predict each GO term at its (propagated) t0 frequency
