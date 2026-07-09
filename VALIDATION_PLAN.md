@@ -12,7 +12,7 @@ engineering cleanup: the code runs; this is about showing the results are
 | §0 Pipeline correctness | ✅ done — 4 correctness bugs found & fixed with tests |
 | §1 Reframe InterPro2GO comparison | ✅ done (#14, #15) — ~65% coverage at FDR<0.01 |
 | **§2 Temporal held-out benchmark (CAFA-style)** | ✅ **done (#8)** — 2021→2026 CAFA split; see results below |
-| §3 Compare to original dcGO | ⬜ open (#9) |
+| §3 Compare to original dcGO | 🟡 method audit done (see §2→"Method audit"); domain re-keying open (#9) |
 | §4 Supra-domain ablation | ⬜ open (#10) — **now unblocked** (reuses the §2 harness) |
 | §5 Pre-paper method decisions | ⬜ open (#11) |
 | §6 Reproducibility | ⬜ open (#12) |
@@ -27,11 +27,14 @@ while dcGO holds up. This is the real *precision* result §2 was for, and it
 confirms the concern that a temporal CAFA benchmark rewards recovery of the
 popularity-weighted curation frontier.
 
-**Next action:** *not* ablation yet. First (a) audit our method against Fang &
-Gough 2013 — especially their **validation** approach (likely domain-centric, not
-protein-centric F_max) and the optimal-level/True-Path test, which was OFF in
-this run; and (b) firm up the metric (promote the IC-controlled view; consider a
-domain-centric evaluation). Ablation only once the yardstick is trusted.
+**Next action:** *not* ablation. The method audit vs Fang & Gough 2013 is **done**
+(see §2 → "Method audit" and §3) and points to two concrete, paper-grounded
+method changes: (a) add the **relative (parental-background) inference** — the
+specificity test we omitted, which demotes generic low-IC associations at
+inference time; and (b) adopt their **per-target p-score** (sum of h-scores,
+min-max normalised per protein). Metric side: keep **both** protein-centric and
+domain-centric evaluations, and report BP/MF as the headline (as the original did;
+CC is least domain-relevant).
 
 ---
 
@@ -196,6 +199,34 @@ S_min/AUPRC in `validation/temporal_benchmark_metrics.tsv`.)
 **Acceptance: met.** dcGO clears both mandatory baselines (random null and naive)
 on informative terms across all three aspects. The raw-F_max caveat is now
 understood and controlled, not a mystery.
+
+### Method audit vs the original dcGO Predictor (2026-07-09)
+
+Read of Fang & Gough 2013, *A domain-centric solution to functional genomics via
+dcGO Predictor* (BMC Bioinformatics 14(S3):S9 — the CAFA paper) and the database
+paper (`gks1080.pdf`). **Their validation is protein-centric CAFA PR-RC**
+(per-target precision/recall, averaged over targets), so our protein-centric
+choice matches theirs. But three concrete divergences likely explain our raw
+gap to naive — and two of them are *method*, not metric:
+
+| Dimension | Original (Fang & Gough) | Ours (§2 run) | Likely impact |
+|-----------|-------------------------|---------------|---------------|
+| Aspects scored | **BP + MF only** (found MF > BP; CC not scored — least domain-relevant) | BP + MF + CC | report BP/MF as headline, CC secondary |
+| Gold-standard evidence | newly-added **EXP + TAS + IC** | strict experimental set | minor |
+| **Statistical inference** | **two tests**: *overall* (background = all UniProt) **and** *relative* (background = only proteins with all direct-parent terms); keep the **larger p / smaller h-score** | **overall only** | **big** — the relative/parental test is what enforces specificity; omitting it lets generic low-IC associations through |
+| **Prediction transfer / score** | **sum** of h-scores over supporting domains, then **min-max normalised _per target_** to 0–1 | **max** over domains, ranked by global −log10(p) | **big** — per-target normalisation is the per-protein calibration we lacked |
+| Propagation / true-path | always on | opt-in, **off** in the run | medium |
+| Domain universe | SCOP/SUPERFAMILY (+Pfam) | InterPro entries | see §3 |
+| FDR threshold | < 1e-3 | < 0.01 | minor |
+| Score saturation | **explicitly noted**: FDR-based p-scores "collapse to FDR=0" for top hits → switched to h-score | we hit the same with `hyper_score` (37% at 100) → switched to −log10(p) | corroborates our fix |
+
+**The load-bearing insight:** their *relative (parental-background) inference*
+does at **inference time** what our IC filter does at **evaluation time** — demote
+associations that aren't stronger than their generic parent. We omitted it, so
+our raw predictions are more promiscuous toward low-IC terms, which is exactly
+what let naive look competitive at IC≥0. Adding the relative inference + their
+per-target p-score is the paper-grounded way to close the gap, and is almost
+certainly worth more than any ablation.
 
 ### Baselines
 - [x] **Naive baseline**: predict each GO term at its (propagated) t0 frequency
