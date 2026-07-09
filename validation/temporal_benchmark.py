@@ -572,9 +572,10 @@ def main() -> int:
     parser.add_argument(
         "--transfer",
         choices=["max", "pscore"],
-        default="max",
-        help="Domain->protein transfer: 'max' (max score, propagated) or 'pscore' "
-        "(Fang & Gough: sum of scores, min-max normalised per protein).",
+        default="pscore",
+        help="Domain->protein transfer: 'pscore' (default; Fang & Gough: sum of "
+        "scores, min-max normalised per protein — the calibrated choice) or 'max' "
+        "(max score, propagated).",
     )
     parser.add_argument(
         "--min-ic",

@@ -246,8 +246,32 @@ informative terms count, so naive collapses); the relative inference only prunes
 dcGO's *predictions* while the evaluation still scores every term — a different
 operation with a much smaller effect. The relative inference remains
 methodologically correct and matters for the *quality of the association set*
-itself — best judged by the **domain-centric** evaluation (still to add), not
-protein-centric F_max. Recommended default going forward: **p-score transfer**.
+itself — best judged by the **domain-centric** evaluation, not protein-centric
+F_max. Recommended default going forward: **p-score transfer** (now the default).
+
+### Domain-centric evaluation — where the relative inference earns its keep
+
+`validation/domain_centric_eval.py` scores the **(domain, GO) associations
+directly** against InterPro2GO (propagated, shared single-domain space — the §1
+frame). This is the right instrument for the relative inference, whose job is
+association-set specificity. On the 2021 t0 associations:
+
+| Config | pairs | precision (lb) | recall | F1 |
+|--------|------:|---------------:|-------:|---:|
+| base (overall only) | 134,610 | 0.218 | 0.631 | 0.324 |
+| **+ relative inference** | 69,206 | **0.253** | 0.430 | 0.319 |
+
+The relative inference **raises domain-level precision 0.218 → 0.253** (a real
+gain — these are curated-pair rates) while halving the set (recall 0.63 → 0.43).
+So the two restored pieces earn their keep on **different** metrics, and are
+complementary: **(1) relative inference** cleans the *associations* (domain-centric
+precision ↑), **(2) p-score transfer** calibrates the *protein* predictions
+(protein-centric F_max/AUPRC ↑). Keep both evaluations; keep both method pieces.
+
+(Caveat: precision here is a *lower bound* vs the incomplete, *current*
+InterPro2GO — good for comparing configs, not an absolute precision. A dated
+2021 InterPro2GO would make this a fully temporal domain-centric test — a small
+follow-up: fetch an archived `interpro2go` and pass it as `--reference`.)
 
 ### Baselines
 - [x] **Naive baseline**: predict each GO term at its (propagated) t0 frequency
