@@ -79,15 +79,37 @@ was worth more than any parameter ablation. They are **complementary**:
 
 ## Reproduce
 
+Assumes the human InterPro subset is already extracted
+(`data/interim/protein2ipr_human.dat.gz`; see [README](README.md) Quick Start).
+
 ```bash
-uv run python scripts/download_data.py --goa-archive 205          # 2021 t0 snapshot
+# 1. Fetch the 2021 t0 GOA snapshot
+uv run python scripts/download_data.py --goa-archive 205
+
+# 2. Stage t0 inputs under the --species name run_dcgo_human.py expects.
+#    Domains are fixed in time (only GOA moves), so symlink the current subset.
+ln -sf "$PWD/data/raw/goa_archive/goa_human.gaf.205.gz" \
+       data/raw/goa_annotations/goa_human_t0_2021.gaf.gz
+ln -sf "$PWD/data/interim/protein2ipr_human.dat.gz" \
+       data/interim/protein2ipr_human_t0_2021.dat.gz
+
+# 3. Train domain→GO associations on t0
 uv run python run_dcgo_human.py --species human_t0_2021 --num-cores 32 \
-    --output-dir results_t0_2021                                  # train on t0
+    --output-dir results_t0_2021
+
+# 4. Protein-centric temporal benchmark (t1 = current GOA)
 uv run python validation/temporal_benchmark.py \
     --t0-gaf data/raw/goa_archive/goa_human.gaf.205.gz \
     --t1-gaf data/raw/goa_annotations/goa_human.gaf.gz \
     --predictions results_t0_2021/domain_go_associations_significant.tsv \
-    --min-ic 0 --min-ic 2 --min-ic 4 --min-ic 6                   # protein-centric
+    --min-ic 0 --min-ic 2 --min-ic 4 --min-ic 6
+
+# 5. Domain-centric eval — build the relative-filtered set, then compare both
+uv run python validation/apply_relative_inference.py \
+    --predictions results_t0_2021/domain_go_associations_significant.tsv \
+    --t0-gaf data/raw/goa_archive/goa_human.gaf.205.gz \
+    --output results_t0_2021/domain_go_associations_relative.tsv
 uv run python validation/domain_centric_eval.py \
-    --predictions base=results_t0_2021/domain_go_associations_significant.tsv
+    --predictions base=results_t0_2021/domain_go_associations_significant.tsv \
+    --predictions relative=results_t0_2021/domain_go_associations_relative.tsv
 ```
