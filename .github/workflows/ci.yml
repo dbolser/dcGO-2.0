@@ -33,3 +33,12 @@ jobs:
 
       - name: Test (pytest)
         run: uv run pytest
+
+      - name: Build distributions
+        run: uv build
+
+      - name: Smoke-test installed wheel CLI
+        run: |
+          uv venv --python 3.12 /tmp/dcgo-wheel-smoke
+          uv pip install --python /tmp/dcgo-wheel-smoke/bin/python dist/*.whl
+          /tmp/dcgo-wheel-smoke/bin/dcgo --help
