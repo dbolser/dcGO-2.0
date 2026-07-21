@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 """
-Extract human protein annotations from the full protein2ipr.dat.gz file.
-This creates a much smaller human-specific file for faster processing.
+Extract a species' protein annotations from the full protein2ipr.dat.gz file.
+
+This creates a much smaller species-specific file for faster processing. The
+name is kept for backward compatibility, but the script works for any organism
+via ``--species`` (default: human), mirroring ``run_dcgo_human.py``.
+
+    uv run python extract_human_interpro.py                 # human (default)
+    uv run python extract_human_interpro.py --species mouse # any organism
 """
 
+import argparse
 import gzip
 from pathlib import Path
 from loguru import logger
@@ -13,7 +20,7 @@ logger.remove()
 logger.add(sys.stderr, level="INFO")
 
 
-def extract_human_proteins(
+def extract_species_proteins(
     protein_set_file: Path, interpro_file: Path, output_file: Path
 ):
     """
@@ -61,17 +68,42 @@ def extract_human_proteins(
 
 
 def main():
-    # Parse GOA to get human protein IDs
-    from src.goa_parser import parse_goa_human
+    parser = argparse.ArgumentParser(
+        description="Extract a species' subset of protein2ipr.dat.gz for a fast dcGO run."
+    )
+    parser.add_argument(
+        "--species",
+        default="human",
+        help="Species to extract: 'human', 'mouse', etc. Must match the "
+        "goa_<species>.gaf.gz file name (default: human)",
+    )
+    parser.add_argument(
+        "--evidence-filter",
+        default="manual",
+        choices=["all", "manual", "experimental"],
+        help="Evidence filter used to select the protein set (default: manual)",
+    )
+    args = parser.parse_args()
 
-    logger.info("Step 1: Parsing GOA to get human protein IDs...")
-    goa_file = Path("data/raw/goa_annotations/goa_human.gaf.gz")
-    protein_go_map = parse_goa_human(
-        goa_file, evidence_filter="manual", aspects={"P", "F", "C"}
+    # Parse GOA to get this species' protein IDs
+    from src.goa_parser import parse_goa
+
+    logger.info(f"Step 1: Parsing GOA to get {args.species} protein IDs...")
+    goa_file = Path(f"data/raw/goa_annotations/goa_{args.species}.gaf.gz")
+    if not goa_file.exists():
+        logger.error(f"GOA file not found: {goa_file}")
+        logger.error(
+            f"Download it first, e.g. "
+            f"uv run python scripts/download_data.py --species {args.species}"
+        )
+        return 1
+
+    protein_go_map = parse_goa(
+        goa_file, evidence_filter=args.evidence_filter, aspects={"P", "F", "C"}
     )
 
     # Write protein IDs to temp file
-    protein_list_file = Path("data/interim/human_proteins.txt")
+    protein_list_file = Path(f"data/interim/{args.species}_proteins.txt")
     protein_list_file.parent.mkdir(parents=True, exist_ok=True)
 
     logger.info(f"Writing {len(protein_go_map):,} protein IDs to {protein_list_file}")
@@ -79,22 +111,33 @@ def main():
         for protein_id in sorted(protein_go_map.keys()):
             f.write(f"{protein_id}\n")
 
-    # Extract human annotations
+    # Extract species annotations
     logger.info("")
-    logger.info("Step 2: Extracting human protein annotations from InterPro...")
+    logger.info(
+        f"Step 2: Extracting {args.species} protein annotations from InterPro..."
+    )
     interpro_file = Path("data/raw/interpro_mappings/protein2ipr.dat.gz")
-    output_file = Path("data/interim/protein2ipr_human.dat.gz")
+    if not interpro_file.exists():
+        logger.error(f"InterPro mappings file not found: {interpro_file}")
+        logger.error(
+            "Download it first: uv run python scripts/download_data.py "
+            "--datasets interpro_mappings"
+        )
+        return 1
+    output_file = Path(f"data/interim/protein2ipr_{args.species}.dat.gz")
 
-    extract_human_proteins(protein_list_file, interpro_file, output_file)
+    extract_species_proteins(protein_list_file, interpro_file, output_file)
 
     logger.info("")
     logger.info("=" * 60)
-    logger.info("SUCCESS! Human-specific InterPro file created")
+    logger.info(f"SUCCESS! {args.species.title()}-specific InterPro file created")
     logger.info("=" * 60)
     logger.info(f"You can now use: {output_file}")
     logger.info(
-        f"This file contains only the {len(protein_go_map):,} human proteins from GOA"
+        f"This file contains only the {len(protein_go_map):,} "
+        f"{args.species} proteins from GOA"
     )
+    return 0
 
 
 if __name__ == "__main__":

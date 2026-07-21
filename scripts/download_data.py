@@ -155,6 +155,15 @@ def main() -> int:
         help="List available datasets and exit.",
     )
     parser.add_argument(
+        "--species",
+        default="human",
+        metavar="NAME",
+        help="Species whose GOA annotations to download (default: human). Any "
+        "other value (e.g. 'mouse', 'zebrafish') retargets the goa_annotations "
+        "dataset to <base>/<SPECIES_UPPER>/goa_<species>.gaf.gz and saves it as "
+        "goa_annotations/goa_<species>.gaf.gz.",
+    )
+    parser.add_argument(
         "--goa-archive",
         action="append",
         metavar="VERSION",
@@ -218,13 +227,26 @@ def main() -> int:
 
     print(f"Saving datasets under: {raw_dir}\n")
 
+    species = (args.species or "human").strip().lower()
+
     failures: list[str] = []
     for name in selected:
         ds = sources[name]
+        url = ds.url
         dest = raw_dir / name / _filename_for(ds.url, name)
-        print(f"[{name}] {ds.description}")
+        description = ds.description
+
+        # GOA is per-species; retarget the pinned (human) URL for any other
+        # organism so a fresh checkout can go download → extract → run for e.g.
+        # mouse without editing settings.py.
+        if name == "goa_annotations" and species != "human":
+            url = config.goa_url_for(species)
+            dest = raw_dir / name / _filename_for(url, name)
+            description = f"Gene Ontology Annotation (GOA) database for {species}"
+
+        print(f"[{name}] {description}")
         try:
-            download_one(ds.url, dest, force=args.force, timeout=args.timeout)
+            download_one(url, dest, force=args.force, timeout=args.timeout)
         except (requests.RequestException, OSError) as exc:
             print(f"  ✘ FAILED: {exc}")
             failures.append(name)

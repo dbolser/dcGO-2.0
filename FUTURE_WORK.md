@@ -1,5 +1,34 @@
 # Future Work: Expanding Ontology Coverage for Human Proteins
 
+> **Status (foundations landed).** Two enabling seams are now in place:
+> (1) the whole path is **species-parameterised** (`--species` on download /
+> extract / run), so non-human annotations no longer need code changes; and
+> (2) annotations enter through the **`AnnotationSource` abstraction**
+> (`src/annotation_source.py`) — the Fisher/FDR engine only sees
+> `{protein → {term}}`, so a new ontology is a new `AnnotationSource` subclass
+> plus (for hierarchical ontologies) an OBO path on its `OntologySpec`.
+> `GAFAnnotationSource` is the reference (GO) implementation, and
+> `ECAnnotationSource` (`src/ec_annotation_source.py`, `run_dcgo_human.py
+> --ontology ec`) is the first non-GO ontology — Enzyme Commission, parsed from
+> Expasy `enzyme.dat`, which is already UniProt-keyed so it needs no id mapping.
+> EC also supports **True Path Rule propagation** (`--enable-true-path`) via
+> `propagate_ec_annotations` / `ec_ancestors` — the EC hierarchy is implicit in
+> the numbering, so it needs no OBO.
+>
+> **Strategy: UniProt is the protein universe → prefer UniProt-native terms.**
+> Because the domain side (`protein2ipr`), GOA, and Expasy ENZYME are all keyed
+> by UniProt accession, the cheapest annotations are the ones UniProt already
+> carries per accession — they need *no* identifier mapping. `src/uniprot_annotation_source.py`
+> harvests these directly from the Swiss-Prot flat file: any `DR` cross-reference
+> database (Reactome and keywords are wired up; KEGG/Orphanet/DisGeNET/MIM/
+> DrugBank/ChEMBL/… are one database name away) and the `KW` keyword vocabulary.
+> **This reframes the identifier-mapping backbone below** (§3): build it only for
+> annotations that are *not* obtainable UniProt-keyed (e.g. HPO gene–phenotype
+> assertions keyed by HGNC). Reach for UniProt-native cross-references first;
+> fall back to the mapping backbone only when a vocabulary isn't already in
+> UniProt. Hierarchies for the UniProt-native ontologies (Reactome's pathway
+> graph, the keyword hierarchy) are a follow-up, mirroring EC/`ec_ancestors`.
+
 ## Objectives
 - Extend dcGO beyond Gene Ontology (GO) annotations to cover a broader ontology landscape relevant to human protein function, disease, phenotypes, and enzymatic activity.
 - Establish a unified integration framework so new ontology layers can be ingested, transformed, and queried through existing dcGO interfaces without bespoke code.

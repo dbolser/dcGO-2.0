@@ -11,12 +11,15 @@ Usage:
 
 Options:
     --species STR            Species to analyze: 'human', 'mouse', etc. (default: human)
+    --ontology STR           Ontology to associate domains with: 'go', 'ec', 'reactome', 'keyword' (default: go)
+    --enzyme-dat PATH        Path to Expasy enzyme.dat, used when --ontology ec
+    --uniprot-dat PATH       Path to UniProt Swiss-Prot flat file, used when --ontology reactome|keyword
     --evidence-filter STR    Evidence code filter: 'all', 'manual', 'experimental' (default: manual)
     --fdr-threshold FLOAT    FDR significance threshold (default: 0.01)
     --num-cores INT          Number of CPU cores for parallel processing (default: 8)
     --output-dir PATH        Output directory for results (default: results/)
     --batch-size INT         Batch size for Fisher tests (default: 50000)
-    --enable-true-path       Enable True Path Rule for GO annotation propagation
+    --enable-true-path       Enable True Path Rule propagation (GO via OBO DAG, EC via numbering)
     --go-ontology PATH       Path to GO ontology file (default: data/raw/go_ontology/go-basic.obo)
 
 Examples:
@@ -25,6 +28,13 @@ Examples:
 
     # Run for mouse proteins with experimental evidence only
     uv run python run_dcgo_human.py --species mouse --evidence-filter experimental
+
+    # Associate human domains with Enzyme Commission numbers instead of GO
+    uv run python run_dcgo_human.py --ontology ec
+
+    # UniProt-native ontologies (Reactome pathways, UniProt keywords)
+    uv run python run_dcgo_human.py --ontology reactome
+    uv run python run_dcgo_human.py --ontology keyword
 
     # Run with True Path Rule propagation
     uv run python run_dcgo_human.py --enable-true-path --go-ontology data/raw/go_ontology/go-basic.obo
@@ -43,8 +53,13 @@ from scipy.stats import hypergeom
 logger.remove()
 logger.add(sys.stderr, level="INFO")
 
+from src.annotation_source import AnnotationSource, GAFAnnotationSource
 from src.domain_annotation_parser import DomainAnnotationParser
-from src.goa_parser import parse_goa_human
+from src.ec_annotation_source import ECAnnotationSource, propagate_ec_annotations
+from src.uniprot_annotation_source import (
+    UniProtKeywordAnnotationSource,
+    reactome_source,
+)
 from src.hierarchical_inference import HierarchicalInferenceEngine
 from src.ontology_processor import OntologyProcessor
 from src.sparse_fisher import (
@@ -146,6 +161,29 @@ def main():
         help="Species to analyze: 'human', 'mouse', or specific GOA file name (default: human)",
     )
     parser.add_argument(
+        "--ontology",
+        default="go",
+        choices=["go", "ec", "reactome", "keyword"],
+        help="Which ontology to associate domains with: 'go' (Gene Ontology, "
+        "from GOA), 'ec' (Enzyme Commission, from Expasy ENZYME), or "
+        "'reactome'/'keyword' (UniProt-native, from the Swiss-Prot flat file) "
+        "(default: go)",
+    )
+    parser.add_argument(
+        "--enzyme-dat",
+        type=Path,
+        default=Path("data/raw/enzyme/enzyme.dat"),
+        help="Path to Expasy enzyme.dat, used when --ontology ec "
+        "(default: data/raw/enzyme/enzyme.dat)",
+    )
+    parser.add_argument(
+        "--uniprot-dat",
+        type=Path,
+        default=Path("data/raw/uniprot_sprot_dat/uniprot_sprot.dat.gz"),
+        help="Path to the UniProt Swiss-Prot flat file, used when --ontology "
+        "reactome or keyword (default: data/raw/uniprot_sprot_dat/uniprot_sprot.dat.gz)",
+    )
+    parser.add_argument(
         "--enable-true-path",
         action="store_true",
         help="Enable True Path Rule for GO annotation propagation",
@@ -190,6 +228,7 @@ def main():
     logger.info("=" * 70)
     logger.info("Configuration:")
     logger.info(f"  Species: {args.species}")
+    logger.info(f"  Ontology: {args.ontology.upper()}")
     logger.info(f"  Evidence filter: {args.evidence_filter}")
     logger.info(f"  FDR threshold: {args.fdr_threshold}")
     logger.info(f"  CPU cores: {args.num_cores}")
@@ -202,30 +241,67 @@ def main():
         )
     logger.info(f"  Output directory: {args.output_dir}")
 
+    # True Path Rule propagation needs a term hierarchy. GO uses its OBO DAG and
+    # EC uses its implicit numbering; the UniProt-native vocabularies have no
+    # local hierarchy here, so propagation is skipped for them.
+    if args.enable_true_path and args.ontology not in ("go", "ec"):
+        logger.warning(
+            f"True Path propagation is not available for --ontology "
+            f"{args.ontology}; skipping it."
+        )
+        args.enable_true_path = False
+
     # File paths - support different species
-    goa_file = Path(f"data/raw/goa_annotations/goa_{args.species}.gaf.gz")
     interpro_file = Path(f"data/interim/protein2ipr_{args.species}.dat.gz")
 
-    # Check files exist
+    # Check domain annotations exist (shared across ontologies)
     if not interpro_file.exists():
         logger.error(f"{args.species.title()} InterPro file not found: {interpro_file}")
         logger.error(f"Please extract {args.species} data from protein2ipr.dat.gz")
         return 1
 
-    if not goa_file.exists():
-        logger.error(f"{args.species.title()} GOA file not found: {goa_file}")
-        logger.error(f"Please download GOA file for {args.species}")
-        return 1
+    # Build the annotation source for the chosen ontology. Everything downstream
+    # only sees a {protein_id: {term}} map, so the engine is ontology-agnostic —
+    # see src/annotation_source.py for the seam.
+    if args.ontology == "ec":
+        if not args.enzyme_dat.exists():
+            logger.error(f"ENZYME data file not found: {args.enzyme_dat}")
+            logger.error(
+                "Download it: uv run python scripts/download_data.py --datasets enzyme"
+            )
+            return 1
+        annotation_source: AnnotationSource = ECAnnotationSource(args.enzyme_dat)
+    elif args.ontology in ("reactome", "keyword"):
+        # UniProt-native: terms come straight from the Swiss-Prot flat file,
+        # already keyed by accession, so no identifier mapping is needed.
+        if not args.uniprot_dat.exists():
+            logger.error(f"UniProt flat file not found: {args.uniprot_dat}")
+            logger.error(
+                "Download it: uv run python scripts/download_data.py "
+                "--datasets uniprot_sprot_dat"
+            )
+            return 1
+        if args.ontology == "reactome":
+            annotation_source = reactome_source(args.uniprot_dat)
+        else:
+            annotation_source = UniProtKeywordAnnotationSource(args.uniprot_dat)
+    else:
+        goa_file = Path(f"data/raw/goa_annotations/goa_{args.species}.gaf.gz")
+        if not goa_file.exists():
+            logger.error(f"{args.species.title()} GOA file not found: {goa_file}")
+            logger.error(f"Please download GOA file for {args.species}")
+            return 1
+        annotation_source = GAFAnnotationSource(
+            goa_file, evidence_filter=args.evidence_filter, aspects={"P", "F", "C"}
+        )
 
     # Load data
     logger.info("")
     logger.info("STAGE 1: Loading Data")
     logger.info("─" * 70)
 
-    logger.info("Parsing GO annotations...")
-    protein_go_map = parse_goa_human(
-        goa_file, evidence_filter=args.evidence_filter, aspects={"P", "F", "C"}
-    )
+    logger.info(f"Parsing {args.ontology.upper()} annotations...")
+    protein_go_map = annotation_source.parse()
 
     logger.info("Parsing domain annotations...")
     parser_obj = DomainAnnotationParser(max_supra_domain_length=3, min_domain_length=10)
@@ -273,7 +349,7 @@ def main():
     go_list = sorted(all_go_terms)
 
     logger.info(
-        f"✓ Dataset prepared: {len(proteins_with_both):,} proteins, {len(domain_list):,} domains, {len(go_list):,} GO terms"
+        f"✓ Dataset prepared: {len(proteins_with_both):,} proteins, {len(domain_list):,} domains, {len(go_list):,} {args.ontology.upper()} terms"
     )
     logger.info(f"  Total tests: {len(domain_list) * len(go_list):,}")
 
@@ -394,31 +470,23 @@ def main():
         logger.info("")
         logger.info("STAGE 5.5: True Path Rule Propagation")
         logger.info("─" * 70)
+        start_time = time.time()
 
-        # Check GO ontology file exists
-        if not args.go_ontology.exists():
-            logger.error(f"GO ontology file not found: {args.go_ontology}")
-            logger.error("Skipping True Path Rule propagation")
-        else:
-            start_time = time.time()
+        # Build AssociationResult objects for the significant associations. This
+        # is ontology-agnostic — go_list holds GO terms or EC numbers.
+        logger.info("Preparing significant associations for propagation...")
+        significant_associations = []
+        significant_indices = np.where(significant)[0]
 
-            # Load GO ontology
-            logger.info(f"Loading GO ontology from: {args.go_ontology}")
-            ontology_processor = OntologyProcessor(args.go_ontology)
+        for idx in significant_indices:
+            domain_idx = idx // len(go_list)
+            go_idx = idx % len(go_list)
+            table = tables[idx]
+            a, b = int(table[0, 0]), int(table[0, 1])
+            c, d = int(table[1, 0]), int(table[1, 1])
 
-            # Create AssociationResult objects for significant associations
-            logger.info("Preparing significant associations for True Path filtering...")
-            significant_associations = []
-            significant_indices = np.where(significant)[0]
-
-            for idx in significant_indices:
-                domain_idx = idx // len(go_list)
-                go_idx = idx % len(go_list)
-                table = tables[idx]
-                a, b = int(table[0, 0]), int(table[0, 1])
-                c, d = int(table[1, 0]), int(table[1, 1])
-
-                assoc = AssociationResult(
+            significant_associations.append(
+                AssociationResult(
                     domain=domain_list[domain_idx],
                     go_term=go_list[go_idx],
                     p_value=float(pvalues[idx]),
@@ -429,7 +497,21 @@ def main():
                     c=c,
                     d=d,
                 )
-                significant_associations.append(assoc)
+            )
+
+        if args.ontology == "ec":
+            # EC hierarchy is implicit in the numbering — propagate via ec_ancestors.
+            logger.info(
+                f"Propagating {len(significant_associations):,} EC associations up the EC hierarchy..."
+            )
+            propagated_annotations = propagate_ec_annotations(significant_associations)
+        elif not args.go_ontology.exists():
+            logger.error(f"GO ontology file not found: {args.go_ontology}")
+            logger.error("Skipping True Path Rule propagation")
+        else:
+            # Load GO ontology (OBO DAG) and apply optimal-level filtering.
+            logger.info(f"Loading GO ontology from: {args.go_ontology}")
+            ontology_processor = OntologyProcessor(args.go_ontology)
 
             logger.info(
                 f"Applying True Path Rule to {len(significant_associations):,} significant associations..."
@@ -455,6 +537,7 @@ def main():
                 filtered_associations
             )
 
+        if propagated_annotations:
             direct_count = sum(
                 1 for ann in propagated_annotations if ann.annotation_type == "direct"
             )
@@ -466,8 +549,8 @@ def main():
             logger.info(f"  - Direct: {direct_count:,}")
             logger.info(f"  - Propagated: {propagated_count:,}")
 
-            true_path_time = time.time() - start_time
-            logger.info(f"✓ True Path Rule completed in {true_path_time:.2f}s")
+        true_path_time = time.time() - start_time
+        logger.info(f"✓ True Path Rule completed in {true_path_time:.2f}s")
 
     # Export results
     logger.info("")
@@ -478,11 +561,17 @@ def main():
     logger.info("Calculating hypergeometric scores for significant associations...")
     significant_indices = np.where(significant)[0]
 
+    # Output naming is ontology-aware: for GO this reproduces the historical
+    # names exactly (domain_go_associations_*.tsv, "go_term" column); EC gets its
+    # own files and an "ec_term" column so no consumer of the GO output is affected.
+    term_col = f"{args.ontology}_term"
+    assoc_stem = f"domain_{args.ontology}_associations"
+
     # Export significant associations with hypergeometric scores and domain types
-    output_file = args.output_dir / "domain_go_associations_significant.tsv"
+    output_file = args.output_dir / f"{assoc_stem}_significant.tsv"
     with open(output_file, "w") as f:
         f.write(
-            "domain\tgo_term\tp_value\tadj_p_value\todds_ratio\thyper_score\t"
+            f"domain\t{term_col}\tp_value\tadj_p_value\todds_ratio\thyper_score\t"
             "domain_type\tconstituent_domains\tn_observations\n"
         )
         for idx in significant_indices:
@@ -512,11 +601,11 @@ def main():
     logger.info(f"  {n_significant:,} associations (FDR < {args.fdr_threshold})")
 
     # Export top associations with hypergeometric scores and domain types
-    top_file = args.output_dir / "domain_go_associations_top100.tsv"
+    top_file = args.output_dir / f"{assoc_stem}_top100.tsv"
     top_indices = np.argsort(pvalues)[:100]
     with open(top_file, "w") as f:
         f.write(
-            "rank\tdomain\tgo_term\tp_value\tadj_p_value\todds_ratio\thyper_score\t"
+            f"rank\tdomain\t{term_col}\tp_value\tadj_p_value\todds_ratio\thyper_score\t"
             "domain_type\tconstituent_domains\tn_observations\n"
         )
         for rank, idx in enumerate(top_indices, 1):
@@ -546,10 +635,12 @@ def main():
 
     # Export propagated annotations if True Path Rule was applied
     if propagated_annotations:
-        annotations_file = args.output_dir / "domain_go_annotations_propagated.tsv"
+        annotations_file = (
+            args.output_dir / f"domain_{args.ontology}_annotations_propagated.tsv"
+        )
         with open(annotations_file, "w") as f:
             f.write(
-                "domain\tgo_term\tq_value\tassociation_score\tannotation_type\tdirect_source_term\n"
+                f"domain\t{term_col}\tq_value\tassociation_score\tannotation_type\tdirect_source_term\n"
             )
             for ann in propagated_annotations:
                 f.write(
@@ -569,7 +660,7 @@ def main():
     logger.info("PIPELINE COMPLETE!")
     logger.info("=" * 70)
     logger.info("Results Summary:")
-    logger.info(f"  Total domain-GO tests: {len(pvalues):,}")
+    logger.info(f"  Total domain-{args.ontology.upper()} tests: {len(pvalues):,}")
     logger.info(
         f"  Significant associations (FDR < {args.fdr_threshold}): {n_significant:,} ({n_significant / len(pvalues) * 100:.2f}%)"
     )

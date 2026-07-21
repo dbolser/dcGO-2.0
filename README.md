@@ -49,8 +49,8 @@ uv sync
 #    (GOA human ~11 MB, GO ontology ~30 MB, InterPro protein2ipr ~20 GB)
 uv run python scripts/download_data.py
 
-# 3. Extract the human subset of protein2ipr (one-time; the 20 GB file is
-#    streamed once and filtered down to human proteins)
+# 3. Extract the species subset of protein2ipr (one-time; the 20 GB file is
+#    streamed once and filtered down to the proteins for this species)
 uv run python extract_human_interpro.py
 
 # 4. Run the statistical inference
@@ -64,6 +64,61 @@ uv run python run_dcgo_human.py --num-cores 8 \
 `scripts/download_data.py --list` shows every dataset it knows about;
 `--datasets NAME` selects a subset and `--all` grabs the optional sources too.
 
+### Other species
+
+The whole path is species-parameterised — download, extract and run all take a
+`--species` flag (default `human`) and share the `goa_<species>` /
+`protein2ipr_<species>` file naming. GOA publishes per-species annotations, so
+e.g. mouse is:
+
+```bash
+uv run python scripts/download_data.py --species mouse   # GOA mouse + shared inputs
+uv run python extract_human_interpro.py --species mouse  # mouse subset of protein2ipr
+uv run python run_dcgo_human.py --species mouse --num-cores 8
+```
+
+The InterPro `protein2ipr.dat.gz` download is shared across species, so it is
+only fetched once.
+
+### Other ontologies (Enzyme Commission)
+
+Domains can be associated with ontologies other than GO via `--ontology`. The
+first non-GO ontology is **Enzyme Commission (EC)**, sourced from the Expasy
+ENZYME database (`enzyme.dat`), which is already keyed by UniProt accession — so
+no identifier mapping is needed:
+
+```bash
+uv run python scripts/download_data.py --datasets enzyme   # Expasy enzyme.dat
+uv run python run_dcgo_human.py --ontology ec              # domain → EC associations
+```
+
+EC results are written to `results/domain_ec_associations_*.tsv` (with an
+`ec_term` column), leaving the GO outputs untouched. `--enable-true-path` also
+works for EC: associations are propagated up the EC hierarchy
+(`1.1.1.1 → 1.1.1.- → 1.1.-.- → 1.-.-.-`) into
+`results/domain_ec_annotations_propagated.tsv` — no ontology file needed, since
+the hierarchy is implicit in the numbering.
+
+### UniProt-native ontologies (Reactome, keywords, …)
+
+Because the protein universe *is* UniProt, the cheapest term annotations are the
+ones UniProt already carries per accession — no identifier mapping required. The
+UniProt Swiss-Prot flat file (`uniprot_sprot.dat.gz`) cross-references many
+resources (`DR` lines: Reactome, KEGG, GO, disease DBs, …) and carries a keyword
+vocabulary (`KW` lines). Two are wired up today:
+
+```bash
+uv run python scripts/download_data.py --datasets uniprot_sprot_dat  # ~1 GB
+uv run python run_dcgo_human.py --ontology reactome   # domain → Reactome pathway
+uv run python run_dcgo_human.py --ontology keyword    # domain → UniProt keyword
+```
+
+Adding another UniProt-native vocabulary (KEGG, Orphanet, DisGeNET, …) is just
+picking a different `DR` database name in `src/uniprot_annotation_source.py`.
+More generally, adding any ontology means writing one `AnnotationSource`
+subclass — see `src/annotation_source.py`, `src/ec_annotation_source.py`, and
+`src/uniprot_annotation_source.py` for the pattern.
+
 ---
 
 ## Required inputs
@@ -74,12 +129,12 @@ are downloaded by `scripts/download_data.py` into `data/raw/<source>/`:
 | Input | File | Size | Purpose |
 |-------|------|------|---------|
 | Domain annotations | `interpro_mappings/protein2ipr.dat.gz` | ~20 GB | Which InterPro domains are in each protein |
-| GO annotations | `goa_annotations/goa_human.gaf.gz` | ~11 MB | Protein → GO term assignments (GAF 2.2) |
+| GO annotations | `goa_annotations/goa_<species>.gaf.gz` | ~11 MB (human) | Protein → GO term assignments (GAF 2.2) |
 | Ontology structure | `go_ontology/go-basic.obo` | ~30 MB | GO DAG (only needed for `--enable-true-path`) |
 
-`extract_human_interpro.py` filters `protein2ipr.dat.gz` down to the human
-proteins found in the GOA file, writing
-`data/interim/protein2ipr_human.dat.gz` so subsequent runs are fast.
+`extract_human_interpro.py` filters `protein2ipr.dat.gz` down to the proteins
+of the chosen species (`--species`, default `human`) found in the GOA file,
+writing `data/interim/protein2ipr_<species>.dat.gz` so subsequent runs are fast.
 
 ---
 
