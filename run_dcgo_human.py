@@ -186,7 +186,8 @@ def main():
     parser.add_argument(
         "--enable-true-path",
         action="store_true",
-        help="Enable True Path Rule for GO annotation propagation",
+        help="Enable True Path Rule propagation (GO via its OBO DAG, EC via its "
+        "numbering; not available for reactome/keyword)",
     )
     parser.add_argument(
         "--go-ontology",
@@ -352,6 +353,17 @@ def main():
         f"✓ Dataset prepared: {len(proteins_with_both):,} proteins, {len(domain_list):,} domains, {len(go_list):,} {args.ontology.upper()} terms"
     )
     logger.info(f"  Total tests: {len(domain_list) * len(go_list):,}")
+
+    # Abort early on an empty design rather than proceeding to zero Fisher tests
+    # (which would divide by len(go_list) downstream). Reachable when a
+    # species/ontology combination has no overlap between domains and terms.
+    if not domain_list or not go_list:
+        logger.error(
+            f"No domain-{args.ontology.upper()} pairs to test "
+            f"({len(domain_list):,} domains, {len(go_list):,} terms). "
+            "Check that the annotation and InterPro inputs cover the same proteins."
+        )
+        return 1
 
     # Build sparse matrices
     logger.info("")

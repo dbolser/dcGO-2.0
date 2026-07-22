@@ -143,14 +143,17 @@ writing `data/interim/protein2ipr_<species>.dat.gz` so subsequent runs are fast.
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--species` | `human` | Species / GOA file to analyze |
+| `--ontology` | `go` | Ontology to associate: `go`, `ec`, `reactome`, `keyword` |
+| `--enzyme-dat` | `data/raw/enzyme/enzyme.dat` | Expasy ENZYME file (used when `--ontology ec`) |
+| `--uniprot-dat` | `data/raw/uniprot_sprot_dat/uniprot_sprot.dat.gz` | UniProt flat file (used when `--ontology reactome`/`keyword`) |
 | `--evidence-filter` | `manual` | GO evidence codes: `all`, `manual`, `experimental` |
 | `--fdr-threshold` | `0.01` | FDR (q-value) significance cutoff |
 | `--num-cores` | `8` | CPU cores for parallel Fisher tests |
 | `--batch-size` | `50000` | Fisher test batch size |
 | `--enable-supra-domains` / `--disable-supra-domains` | enabled | Test contiguous domain combinations |
 | `--enable-shrinkage` | off | Empirical-Bayes shrinkage for supra-domains |
-| `--enable-true-path` | off | Propagate associations up the GO DAG |
-| `--go-ontology` | `data/raw/go_ontology/go-basic.obo` | OBO file (required for True Path Rule) |
+| `--enable-true-path` | off | Propagate associations up the term hierarchy (GO via OBO DAG, EC via numbering) |
+| `--go-ontology` | `data/raw/go_ontology/go-basic.obo` | GO OBO file (GO only; required for `--ontology go --enable-true-path`) |
 | `--output-dir` | `results/` | Output directory |
 
 ---

@@ -29,11 +29,14 @@ from __future__ import annotations
 import gzip
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Set
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Set
 
 from loguru import logger
 
 from src.annotation_source import AnnotationSource, OntologySpec
+
+if TYPE_CHECKING:
+    from src.ontology_processor import Annotation
 
 # EC numbers carry no id prefix (e.g. "1.1.1.1"), so term_prefix stays None.
 EC_SPEC = OntologySpec(ontology_id="EC", name="Enzyme Commission")
@@ -63,7 +66,7 @@ def ec_ancestors(ec_number: str) -> List[str]:
     return ancestors
 
 
-def propagate_ec_annotations(direct_associations):
+def propagate_ec_annotations(direct_associations: Iterable[Any]) -> "List[Annotation]":
     """Propagate significant domain→EC associations up the EC hierarchy.
 
     The EC counterpart of the GO True Path Rule

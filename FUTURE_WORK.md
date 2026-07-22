@@ -6,7 +6,8 @@
 > (2) annotations enter through the **`AnnotationSource` abstraction**
 > (`src/annotation_source.py`) — the Fisher/FDR engine only sees
 > `{protein → {term}}`, so a new ontology is a new `AnnotationSource` subclass
-> plus (for hierarchical ontologies) an OBO path on its `OntologySpec`.
+> plus, to propagate, an ontology-specific hierarchy — an OBO DAG for graph-based
+> ontologies (GO), or none at all when the hierarchy is implicit (EC's numbering).
 > `GAFAnnotationSource` is the reference (GO) implementation, and
 > `ECAnnotationSource` (`src/ec_annotation_source.py`, `run_dcgo_human.py
 > --ontology ec`) is the first non-GO ontology — Enzyme Commission, parsed from
