@@ -19,7 +19,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 dcGO-2.0 is a bioinformatics pipeline implementing the domain-centric Gene Ontology (dcGO) methodology for protein function prediction. It transforms protein-level GO annotations into statistically validated domain-level associations using Fisher's exact tests, FDR correction, and hypergeometric scoring.
 
-The supported entry point today is the **human analysis path** (`run_dcgo_human.py`). It consumes **pre-computed InterPro domain annotations** (`protein2ipr.dat`) — it does not run InterProScan or scan sequences itself. There is no general `main_pipeline` orchestrator yet; a multi-organism version is future work (see `FUTURE_WORK.md`).
+The supported entry point today is `run_dcgo_human.py`. It consumes **pre-computed InterPro domain annotations** (`protein2ipr.dat`) — it does not run InterProScan or scan sequences itself. There is no general `main_pipeline` orchestrator yet.
+
+The path is **species-parameterised**: download, extract, and run all take a `--species` flag (default `human`) and share `goa_<species>` / `protein2ipr_<species>` file naming, so any organism with a GOA file works (the script name keeps `human` for historical reasons). Annotations enter through the **`AnnotationSource` seam** (`src/annotation_source.py`): the Fisher/FDR engine only ever sees `{protein → {term}}` dicts, so associating domains with a non-GO ontology (Disease Ontology, HPO, EC, Reactome …) means adding an `AnnotationSource` subclass, not touching the statistics. Broader multi-ontology work is tracked in `FUTURE_WORK.md`.
 
 ## Core Architecture
 
@@ -30,7 +32,10 @@ The human path runs as a sequence of scripts backed by modules in `src/`:
 3. **Run** (`run_dcgo_human.py`) - Orchestrates the analysis using the `src/` modules below.
 
 Key `src/` modules:
-- `goa_parser.py` - Parses GOA GAF files (protein → GO), with evidence-code filtering.
+- `annotation_source.py` - `AnnotationSource` abstraction (protein → ontology term). `GAFAnnotationSource` is the GO reference implementation; the seam for adding non-GO ontologies.
+- `ec_annotation_source.py` - Enzyme Commission adapter (`run_dcgo_human.py --ontology ec`): parses Expasy `enzyme.dat` (already UniProt-keyed, so no id mapping) and provides `propagate_ec_annotations`/`ec_ancestors` for EC True Path propagation (hierarchy is implicit in the numbering — no OBO). First non-GO ontology on the seam.
+- `uniprot_annotation_source.py` - UniProt-native adapters (`--ontology reactome|keyword`): harvest DR cross-references (Reactome/KEGG/GO/disease DBs) and KW keywords straight from the Swiss-Prot flat file. UniProt is the protein universe, so these terms are already accession-keyed — no id mapping. Pick a DR database name to add more.
+- `goa_parser.py` - Parses GOA GAF files (protein → GO), with evidence-code filtering. `parse_goa` is the species-agnostic API (`parse_goa_human` is a kept alias).
 - `domain_annotation_parser.py` - Parses `protein2ipr` domain mappings and builds domain architectures.
 - `sparse_fisher.py` - Sparse contingency-table construction for domain × GO.
 - `vectorized_fisher.py` - Vectorized Fisher's exact tests (Cython `fisher`) + Benjamini–Hochberg FDR.
@@ -136,6 +141,9 @@ run_dcgo_human.py            # Main entry point
 extract_human_interpro.py    # Human subset extraction
 scripts/download_data.py     # Dataset downloader
 src/
+├── annotation_source.py     # AnnotationSource seam (protein → ontology term)
+├── ec_annotation_source.py  # Enzyme Commission adapter (Expasy enzyme.dat)
+├── uniprot_annotation_source.py # UniProt-native adapters (Reactome/keywords from the flat file)
 ├── goa_parser.py            # GOA GAF parsing
 ├── domain_annotation_parser.py  # protein2ipr parsing
 ├── sparse_fisher.py         # Sparse contingency tables

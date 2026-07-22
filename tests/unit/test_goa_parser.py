@@ -11,12 +11,19 @@ from pathlib import Path
 from src.goa_parser import (
     GOAAnnotation,
     GOAParser,
+    parse_goa,
     parse_goa_human,
     EXPERIMENTAL_EVIDENCE,
     MANUAL_EVIDENCE,
     ELECTRONIC_EVIDENCE,
     ALL_EVIDENCE,
 )
+
+
+def test_parse_goa_human_is_alias_of_parse_goa():
+    """The species-agnostic parse_goa is the canonical name; the _human name is
+    kept only as a backward-compatible alias."""
+    assert parse_goa_human is parse_goa
 
 
 class TestGOAAnnotation:

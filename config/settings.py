@@ -200,6 +200,12 @@ class Config:
     # --goa-archive for the temporal benchmark (VALIDATION_PLAN §2/§6).
     goa_archive_base_url: str = "https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/HUMAN"
 
+    # Base URL for current per-species GOA releases. EBI lays these out as
+    # <base>/<SPECIES_UPPER>/goa_<species>.gaf.gz (HUMAN/goa_human.gaf.gz,
+    # MOUSE/goa_mouse.gaf.gz, ZEBRAFISH/goa_zebrafish.gaf.gz, …). Used by
+    # scripts/download_data.py --species to fetch non-human annotations.
+    goa_base_url: str = "https://ftp.ebi.ac.uk/pub/databases/GO/goa"
+
     # Data sources configuration
     data_sources: Dict[str, DataSource] = field(
         default_factory=lambda: {
@@ -213,6 +219,18 @@ class Config:
                 name="uniprot_trembl",
                 url="https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.fasta.gz",
                 description="UniProt TrEMBL protein sequences",
+                required=False,
+            ),
+            # UniProt Swiss-Prot flat file (DR cross-references + KW keywords).
+            # UniProt is the protein universe, so this is the source of
+            # UniProt-native term annotations that need no identifier mapping:
+            # Reactome, KEGG, keywords, disease DBs, etc. Consumed by
+            # src/uniprot_annotation_source.py (run_dcgo_human.py --ontology
+            # reactome|keyword). Large (~1 GB compressed).
+            "uniprot_sprot_dat": DataSource(
+                name="uniprot_sprot_dat",
+                url="https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.dat.gz",
+                description="UniProt Swiss-Prot flat file (DR cross-refs + keywords) for UniProt-native ontologies",
                 required=False,
             ),
             "goa_annotations": DataSource(
@@ -244,6 +262,16 @@ class Config:
                 name="interpro_definitions",
                 url="https://ftp.ebi.ac.uk/pub/databases/interpro/current_release/interpro.xml.gz",
                 description="InterPro entry definitions and metadata",
+                required=False,
+            ),
+            # Expasy ENZYME database for the EC ontology path. Maps each EC
+            # number to its UniProt accessions (DR lines) — same id space as
+            # protein2ipr, so no identifier mapping is needed. Consumed by
+            # src/ec_annotation_source.py (run_dcgo_human.py --ontology ec).
+            "enzyme": DataSource(
+                name="enzyme",
+                url="https://ftp.expasy.org/databases/enzyme/enzyme.dat",
+                description="Expasy ENZYME (EC number → UniProt accession) for the EC ontology path",
                 required=False,
             ),
             # Curated InterPro->GO mapping used as a validation reference (§1)
@@ -394,6 +422,18 @@ class Config:
     def from_env(cls) -> Self:
         """Create configuration with environment variable overrides enabled."""
         return cls(use_env_overrides=True)
+
+    def goa_url_for(self, species: str) -> str:
+        """Build the current-release GOA download URL for a species.
+
+        EBI publishes per-species GOA under ``<base>/<SPECIES_UPPER>/`` with a
+        ``goa_<species>.gaf.gz`` filename, e.g. ``MOUSE/goa_mouse.gaf.gz``. For
+        ``human`` this reproduces the URL pinned in ``data_sources``.
+        """
+        species = species.strip().lower()
+        if not species:
+            raise ConfigurationError("Species must be a non-empty string")
+        return f"{self.goa_base_url}/{species.upper()}/goa_{species}.gaf.gz"
 
     def get_data_source_url(self, source_name: str) -> str:
         """Get URL for a specific data source."""

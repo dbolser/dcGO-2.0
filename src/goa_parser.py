@@ -237,14 +237,18 @@ class GOAParser:
         return {ann.protein_id for ann in self.annotations if ann.go_term == go_term}
 
 
-def parse_goa_human(
+def parse_goa(
     gaf_path: Path, evidence_filter: str = "manual", aspects: Optional[Set[str]] = None
 ) -> Dict[str, Set[str]]:
     """
-    Convenience function to parse human GOA file with common presets.
+    Convenience function to parse a GOA GAF file with common evidence presets.
+
+    GAF 2.2 is a species-agnostic format, so this works for any organism's GOA
+    file (``goa_human.gaf.gz``, ``goa_mouse.gaf.gz``, …) — nothing here is
+    human-specific.
 
     Args:
-        gaf_path: Path to goa_human.gaf.gz file
+        gaf_path: Path to a ``goa_<species>.gaf.gz`` file
         evidence_filter: Evidence filter preset:
             'all' - All evidence codes (including IEA)
             'manual' - Exclude electronic (IEA) annotations
@@ -266,3 +270,8 @@ def parse_goa_human(
     )
 
     return parser.parse_gaf_file(gaf_path)
+
+
+# Backward-compatible alias: the parser was always species-agnostic despite the
+# name. Existing callers and tests import ``parse_goa_human``.
+parse_goa_human = parse_goa
