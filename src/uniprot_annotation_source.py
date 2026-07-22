@@ -40,6 +40,9 @@ REACTOME_SPEC = OntologySpec(
     ontology_id="Reactome", name="Reactome pathways", term_prefix="R-"
 )
 KEYWORD_SPEC = OntologySpec(ontology_id="UniProtKW", name="UniProt keywords")
+# OMIM MIM numbers (numeric, no prefix). UniProt DR MIM lines are typed
+# gene/phenotype; disease association uses the phenotype entries.
+DISEASE_SPEC = OntologySpec(ontology_id="OMIM", name="OMIM disease (phenotype)")
 
 
 def _open_text(path: Path):
@@ -63,16 +66,18 @@ def _split_keywords(kw_parts: List[str]) -> List[str]:
 
 def _iter_entries(
     path: Path,
-) -> Iterator[Tuple[str | None, List[Tuple[str, str]], List[str]]]:
-    """Yield ``(primary_accession, dr_pairs, keywords)`` per flat-file entry.
+) -> Iterator[Tuple[str | None, List[Tuple[str, str, str]], List[str]]]:
+    """Yield ``(primary_accession, dr_triples, keywords)`` per flat-file entry.
 
-    ``dr_pairs`` is a list of ``(database, external_id)``; ``keywords`` is the
-    entry's keyword list. The primary accession is the first accession on the
-    first ``AC`` line — the same key space as ``protein2ipr``.
+    ``dr_triples`` is a list of ``(database, external_id, id_type)``, where
+    ``id_type`` is the DR line's third field (e.g. ``"gene"``/``"phenotype"`` for
+    ``MIM``, ``""`` when absent). ``keywords`` is the entry's keyword list. The
+    primary accession is the first accession on the first ``AC`` line — the same
+    key space as ``protein2ipr``.
     """
     with _open_text(path) as f:
         accession: str | None = None
-        dr_pairs: List[Tuple[str, str]] = []
+        dr_triples: List[Tuple[str, str, str]] = []
         kw_parts: List[str] = []
 
         for line in f:
@@ -86,31 +91,43 @@ def _iter_entries(
                 if len(fields) >= 2:
                     db = fields[0].strip()
                     xref_id = fields[1].strip()
+                    id_type = fields[2].strip().rstrip(".") if len(fields) >= 3 else ""
                     if db and xref_id:
-                        dr_pairs.append((db, xref_id))
+                        dr_triples.append((db, xref_id, id_type))
             elif tag == "KW":
                 kw_parts.append(line[5:])
             elif line.startswith("//"):
-                yield accession, dr_pairs, _split_keywords(kw_parts)
+                yield accession, dr_triples, _split_keywords(kw_parts)
                 accession = None
-                dr_pairs = []
+                dr_triples = []
                 kw_parts = []
 
 
-def parse_uniprot_cross_refs(path: Path, database: str) -> Dict[str, Set[str]]:
-    """Return ``{accession: {external_id}}`` for one DR database (e.g. ``"Reactome"``)."""
-    logger.info(f"Parsing UniProt cross-references ({database}) from {path}")
+def parse_uniprot_cross_refs(
+    path: Path, database: str, id_type: str | None = None
+) -> Dict[str, Set[str]]:
+    """Return ``{accession: {external_id}}`` for one DR database (e.g. ``"Reactome"``).
+
+    Args:
+        path: UniProt flat file.
+        database: exact DR database name (``"Reactome"``, ``"MIM"``, …).
+        id_type: if given, keep only cross-references whose third DR field
+            matches (e.g. ``"phenotype"`` to select OMIM disease entries and
+            drop the ``"gene"`` ones). ``None`` keeps all.
+    """
+    label = database if id_type is None else f"{database}/{id_type}"
+    logger.info(f"Parsing UniProt cross-references ({label}) from {path}")
     result: Dict[str, Set[str]] = defaultdict(set)
     n_entries = 0
-    for accession, dr_pairs, _kw in _iter_entries(path):
+    for accession, dr_triples, _kw in _iter_entries(path):
         n_entries += 1
         if accession is None:
             continue
-        for db, xref_id in dr_pairs:
-            if db == database:
+        for db, xref_id, xref_type in dr_triples:
+            if db == database and (id_type is None or xref_type == id_type):
                 result[accession].add(xref_id)
     logger.info(
-        f"  Entries scanned: {n_entries:,}; proteins with {database}: {len(result):,}"
+        f"  Entries scanned: {n_entries:,}; proteins with {label}: {len(result):,}"
     )
     return dict(result)
 
@@ -139,13 +156,22 @@ class UniProtCrossRefAnnotationSource(AnnotationSource):
     UniProt accession, the resulting terms join directly to the domain data.
     """
 
-    def __init__(self, dat_path: Path, database: str, spec: OntologySpec) -> None:
+    def __init__(
+        self,
+        dat_path: Path,
+        database: str,
+        spec: OntologySpec,
+        id_type: str | None = None,
+    ) -> None:
         self.dat_path = Path(dat_path)
         self.database = database
         self.spec = spec
+        self.id_type = id_type
 
     def parse(self) -> Dict[str, Set[str]]:
-        return parse_uniprot_cross_refs(self.dat_path, self.database)
+        return parse_uniprot_cross_refs(
+            self.dat_path, self.database, id_type=self.id_type
+        )
 
 
 class UniProtKeywordAnnotationSource(AnnotationSource):
@@ -162,3 +188,14 @@ class UniProtKeywordAnnotationSource(AnnotationSource):
 def reactome_source(dat_path: Path) -> UniProtCrossRefAnnotationSource:
     """Convenience factory for a Reactome-pathway annotation source."""
     return UniProtCrossRefAnnotationSource(dat_path, "Reactome", REACTOME_SPEC)
+
+
+def disease_source(dat_path: Path) -> UniProtCrossRefAnnotationSource:
+    """Convenience factory for an OMIM disease annotation source.
+
+    Uses UniProt ``DR MIM`` cross-references restricted to ``phenotype`` entries
+    (dropping the ``gene`` MIM links), i.e. the disease side of OMIM.
+    """
+    return UniProtCrossRefAnnotationSource(
+        dat_path, "MIM", DISEASE_SPEC, id_type="phenotype"
+    )

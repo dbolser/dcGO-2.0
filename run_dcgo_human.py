@@ -11,9 +11,11 @@ Usage:
 
 Options:
     --species STR            Species to analyze: 'human', 'mouse', etc. (default: human)
-    --ontology STR           Ontology to associate domains with: 'go', 'ec', 'reactome', 'keyword' (default: go)
+    --ontology STR           Ontology: 'go', 'ec', 'reactome', 'keyword', 'disease', or 'xref' (default: go)
+    --xref-db STR            UniProt DR database name, required when --ontology xref (e.g. KEGG, Orphanet)
+    --xref-type STR          Optional DR third-field filter for --ontology xref (e.g. 'phenotype')
     --enzyme-dat PATH        Path to Expasy enzyme.dat, used when --ontology ec
-    --uniprot-dat PATH       Path to UniProt Swiss-Prot flat file, used when --ontology reactome|keyword
+    --uniprot-dat PATH       Path to UniProt Swiss-Prot flat file, used when --ontology reactome|keyword|disease|xref
     --evidence-filter STR    Evidence code filter: 'all', 'manual', 'experimental' (default: manual)
     --fdr-threshold FLOAT    FDR significance threshold (default: 0.01)
     --num-cores INT          Number of CPU cores for parallel processing (default: 8)
@@ -32,9 +34,11 @@ Examples:
     # Associate human domains with Enzyme Commission numbers instead of GO
     uv run python run_dcgo_human.py --ontology ec
 
-    # UniProt-native ontologies (Reactome pathways, UniProt keywords)
+    # UniProt-native vocabularies (all keyed by accession, no id mapping)
     uv run python run_dcgo_human.py --ontology reactome
     uv run python run_dcgo_human.py --ontology keyword
+    uv run python run_dcgo_human.py --ontology disease            # OMIM phenotype (DR MIM)
+    uv run python run_dcgo_human.py --ontology xref --xref-db KEGG # any DR database
 
     # Run with True Path Rule propagation
     uv run python run_dcgo_human.py --enable-true-path --go-ontology data/raw/go_ontology/go-basic.obo
@@ -53,11 +57,13 @@ from scipy.stats import hypergeom
 logger.remove()
 logger.add(sys.stderr, level="INFO")
 
-from src.annotation_source import AnnotationSource, GAFAnnotationSource
+from src.annotation_source import AnnotationSource, GAFAnnotationSource, OntologySpec
 from src.domain_annotation_parser import DomainAnnotationParser
 from src.ec_annotation_source import ECAnnotationSource, propagate_ec_annotations
 from src.uniprot_annotation_source import (
+    UniProtCrossRefAnnotationSource,
     UniProtKeywordAnnotationSource,
+    disease_source,
     reactome_source,
 )
 from src.hierarchical_inference import HierarchicalInferenceEngine
@@ -163,11 +169,24 @@ def main():
     parser.add_argument(
         "--ontology",
         default="go",
-        choices=["go", "ec", "reactome", "keyword"],
+        choices=["go", "ec", "reactome", "keyword", "disease", "xref"],
         help="Which ontology to associate domains with: 'go' (Gene Ontology, "
-        "from GOA), 'ec' (Enzyme Commission, from Expasy ENZYME), or "
-        "'reactome'/'keyword' (UniProt-native, from the Swiss-Prot flat file) "
-        "(default: go)",
+        "from GOA), 'ec' (Enzyme Commission, from Expasy ENZYME), or a "
+        "UniProt-native vocabulary from the Swiss-Prot flat file: 'reactome', "
+        "'keyword', 'disease' (OMIM phenotype), or 'xref' for an arbitrary DR "
+        "database named by --xref-db (default: go)",
+    )
+    parser.add_argument(
+        "--xref-db",
+        default=None,
+        help="UniProt DR database name to harvest when --ontology xref "
+        "(e.g. 'KEGG', 'Orphanet', 'DrugBank', 'PANTHER')",
+    )
+    parser.add_argument(
+        "--xref-type",
+        default=None,
+        help="Optional DR third-field filter for --ontology xref "
+        "(e.g. 'phenotype' to keep only those typed entries)",
     )
     parser.add_argument(
         "--enzyme-dat",
@@ -181,7 +200,8 @@ def main():
         type=Path,
         default=Path("data/raw/uniprot_sprot_dat/uniprot_sprot.dat.gz"),
         help="Path to the UniProt Swiss-Prot flat file, used when --ontology "
-        "reactome or keyword (default: data/raw/uniprot_sprot_dat/uniprot_sprot.dat.gz)",
+        "reactome/keyword/disease/xref "
+        "(default: data/raw/uniprot_sprot_dat/uniprot_sprot.dat.gz)",
     )
     parser.add_argument(
         "--enable-true-path",
@@ -221,6 +241,19 @@ def main():
 
     args = parser.parse_args()
 
+    # Validate the arbitrary-cross-reference selection and derive a short label
+    # used for logging, the term column, and output filenames. For everything
+    # except 'xref' the label is the ontology name (so 'go' stays byte-identical);
+    # for 'xref' it is the chosen DR database (e.g. 'kegg').
+    if args.ontology == "xref":
+        if not args.xref_db:
+            parser.error(
+                "--ontology xref requires --xref-db (a UniProt DR database name)"
+            )
+        ontology_label = args.xref_db.lower()
+    else:
+        ontology_label = args.ontology
+
     # Create output directory
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -229,7 +262,7 @@ def main():
     logger.info("=" * 70)
     logger.info("Configuration:")
     logger.info(f"  Species: {args.species}")
-    logger.info(f"  Ontology: {args.ontology.upper()}")
+    logger.info(f"  Ontology: {ontology_label.upper()}")
     logger.info(f"  Evidence filter: {args.evidence_filter}")
     logger.info(f"  FDR threshold: {args.fdr_threshold}")
     logger.info(f"  CPU cores: {args.num_cores}")
@@ -272,7 +305,7 @@ def main():
             )
             return 1
         annotation_source: AnnotationSource = ECAnnotationSource(args.enzyme_dat)
-    elif args.ontology in ("reactome", "keyword"):
+    elif args.ontology in ("reactome", "keyword", "disease", "xref"):
         # UniProt-native: terms come straight from the Swiss-Prot flat file,
         # already keyed by accession, so no identifier mapping is needed.
         if not args.uniprot_dat.exists():
@@ -284,8 +317,20 @@ def main():
             return 1
         if args.ontology == "reactome":
             annotation_source = reactome_source(args.uniprot_dat)
-        else:
+        elif args.ontology == "keyword":
             annotation_source = UniProtKeywordAnnotationSource(args.uniprot_dat)
+        elif args.ontology == "disease":
+            annotation_source = disease_source(args.uniprot_dat)
+        else:  # xref: an arbitrary DR database named by --xref-db
+            annotation_source = UniProtCrossRefAnnotationSource(
+                args.uniprot_dat,
+                args.xref_db,
+                OntologySpec(
+                    ontology_id=args.xref_db,
+                    name=f"UniProt {args.xref_db} cross-reference",
+                ),
+                id_type=args.xref_type,
+            )
     else:
         goa_file = Path(f"data/raw/goa_annotations/goa_{args.species}.gaf.gz")
         if not goa_file.exists():
@@ -301,7 +346,7 @@ def main():
     logger.info("STAGE 1: Loading Data")
     logger.info("─" * 70)
 
-    logger.info(f"Parsing {args.ontology.upper()} annotations...")
+    logger.info(f"Parsing {ontology_label.upper()} annotations...")
     protein_go_map = annotation_source.parse()
 
     logger.info("Parsing domain annotations...")
@@ -350,7 +395,7 @@ def main():
     go_list = sorted(all_go_terms)
 
     logger.info(
-        f"✓ Dataset prepared: {len(proteins_with_both):,} proteins, {len(domain_list):,} domains, {len(go_list):,} {args.ontology.upper()} terms"
+        f"✓ Dataset prepared: {len(proteins_with_both):,} proteins, {len(domain_list):,} domains, {len(go_list):,} {ontology_label.upper()} terms"
     )
     logger.info(f"  Total tests: {len(domain_list) * len(go_list):,}")
 
@@ -359,7 +404,7 @@ def main():
     # species/ontology combination has no overlap between domains and terms.
     if not domain_list or not go_list:
         logger.error(
-            f"No domain-{args.ontology.upper()} pairs to test "
+            f"No domain-{ontology_label.upper()} pairs to test "
             f"({len(domain_list):,} domains, {len(go_list):,} terms). "
             "Check that the annotation and InterPro inputs cover the same proteins."
         )
@@ -576,8 +621,8 @@ def main():
     # Output naming is ontology-aware: for GO this reproduces the historical
     # names exactly (domain_go_associations_*.tsv, "go_term" column); EC gets its
     # own files and an "ec_term" column so no consumer of the GO output is affected.
-    term_col = f"{args.ontology}_term"
-    assoc_stem = f"domain_{args.ontology}_associations"
+    term_col = f"{ontology_label}_term"
+    assoc_stem = f"domain_{ontology_label}_associations"
 
     # Export significant associations with hypergeometric scores and domain types
     output_file = args.output_dir / f"{assoc_stem}_significant.tsv"
@@ -648,7 +693,7 @@ def main():
     # Export propagated annotations if True Path Rule was applied
     if propagated_annotations:
         annotations_file = (
-            args.output_dir / f"domain_{args.ontology}_annotations_propagated.tsv"
+            args.output_dir / f"domain_{ontology_label}_annotations_propagated.tsv"
         )
         with open(annotations_file, "w") as f:
             f.write(
@@ -672,7 +717,7 @@ def main():
     logger.info("PIPELINE COMPLETE!")
     logger.info("=" * 70)
     logger.info("Results Summary:")
-    logger.info(f"  Total domain-{args.ontology.upper()} tests: {len(pvalues):,}")
+    logger.info(f"  Total domain-{ontology_label.upper()} tests: {len(pvalues):,}")
     logger.info(
         f"  Significant associations (FDR < {args.fdr_threshold}): {n_significant:,} ({n_significant / len(pvalues) * 100:.2f}%)"
     )
