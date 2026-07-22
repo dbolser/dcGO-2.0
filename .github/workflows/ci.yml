@@ -42,3 +42,9 @@ jobs:
           uv venv --python 3.12 /tmp/dcgo-wheel-smoke
           uv pip install --python /tmp/dcgo-wheel-smoke/bin/python dist/*.whl
           /tmp/dcgo-wheel-smoke/bin/dcgo --help
+
+      - name: Smoke-test installed sdist CLI
+        run: |
+          uv venv --python 3.12 /tmp/dcgo-sdist-smoke
+          uv pip install --python /tmp/dcgo-sdist-smoke/bin/python dist/*.tar.gz
+          /tmp/dcgo-sdist-smoke/bin/dcgo --help
