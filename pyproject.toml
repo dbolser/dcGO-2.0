@@ -79,7 +79,7 @@ Repository = "https://github.com/dbolser/dcGO-2.0"
 dcgo = "run_dcgo_human:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src"]
+packages = ["src", "run_dcgo_human.py"]
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -87,6 +87,7 @@ include = [
     "/tests",
     "/config",
     "/examples",
+    "/run_dcgo_human.py",
     "/README.md",
     "/LICENSE",
 ]
