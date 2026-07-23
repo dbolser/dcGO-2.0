@@ -6,29 +6,35 @@ import pytest
 
 from src.annotation_source import AnnotationSource
 from src.uniprot_annotation_source import (
+    DISEASE_SPEC,
     KEYWORD_SPEC,
     REACTOME_SPEC,
     UniProtCrossRefAnnotationSource,
     UniProtKeywordAnnotationSource,
+    disease_source,
     parse_uniprot_cross_refs,
     parse_uniprot_keywords,
     reactome_source,
 )
 
-# Two entries. P07327 has a secondary accession, Reactome/KEGG/GO cross-refs, and
-# a multi-line KW block. Q00000 has one Reactome id and no keywords.
+# Two entries. P07327 has a secondary accession, Reactome/KEGG/GO cross-refs, a
+# multi-line KW block, and MIM links (one gene, one phenotype). Q00000 has one
+# Reactome id, no keywords, and only a gene-typed MIM link.
 SAMPLE_UNIPROT_DAT = """ID   ADH1A_HUMAN             Reviewed;         375 AA.
 AC   P07327; B2R5V5;
 DR   Reactome; R-HSA-71384; Ethanol oxidation.
 DR   Reactome; R-HSA-9033241; Peroxisomal protein import.
 DR   KEGG; hsa:124; .
 DR   GO; GO:0004022; F:alcohol dehydrogenase (NAD+) activity; IDA:UniProtKB.
+DR   MIM; 103700; gene.
+DR   MIM; 300100; phenotype.
 KW   Cytoplasm; Metal-binding; NAD;
 KW   Oxidoreductase; Zinc.
 //
 ID   TEST2_HUMAN             Reviewed;         100 AA.
 AC   Q00000;
 DR   Reactome; R-HSA-71384; Ethanol oxidation.
+DR   MIM; 999999; gene.
 //
 """
 
@@ -111,3 +117,27 @@ class TestSources:
         assert isinstance(source, AnnotationSource)
         assert source.spec is KEYWORD_SPEC
         assert "Zinc" in source.parse()["P07327"]
+
+
+class TestIdTypeFilterAndDisease:
+    def test_no_filter_keeps_all_mim(self, uniprot_dat_file):
+        result = parse_uniprot_cross_refs(uniprot_dat_file, "MIM")
+        assert result["P07327"] == {"103700", "300100"}
+        assert result["Q00000"] == {"999999"}
+
+    def test_phenotype_filter_drops_gene_entries(self, uniprot_dat_file):
+        result = parse_uniprot_cross_refs(uniprot_dat_file, "MIM", id_type="phenotype")
+        assert result["P07327"] == {"300100"}  # gene 103700 dropped
+        assert "Q00000" not in result  # only a gene MIM link
+
+    def test_disease_source(self, uniprot_dat_file):
+        source = disease_source(uniprot_dat_file)
+        assert isinstance(source, AnnotationSource)
+        assert source.spec is DISEASE_SPEC
+        assert source.parse() == {"P07327": {"300100"}}
+
+    def test_cross_ref_source_passes_id_type(self, uniprot_dat_file):
+        source = UniProtCrossRefAnnotationSource(
+            uniprot_dat_file, "MIM", DISEASE_SPEC, id_type="phenotype"
+        )
+        assert source.parse() == {"P07327": {"300100"}}

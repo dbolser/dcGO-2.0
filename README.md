@@ -105,18 +105,30 @@ Because the protein universe *is* UniProt, the cheapest term annotations are the
 ones UniProt already carries per accession — no identifier mapping required. The
 UniProt Swiss-Prot flat file (`uniprot_sprot.dat.gz`) cross-references many
 resources (`DR` lines: Reactome, KEGG, GO, disease DBs, …) and carries a keyword
-vocabulary (`KW` lines). Two are wired up today:
+vocabulary (`KW` lines):
 
 ```bash
 uv run python scripts/download_data.py --datasets uniprot_sprot_dat  # ~1 GB
-uv run python run_dcgo_human.py --ontology reactome   # domain → Reactome pathway
-uv run python run_dcgo_human.py --ontology keyword    # domain → UniProt keyword
+uv run python run_dcgo_human.py --ontology reactome                 # Reactome pathway
+uv run python run_dcgo_human.py --ontology keyword                  # UniProt keyword
+uv run python run_dcgo_human.py --ontology disease                  # OMIM phenotype (DR MIM)
+uv run python run_dcgo_human.py --ontology xref --xref-db KEGG      # any DR database
 ```
 
-Adding another UniProt-native vocabulary (KEGG, Orphanet, DisGeNET, …) is just
-picking a different `DR` database name in `src/uniprot_annotation_source.py`.
-More generally, adding any ontology means writing one `AnnotationSource`
-subclass — see `src/annotation_source.py`, `src/ec_annotation_source.py`, and
+`disease` uses `DR MIM` restricted to `phenotype` entries (dropping the `gene`
+links). `xref` opens **any** DR database by name, so KEGG / Orphanet / DisGeNET /
+DrugBank / PANTHER / … need no code change — add `--xref-type phenotype` to filter
+a typed database. Results land in `results/domain_<vocab>_associations_*.tsv`
+(e.g. `domain_disease_*`, `domain_kegg_*`), leaving GO/EC outputs untouched.
+
+> **Note on evidence:** these are UniProt-native *cross-references*, not GO
+> annotations, so there is no IEA/evidence code to filter. (GO is the exception —
+> UniProt's `DR GO` lines include IEA, which is why GO is pulled from GOA with its
+> evidence filter instead.) No source is "preferred"; if the same annotation
+> appears in UniProt and a primary DB, they deduplicate to the union.
+
+Adding any ontology means writing one `AnnotationSource` subclass — see
+`src/annotation_source.py`, `src/ec_annotation_source.py`, and
 `src/uniprot_annotation_source.py` for the pattern.
 
 ---
@@ -143,9 +155,11 @@ writing `data/interim/protein2ipr_<species>.dat.gz` so subsequent runs are fast.
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--species` | `human` | Species / GOA file to analyze |
-| `--ontology` | `go` | Ontology to associate: `go`, `ec`, `reactome`, `keyword` |
+| `--ontology` | `go` | Ontology: `go`, `ec`, `reactome`, `keyword`, `disease`, `xref` |
+| `--xref-db` | — | UniProt DR database name (required for `--ontology xref`, e.g. `KEGG`) |
+| `--xref-type` | — | Optional DR third-field filter for `xref` (e.g. `phenotype`) |
 | `--enzyme-dat` | `data/raw/enzyme/enzyme.dat` | Expasy ENZYME file (used when `--ontology ec`) |
-| `--uniprot-dat` | `data/raw/uniprot_sprot_dat/uniprot_sprot.dat.gz` | UniProt flat file (used when `--ontology reactome`/`keyword`) |
+| `--uniprot-dat` | `data/raw/uniprot_sprot_dat/uniprot_sprot.dat.gz` | UniProt flat file (used when `--ontology reactome`/`keyword`/`disease`/`xref`) |
 | `--evidence-filter` | `manual` | GO evidence codes: `all`, `manual`, `experimental` |
 | `--fdr-threshold` | `0.01` | FDR (q-value) significance cutoff |
 | `--num-cores` | `8` | CPU cores for parallel Fisher tests |
