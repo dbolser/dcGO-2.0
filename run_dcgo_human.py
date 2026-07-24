@@ -21,7 +21,7 @@ Options:
     --num-cores INT          Number of CPU cores for parallel processing (default: 8)
     --output-dir PATH        Output directory for results (default: results/)
     --batch-size INT         Batch size for Fisher tests (default: 50000)
-    --enable-true-path       Enable True Path Rule propagation (GO via OBO DAG, EC via numbering)
+    --enable-true-path       True Path propagation (GO via OBO DAG, EC via numbering, reactome/keyword via hierarchy files)
     --go-ontology PATH       Path to GO ontology file (default: data/raw/go_ontology/go-basic.obo)
 
 Examples:
@@ -60,10 +60,13 @@ logger.add(sys.stderr, level="INFO")
 from src.annotation_source import AnnotationSource, GAFAnnotationSource, OntologySpec
 from src.domain_annotation_parser import DomainAnnotationParser
 from src.ec_annotation_source import ECAnnotationSource, propagate_ec_annotations
+from src.hierarchy import closure_ancestors, propagate_via_ancestors
 from src.uniprot_annotation_source import (
     UniProtCrossRefAnnotationSource,
     UniProtKeywordAnnotationSource,
     disease_source,
+    parse_keyword_hierarchy,
+    parse_reactome_relations,
     reactome_source,
 )
 from src.hierarchical_inference import HierarchicalInferenceEngine
@@ -207,13 +210,27 @@ def main():
         "--enable-true-path",
         action="store_true",
         help="Enable True Path Rule propagation (GO via its OBO DAG, EC via its "
-        "numbering; not available for reactome/keyword)",
+        "numbering, reactome/keyword via their hierarchy files; not available "
+        "for disease/xref)",
     )
     parser.add_argument(
         "--go-ontology",
         type=Path,
         default=Path("data/raw/go_ontology/go-basic.obo"),
         help="Path to GO ontology file (default: data/raw/go_ontology/go-basic.obo)",
+    )
+    parser.add_argument(
+        "--reactome-relations",
+        type=Path,
+        default=Path("data/raw/reactome_relations/ReactomePathwaysRelation.txt"),
+        help="Path to Reactome ReactomePathwaysRelation.txt, for --ontology "
+        "reactome --enable-true-path",
+    )
+    parser.add_argument(
+        "--keyword-list",
+        type=Path,
+        default=Path("data/raw/uniprot_keywlist/keywlist.txt"),
+        help="Path to UniProt keywlist.txt, for --ontology keyword --enable-true-path",
     )
     parser.add_argument(
         "--enable-supra-domains",
@@ -275,10 +292,15 @@ def main():
         )
     logger.info(f"  Output directory: {args.output_dir}")
 
-    # True Path Rule propagation needs a term hierarchy. GO uses its OBO DAG and
-    # EC uses its implicit numbering; the UniProt-native vocabularies have no
-    # local hierarchy here, so propagation is skipped for them.
-    if args.enable_true_path and args.ontology not in ("go", "ec"):
+    # True Path Rule propagation needs a term hierarchy: GO's OBO DAG, EC's
+    # implicit numbering, or a companion hierarchy file for reactome/keyword.
+    # 'disease' and 'xref' have no hierarchy wired up, so it's skipped for them.
+    if args.enable_true_path and args.ontology not in (
+        "go",
+        "ec",
+        "reactome",
+        "keyword",
+    ):
         logger.warning(
             f"True Path propagation is not available for --ontology "
             f"{args.ontology}; skipping it."
@@ -562,6 +584,32 @@ def main():
                 f"Propagating {len(significant_associations):,} EC associations up the EC hierarchy..."
             )
             propagated_annotations = propagate_ec_annotations(significant_associations)
+        elif args.ontology in ("reactome", "keyword"):
+            # UniProt-native vocabularies: propagate up a companion hierarchy file
+            # (Reactome pathway relations / UniProt keyword list) via the shared
+            # ancestor engine.
+            if args.ontology == "reactome":
+                hier_file = args.reactome_relations
+                child_to_parents = (
+                    parse_reactome_relations(hier_file) if hier_file.exists() else None
+                )
+            else:
+                hier_file = args.keyword_list
+                child_to_parents = (
+                    parse_keyword_hierarchy(hier_file) if hier_file.exists() else None
+                )
+            if child_to_parents is None:
+                logger.error(f"{ontology_label} hierarchy file not found: {hier_file}")
+                logger.error("Skipping True Path Rule propagation")
+            else:
+                logger.info(
+                    f"Propagating {len(significant_associations):,} {ontology_label.upper()} "
+                    f"associations up the {ontology_label} hierarchy..."
+                )
+                ancestors_fn = closure_ancestors(child_to_parents)
+                propagated_annotations = propagate_via_ancestors(
+                    significant_associations, ancestors_fn
+                )
         elif not args.go_ontology.exists():
             logger.error(f"GO ontology file not found: {args.go_ontology}")
             logger.error("Skipping True Path Rule propagation")

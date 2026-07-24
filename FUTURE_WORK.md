@@ -27,8 +27,10 @@
 > annotations that are *not* obtainable UniProt-keyed (e.g. HPO gene–phenotype
 > assertions keyed by HGNC). Reach for UniProt-native cross-references first;
 > fall back to the mapping backbone only when a vocabulary isn't already in
-> UniProt. Hierarchies for the UniProt-native ontologies (Reactome's pathway
-> graph, the keyword hierarchy) are a follow-up, mirroring EC/`ec_ancestors`.
+> UniProt. Hierarchies for the UniProt-native ontologies **have landed**:
+> `--enable-true-path` now propagates Reactome (via `ReactomePathwaysRelation.txt`)
+> and keywords (via `keywlist.txt`) through the shared `src/hierarchy.py` engine,
+> alongside EC and GO.
 
 ## Objectives
 - Extend dcGO beyond Gene Ontology (GO) annotations to cover a broader ontology landscape relevant to human protein function, disease, phenotypes, and enzymatic activity.

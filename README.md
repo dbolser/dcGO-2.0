@@ -121,6 +121,20 @@ DrugBank / PANTHER / … need no code change — add `--xref-type phenotype` to 
 a typed database. Results land in `results/domain_<vocab>_associations_*.tsv`
 (e.g. `domain_disease_*`, `domain_kegg_*`), leaving GO/EC outputs untouched.
 
+`--enable-true-path` also propagates **reactome** and **keyword** associations up
+their hierarchies, using companion files (downloaded separately):
+
+```bash
+uv run python scripts/download_data.py --datasets reactome_relations uniprot_keywlist
+uv run python run_dcgo_human.py --ontology reactome --enable-true-path  # up Reactome pathways
+uv run python run_dcgo_human.py --ontology keyword  --enable-true-path  # up the keyword DAG
+```
+
+Reactome uses `ReactomePathwaysRelation.txt` (parent/child) and keywords use
+`keywlist.txt` (the `HI` hierarchy) — same shared engine as EC/GO
+(`src/hierarchy.py`). `disease`/`xref` have no hierarchy wired up, so
+`--enable-true-path` is skipped there.
+
 > **Note on evidence:** these are UniProt-native *cross-references*, not GO
 > annotations, so there is no IEA/evidence code to filter. (GO is the exception —
 > UniProt's `DR GO` lines include IEA, which is why GO is pulled from GOA with its

@@ -12,6 +12,8 @@ from src.uniprot_annotation_source import (
     UniProtCrossRefAnnotationSource,
     UniProtKeywordAnnotationSource,
     disease_source,
+    parse_keyword_hierarchy,
+    parse_reactome_relations,
     parse_uniprot_cross_refs,
     parse_uniprot_keywords,
     reactome_source,
@@ -141,3 +143,39 @@ class TestIdTypeFilterAndDisease:
             uniprot_dat_file, "MIM", DISEASE_SPEC, id_type="phenotype"
         )
         assert source.parse() == {"P07327": {"300100"}}
+
+
+class TestReactomeHierarchy:
+    def test_parse_relations(self, tmp_path):
+        p = tmp_path / "rel.txt"
+        p.write_text("R-HSA-1\tR-HSA-2\nR-HSA-2\tR-HSA-3\n")
+        assert parse_reactome_relations(p) == {
+            "R-HSA-2": {"R-HSA-1"},
+            "R-HSA-3": {"R-HSA-2"},
+        }
+
+    def test_species_prefix_filter(self, tmp_path):
+        p = tmp_path / "rel.txt"
+        p.write_text("R-HSA-1\tR-HSA-2\nR-MMU-1\tR-MMU-2\n")
+        assert parse_reactome_relations(p, species_prefix="R-HSA-") == {
+            "R-HSA-2": {"R-HSA-1"}
+        }
+
+
+class TestKeywordHierarchy:
+    def test_parse_keyword_paths(self, tmp_path):
+        p = tmp_path / "keywlist.txt"
+        p.write_text(
+            "ID   2Fe-2S.\n"
+            "HI   Ligand: Iron; Iron-sulfur; 2Fe-2S.\n"
+            "HI   Ligand: Metal-binding; 2Fe-2S.\n"
+            "CA   Ligand.\n"
+            "//\n"
+            "ID   Kinase.\n"
+            "HI   Molecular function: Transferase; Kinase.\n"
+            "CA   Molecular function.\n"
+            "//\n"
+        )
+        result = parse_keyword_hierarchy(p)
+        assert result["2Fe-2S"] == {"Iron-sulfur", "Metal-binding"}
+        assert result["Kinase"] == {"Transferase"}

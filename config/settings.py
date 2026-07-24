@@ -233,6 +233,24 @@ class Config:
                 description="UniProt Swiss-Prot flat file (DR cross-refs + keywords) for UniProt-native ontologies",
                 required=False,
             ),
+            # Reactome pathway hierarchy (parent<TAB>child), for True Path
+            # propagation of --ontology reactome. Consumed by
+            # src/uniprot_annotation_source.parse_reactome_relations.
+            "reactome_relations": DataSource(
+                name="reactome_relations",
+                url="https://reactome.org/download/current/ReactomePathwaysRelation.txt",
+                description="Reactome pathway parent/child relations (True Path for --ontology reactome)",
+                required=False,
+            ),
+            # UniProt keyword list (defines the keyword hierarchy on HI lines),
+            # for True Path propagation of --ontology keyword. Consumed by
+            # src/uniprot_annotation_source.parse_keyword_hierarchy.
+            "uniprot_keywlist": DataSource(
+                name="uniprot_keywlist",
+                url="https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/docs/keywlist.txt",
+                description="UniProt keyword list + hierarchy (True Path for --ontology keyword)",
+                required=False,
+            ),
             "goa_annotations": DataSource(
                 name="goa_annotations",
                 url="https://ftp.ebi.ac.uk/pub/databases/GO/goa/HUMAN/goa_human.gaf.gz",
