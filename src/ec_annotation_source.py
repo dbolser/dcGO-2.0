@@ -69,13 +69,9 @@ def ec_ancestors(ec_number: str) -> List[str]:
 def propagate_ec_annotations(direct_associations: Iterable[Any]) -> "List[Annotation]":
     """Propagate significant domain→EC associations up the EC hierarchy.
 
-    The EC counterpart of the GO True Path Rule
-    (``ontology_processor.propagate_annotations``): instead of walking an OBO
-    DAG, it uses the implicit EC hierarchy via :func:`ec_ancestors`. Each direct
-    association is emitted as-is, plus one ``"propagated"`` annotation per
-    ancestor EC number. ``(domain, ec)`` pairs are de-duplicated, keeping the
-    most significant source association (lowest ``q_value``), so a shared
-    ancestor is attributed to the strongest evidence.
+    The EC counterpart of the GO True Path Rule: instead of walking an OBO DAG,
+    it uses the implicit EC hierarchy via :func:`ec_ancestors`. Thin wrapper over
+    the shared :func:`src.hierarchy.propagate_via_ancestors` engine.
 
     Args:
         direct_associations: iterable of objects exposing ``domain``,
@@ -86,46 +82,9 @@ def propagate_ec_annotations(direct_associations: Iterable[Any]) -> "List[Annota
         list of ``ontology_processor.Annotation`` with ``annotation_type`` of
         ``"direct"`` or ``"propagated"``.
     """
-    # Lazy import keeps this module dependency-light (ontology_processor pulls in
-    # obonet/networkx/pandas) and avoids an import cycle.
-    from src.ontology_processor import Annotation
+    from src.hierarchy import propagate_via_ancestors
 
-    # Most significant first, so shared ancestors record the best source term.
-    ordered = sorted(direct_associations, key=lambda a: a.q_value)
-
-    annotations = []
-    seen: Set[tuple] = set()  # (domain, ec) pairs already emitted
-    for assoc in ordered:
-        direct_key = (assoc.domain, assoc.go_term)
-        if direct_key not in seen:
-            annotations.append(
-                Annotation(
-                    domain=assoc.domain,
-                    go_term=assoc.go_term,
-                    q_value=assoc.q_value,
-                    association_score=assoc.hyper_score,
-                    annotation_type="direct",
-                    direct_source_term=assoc.go_term,
-                )
-            )
-            seen.add(direct_key)
-
-        for ancestor in ec_ancestors(assoc.go_term):
-            ancestor_key = (assoc.domain, ancestor)
-            if ancestor_key not in seen:
-                annotations.append(
-                    Annotation(
-                        domain=assoc.domain,
-                        go_term=ancestor,
-                        q_value=assoc.q_value,
-                        association_score=assoc.hyper_score,
-                        annotation_type="propagated",
-                        direct_source_term=assoc.go_term,
-                    )
-                )
-                seen.add(ancestor_key)
-
-    return annotations
+    return propagate_via_ancestors(direct_associations, ec_ancestors)
 
 
 def parse_enzyme_dat(path: Path) -> Dict[str, Set[str]]:

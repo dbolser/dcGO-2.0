@@ -34,7 +34,8 @@ The human path runs as a sequence of scripts backed by modules in `src/`:
 Key `src/` modules:
 - `annotation_source.py` - `AnnotationSource` abstraction (protein → ontology term). `GAFAnnotationSource` is the GO reference implementation; the seam for adding non-GO ontologies.
 - `ec_annotation_source.py` - Enzyme Commission adapter (`run_dcgo_human.py --ontology ec`): parses Expasy `enzyme.dat` (already UniProt-keyed, so no id mapping) and provides `propagate_ec_annotations`/`ec_ancestors` for EC True Path propagation (hierarchy is implicit in the numbering — no OBO). First non-GO ontology on the seam.
-- `uniprot_annotation_source.py` - UniProt-native adapters (`--ontology reactome|keyword|disease|xref`): harvest DR cross-references and KW keywords straight from the Swiss-Prot flat file. `disease` = `DR MIM` phenotype-only; `xref --xref-db NAME` opens any DR database (KEGG/Orphanet/DisGeNET/…), with an optional `--xref-type` filter. UniProt is the protein universe, so these terms are already accession-keyed — no id mapping.
+- `uniprot_annotation_source.py` - UniProt-native adapters (`--ontology reactome|keyword|disease|xref`): harvest DR cross-references and KW keywords straight from the Swiss-Prot flat file. `disease` = `DR MIM` phenotype-only; `xref --xref-db NAME` opens any DR database (KEGG/Orphanet/DisGeNET/…), with an optional `--xref-type` filter. UniProt is the protein universe, so these terms are already accession-keyed — no id mapping. Also parses the Reactome/keyword hierarchies (`parse_reactome_relations`, `parse_keyword_hierarchy`) for True Path propagation.
+- `hierarchy.py` - Shared, ontology-agnostic True Path engine: `closure_ancestors` (child→parents map → transitive-ancestors fn) and `propagate_via_ancestors`. EC, Reactome, and keywords all propagate through it (GO keeps its obonet `OntologyProcessor` path).
 - `goa_parser.py` - Parses GOA GAF files (protein → GO), with evidence-code filtering. `parse_goa` is the species-agnostic API (`parse_goa_human` is a kept alias).
 - `domain_annotation_parser.py` - Parses `protein2ipr` domain mappings and builds domain architectures.
 - `sparse_fisher.py` - Sparse contingency-table construction for domain × GO.
@@ -143,7 +144,8 @@ scripts/download_data.py     # Dataset downloader
 src/
 ├── annotation_source.py     # AnnotationSource seam (protein → ontology term)
 ├── ec_annotation_source.py  # Enzyme Commission adapter (Expasy enzyme.dat)
-├── uniprot_annotation_source.py # UniProt-native adapters (Reactome/keywords from the flat file)
+├── uniprot_annotation_source.py # UniProt-native adapters (Reactome/keywords/disease/xref)
+├── hierarchy.py             # Shared True Path engine (ancestors + propagation)
 ├── goa_parser.py            # GOA GAF parsing
 ├── domain_annotation_parser.py  # protein2ipr parsing
 ├── sparse_fisher.py         # Sparse contingency tables

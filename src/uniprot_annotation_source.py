@@ -199,3 +199,77 @@ def disease_source(dat_path: Path) -> UniProtCrossRefAnnotationSource:
     return UniProtCrossRefAnnotationSource(
         dat_path, "MIM", DISEASE_SPEC, id_type="phenotype"
     )
+
+
+def parse_reactome_relations(
+    path: Path, species_prefix: str | None = None
+) -> Dict[str, Set[str]]:
+    """Parse Reactome ``ReactomePathwaysRelation.txt`` into ``{child: {parents}}``.
+
+    The file is two tab-separated columns, ``parent_id<TAB>child_id`` (stable ids
+    like ``R-HSA-71384``). Feed the result to
+    :func:`src.hierarchy.closure_ancestors` to propagate domain→pathway
+    associations up the pathway hierarchy.
+
+    Args:
+        path: the relations file (optionally gzipped).
+        species_prefix: if given (e.g. ``"R-HSA-"``), keep only edges whose ids
+            both start with it. ``None`` keeps all species.
+    """
+    child_to_parents: Dict[str, Set[str]] = defaultdict(set)
+    with _open_text(path) as f:
+        for line in f:
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 2:
+                continue
+            parent, child = parts[0].strip(), parts[1].strip()
+            if not parent or not child:
+                continue
+            if species_prefix and not (
+                parent.startswith(species_prefix) and child.startswith(species_prefix)
+            ):
+                continue
+            child_to_parents[child].add(parent)
+    logger.info(
+        f"Parsed Reactome hierarchy: {len(child_to_parents):,} pathways with parents"
+    )
+    return dict(child_to_parents)
+
+
+def parse_keyword_hierarchy(path: Path) -> Dict[str, Set[str]]:
+    """Parse the UniProt keyword list (``keywlist.txt``) into ``{keyword: {parents}}``.
+
+    Keyword names are the terms our ``KW`` harvesting produces, and the keyword
+    list encodes the hierarchy on ``HI`` lines::
+
+        ID   2Fe-2S.
+        HI   Ligand: Iron; Iron-sulfur; 2Fe-2S.
+
+    Each ``HI`` line is a path ``Category: parent; …; thisKeyword``; the term
+    immediately before the current keyword is its (a) direct parent. Keywords
+    form a DAG (multiple ``HI`` lines → multiple parents). Feed the result to
+    :func:`src.hierarchy.closure_ancestors`.
+    """
+    child_to_parents: Dict[str, Set[str]] = defaultdict(set)
+    current: str | None = None
+    with _open_text(path) as f:
+        for line in f:
+            tag = line[:2]
+            if tag == "ID":
+                current = line[5:].strip().rstrip(".") or None
+            elif tag == "HI" and current is not None:
+                # Drop the "Category:" prefix, then split the path on ';'.
+                payload = line[5:].split(":", 1)
+                path_part = payload[1] if len(payload) > 1 else payload[0]
+                items = [
+                    x.strip().rstrip(".") for x in path_part.split(";") if x.strip()
+                ]
+                # Path ends at the current keyword; its parent is the one before.
+                if len(items) >= 2 and items[-1] == current:
+                    child_to_parents[current].add(items[-2])
+            elif line.startswith("//"):
+                current = None
+    logger.info(
+        f"Parsed keyword hierarchy: {len(child_to_parents):,} keywords with parents"
+    )
+    return dict(child_to_parents)
