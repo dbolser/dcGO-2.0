@@ -408,6 +408,39 @@ stage that doesn't help is a finding too — report it).
 
 ## 5. Decisions to settle before writing the paper
 
+### Held-out validation of the surprise score (2026-07-28) — DONE
+
+`validation/temporal_surprise.py` re-uses the §2 split (t0 = GOA 205, 2021-04;
+t1 = 2026-06) to ask whether the emergent-combination ranking predicts *future
+curation*. For each t0 association, the proteins carrying the combination that
+lacked the term at t0 are its predictions; hits are those annotated by t1; the
+control is the term's own acquisition rate over all domain-carrying proteins
+that lacked it. Metrics in `validation/temporal_surprise_metrics.tsv`, outcomes
+per association in `validation/temporal_surprise_associations.tsv`.
+
+- [x] **The supra-domain associations predict future curation: 12.5×
+      enrichment** over the terms' own acquisition rates (2,181 hits on 170,416
+      predictions vs ~175 expected), bootstrap CI [10.9, 14.4]. This is the
+      out-of-sample evidence the domain-combination claim was missing.
+- [x] **The surprise ranking is *not* demonstrably better than ranking by the
+      dcGO q-value.** At matched prediction budgets the point estimate favours
+      surprise 3/3 (15.5 vs 5.3, 21.2 vs 13.2, 11.6 vs 10.8) but a **paired**
+      bootstrap — re-ranking both ways inside each resample, because the two
+      rankings share a candidate pool and their independent intervals are
+      therefore correlated — puts zero inside every interval. Report it as "no
+      demonstrated ranking advantage"; the score's contribution is
+      interpretability (redundant-signature and curated-novelty filtering) and a
+      bias toward rarer, higher-IC terms, not ranking power.
+- [ ] **Open: the emergence/testability tension.** The most emergent
+      associations leave the fewest standing predictions (emergence requires
+      that carriers are already nearly all annotated), so the sharp end of the
+      ranking cannot be validated this way — `surprise top-25` yields 117
+      predictions against an expected 0.14 hits. A revised score should weigh
+      emergence against how many predictions it leaves outstanding.
+- [ ] **Open: same look-ahead caveat as §2.** Domain architectures come from the
+      current `protein2ipr`, so this is annotation-temporal, not prospective.
+
+
 - [ ] **True Path Rule default.** The original dcGO makes TPR central; here it is
       opt-in. Decide: make it default (recommended, with `--disable-true-path`
       escape) or justify keeping it optional. Whatever is chosen, benchmark both.

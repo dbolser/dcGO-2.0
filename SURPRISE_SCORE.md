@@ -160,16 +160,105 @@ run is where the two diverge most, because the EC universe is enzymes only, so
 constituent rates are high. The one survivor is the Ser/Thr kinase
 active site + catalytic domain pair for EC 2.7.11.25 (8/11, 6.6× lift).
 
+## Held-out temporal validation (2026-07-28)
+
+Everything above is computed on the proteins that produced the associations, so
+it measures internal consistency, not predictive power. `validation/temporal_surprise.py`
+is the held-out test: **score the associations dcGO found in 2021, then ask how
+often curators added the predicted term by 2026.**
+
+For each t0 association (supra-domain `S`, term `t`): *predictions* are proteins
+carrying `S` that had no `t` at t0 (propagated, non-IEA — the same evidence space
+the pipeline trains on, so the gate cannot leak a seen label); *hits* are those
+annotated `t` (propagated, experimental) at t1; and the *base rate* is the term's
+own acquisition rate among all domain-carrying proteins lacking it at t0. The
+statistic is `enrichment = hit rate / base rate`, which removes the fact that
+popular terms accumulate annotations regardless of any prediction.
+
+Pool: 22,376 t0 candidates, of which 10,136 make at least one prediction —
+170,416 protein-term predictions in total.
+
+### Result 1 — the associations are strongly predictive (12.5×)
+
+| Stratum | assoc. | predictions | hits | hit rate | expected | enrichment (95% CI) |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| **all candidates** | 10,136 | 170,416 | 2,181 | 1.3% | 0.1% | **12.5× [10.9, 14.4]** |
+| surprise top-100 | 100 | 481 | 12 | 2.5% | 0.2% | 16.5× [6.2, 26.4] |
+| surprise top-500 | 500 | 4,440 | 56 | 1.3% | 0.1% | 14.8× [10.6, 21.6] |
+| dcGO-q top-100 | 100 | 7,293 | 109 | 1.5% | 0.1% | 10.3× [5.9, 21.4] |
+| dcGO-q top-500 | 500 | 18,651 | 393 | 2.1% | 0.2% | 13.2× [9.5, 19.2] |
+
+2,181 predictions came true where the terms' own rates predict ~175. This is
+out-of-sample evidence that the supra-domain associations anticipate curation,
+and it is the strongest claim in this document.
+
+### Result 2 — the surprise ranking does *not* beat plain significance
+
+Top-K is not a fair comparison: surprise favours tight architectures (≈5
+predictions each) while significance favours common domains (≈73), so the same K
+exposes 15× more predictions for one than the other. Matching on **prediction
+budget** — "given capacity to check N predictions, which ranking finds more that
+come true?" — and testing the difference with a **paired** bootstrap that
+re-ranks both ways inside each resample:
+
+| Budget | surprise | dcGO-q | difference (95% CI) | resamples favouring surprise |
+| --- | ---: | ---: | --- | ---: |
+| 2,000 predictions | 15.5× | 5.3× | +10.19 [−85.26, +20.87] | 75% |
+| 10,000 predictions | 21.2× | 13.2× | +7.96 [−9.39, +10.23] | 54% |
+| 40,000 predictions | 11.6× | 10.8× | +0.82 [−2.15, +5.25] | 82% |
+
+**No separation at any budget.** The point estimate favours surprise 3/3, but
+every paired interval spans zero, and at the budget with the largest apparent
+gap only 54% of resamples favour it. Comparing the two rankings' *independent*
+intervals would have looked much more favourable — they are computed on the same
+candidate pool and so are correlated, which is why the paired test is the right
+one and why its verdict supersedes the unpaired view.
+
+So the honest position is: **the surprise score is not demonstrated to rank
+better than the dcGO q-value.** What it demonstrably does is different:
+
+* It selects **rarer, more specific terms.** At a matched 10,000 predictions it
+  takes 580 associations at a 0.0% base rate, against significance's 169 at 0.1%.
+  Its raw hit rate is *lower* (1.0% vs 1.8%) while its enrichment is higher — it
+  is finding harder, more informative predictions, echoing the §2 result that
+  dcGO's advantage lives in high-information terms.
+* It applies two filters a q-value cannot: redundant-signature removal and
+  novelty against curated knowledge. Those are interpretability work, not
+  ranking work, and they are why the top of the list is readable at all.
+
+### A structural tension the test exposed
+
+`surprise top-25` scored **0 hits on 117 predictions** — but the base rate
+predicts 0.14 hits there, so this cell is uninformative rather than negative.
+The reason it is so small is the interesting part: emergence *requires* that a
+combination's carriers are nearly all annotated with the term, which by
+construction leaves almost nothing unannotated to predict. The most emergent
+associations are therefore the least testable, and the score's sharpest end
+cannot be validated this way. Any future version should weigh emergence against
+the number of standing predictions it leaves.
+
+Reproduce with:
+
+```bash
+uv run python scripts/rank_surprising_associations.py --ontology go \
+    --gaf data/raw/goa_archive/goa_human.gaf.205.gz \
+    --associations results_t0_2021/domain_go_associations_significant.tsv \
+    --output results_t0_2021/domain_go_surprising.tsv
+uv run python validation/temporal_surprise.py
+# re-analyse without re-parsing the snapshots:
+uv run python validation/temporal_surprise.py --replay validation/temporal_surprise_associations.tsv
+```
+
 ## Caveats
 
 * The emergence test conditions on associations that already passed the dcGO FDR
   filter, so it is a *re-ranking* of a selected set, not an unbiased screen of
   all domain combinations.
 * Rates are estimated on the same proteins used to call the original
-  associations; the score measures internal consistency of the evidence, not
-  out-of-sample predictive performance. A temporal or held-out evaluation of the
-  top-ranked hypotheses is the natural follow-up
-  (see `VALIDATION_PLAN.md`).
+  associations, so the score itself measures internal consistency of the
+  evidence. The held-out section above is what tests predictive power — and its
+  verdict is that the *associations* predict future curation strongly (12.5×)
+  while the *ranking* is not demonstrably better than the q-value.
 * `--max-overlap` is a heuristic threshold on a continuous quantity; the overlap
   value is reported for every row, so a stricter or looser cut needs no re-run.
 * Weights (0.1/0.3/0.6/1.0) for the novelty statuses are a prioritisation

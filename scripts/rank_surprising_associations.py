@@ -293,6 +293,14 @@ def main() -> int:
     )
     parser.add_argument("--evidence-filter", default="manual")
     parser.add_argument(
+        "--gaf",
+        type=Path,
+        default=None,
+        help="GOA GAF to score against (default: the current release for "
+        "--species). Point this at an archived release to score a historical "
+        "run, e.g. a t0 snapshot for the temporal validation",
+    )
+    parser.add_argument(
         "--subcell", type=Path, default=Path("data/raw/uniprot_subcell/subcell.txt")
     )
     parser.add_argument(
@@ -325,7 +333,7 @@ def main() -> int:
 
     entry = get_ontology(args.ontology)
     paths = {
-        "gaf": Path(f"data/raw/goa_annotations/goa_{args.species}.gaf.gz"),
+        "gaf": args.gaf or Path(f"data/raw/goa_annotations/goa_{args.species}.gaf.gz"),
         "go_obo": args.go_ontology,
         "enzyme_dat": args.enzyme_dat,
         "uniprot_dat": args.uniprot_dat,
