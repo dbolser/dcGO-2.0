@@ -21,6 +21,7 @@ from src.uniprot_annotation_source import (
     parse_cofactors,
     parse_subcell_vocabulary,
     parse_subcellular_locations,
+    parse_uniprot_accessions,
     parse_keyword_hierarchy,
     parse_reactome_relations,
     parse_uniprot_cross_refs,
@@ -405,3 +406,21 @@ class TestTermFromIdType:
 
     def test_placeholder_third_field_is_not_a_term(self, dat):
         assert parse_uniprot_cross_refs(dat, "KEGG", term_from_id_type=True) == {}
+
+
+class TestAccessionSet:
+    """The t0 membership a temporal evaluation needs but a source cannot give."""
+
+    def test_every_primary_accession(self, uniprot_dat_file):
+        assert parse_uniprot_accessions(uniprot_dat_file) == {"P07327", "Q00000"}
+
+    def test_secondary_accessions_excluded(self, uniprot_dat_file):
+        # P07327's entry also lists B2R5V5; only the primary keys protein2ipr.
+        assert "B2R5V5" not in parse_uniprot_accessions(uniprot_dat_file)
+
+    def test_entries_without_annotations_still_count_as_present(self, body_dat_file):
+        # BARE_HUMAN carries no harvestable term, but it existed in the release.
+        assert "Q00002" in parse_uniprot_accessions(body_dat_file)
+
+    def test_gzip_supported(self, uniprot_dat_gz):
+        assert parse_uniprot_accessions(uniprot_dat_gz) == {"P07327", "Q00000"}

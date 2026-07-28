@@ -1,0 +1,2 @@
+ontology	n_associations	n_predictions	n_hits	hit_rate	expected_rate	enrichment	ci_low	ci_high
+go (all-domains)	92377	3139544	106816	0.03402	0.00300	11.33	10.89	11.75

@@ -181,6 +181,24 @@ def _iter_entries(
                 cc_topic, cc_parts = None, []
 
 
+def parse_uniprot_accessions(path: Path) -> Set[str]:
+    """Every primary accession in a UniProt flat file.
+
+    Temporal evaluations need to know which proteins *existed* in a snapshot,
+    not merely which carried a given annotation: a protein absent from the t0
+    release cannot have been "predicted" to gain a term, it simply had no entry
+    yet. An :class:`AnnotationSource` cannot answer that, because it only
+    reports proteins that carry terms of its own ontology.
+    """
+    logger.info(f"Reading the accession set from {path}")
+    accessions: Set[str] = set()
+    for entry in _iter_entries(path):
+        if entry.accession:
+            accessions.add(entry.accession)
+    logger.info(f"  Entries: {len(accessions):,}")
+    return accessions
+
+
 def parse_uniprot_cross_refs(
     path: Path,
     database: str,

@@ -171,6 +171,29 @@ well-populated ones will yield associations; `pharos` is the opposite extreme,
 hierarchy is deep, so True Path there produces many generic terms
 ("metal cation", "molecular entity") alongside the specific ones.
 
+## Do these layers actually predict anything?
+
+Coverage is not usefulness. `validation/temporal_breadth.py` trains each layer on
+an archived 2021 Swiss-Prot release and scores it against 2026 curation
+(`VALIDATION_PLAN.md` §2, breadth subsection). Enrichment is the hit rate over
+the term's own acquisition rate:
+
+| `--ontology` | enrichment (95% CI) | verdict |
+| --- | --- | --- |
+| `go` (anchor) | 11.3× [10.9, 11.8] | strongest |
+| `reactome` | 8.0× [6.7, 9.6] | strong |
+| `cofactor` | 3.2× [1.7, 4.0] | real, term-specific |
+| `subcellular` | 2.9× [2.7, 3.0] | real |
+| `keyword` | 1.7× [1.6, 1.8] | weak — 720 near-universal terms leave little headroom |
+| `complex` | detectable, magnitude meaningless | ~1.5 proteins per complex, so the base rate ≈ 0 |
+| `disease` | undefined (0 hits / 369) | too sparse to test; see the DO plan in `TODO.md` |
+| `ligand` | untestable at this split | `/ligand_id` postdates 2021 (see below) |
+
+The layers not listed were not trained at t0. Note that `ligand` is *entirely
+post-2022 annotation*: UniProt used free-text `/note="ATP"` on binding sites
+until the structured ChEBI qualifier arrived, so that layer rests on recent, and
+still-growing, curation.
+
 ## Reproducing this survey
 
 ```bash

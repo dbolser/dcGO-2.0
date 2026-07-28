@@ -36,6 +36,33 @@ This file is just loose notes.
   p-score predictor as the standard path.
 - §4 ablation (#10), §3 original-dcGO domain re-keying SSF/PF (#9), §5–§6.
 
+## Queued
+
+- **Give the disease layers a hierarchy via the Disease Ontology.** `--ontology
+  disease` is raw OMIM phenotype ids with no DAG, so `--enable-true-path`
+  refuses, and the sparsity shows: the 2021 t0 run yielded only **53**
+  significant associations from 6,904 terms over 5,029 proteins. DO supplies the
+  missing structure.
+  - Download: `http://purl.obolibrary.org/obo/doid.obo` (checked 2026-07-28:
+    live, 7.2 MB, 14,735 terms, release 2026-06-30). MONDO —
+    `http://purl.obolibrary.org/obo/mondo.obo` — is the alternative, and is what
+    dcGO 2023 switched to.
+  - The join already exists: DO cross-references OMIM as **`xref: MIM:<id>`**
+    (note the prefix is `MIM`, *not* `OMIM`) — 6,467 xrefs over 6,123 distinct
+    MIM ids — and Orphanet as `xref: ORDO:<id>` (2,319), which would give
+    `--ontology orphanet` a hierarchy too.
+  - Two ways to use it, and the choice matters: post-hoc mapping of existing
+    output is nearly worthless here (the 53 t0 associations use just 9 distinct
+    OMIM terms, 6 mappable), so the value is in **re-keying at parse time** — a
+    disease source that emits DOIDs, letting sparse OMIM phenotypes pool into
+    better-supported DO classes *before* the Fisher tests, then propagating up
+    the DO DAG.
+  - Machinery needed: none new. `parse_obo_child_parents` already reads DO's
+    `is_a` edges, and the registry takes the ancestors factory. The work is an
+    OMIM→DOID translation in the annotation source plus a registry entry.
+  - Acceptance: more significant associations than the OMIM-keyed run, and a
+    `disease` row in the breadth test that is no longer underpowered.
+
 ## Loose ideas / nice-to-haves
 - Add InterPro names / gene names / GO term descriptions to the output TSVs
   (currently just IDs) — improves readability for downstream users.
