@@ -33,9 +33,11 @@ The human path runs as a sequence of scripts backed by modules in `src/`:
 
 Key `src/` modules:
 - `annotation_source.py` - `AnnotationSource` abstraction (protein → ontology term). `GAFAnnotationSource` is the GO reference implementation; the seam for adding non-GO ontologies.
+- `ontology_registry.py` - the `--ontology` dispatch table: one `OntologyEntry` per ontology, holding its `AnnotationSource` factory, its ancestors factory (or `None` when it has no hierarchy), and the input files each needs so a run fails early on a missing input. Adding an ontology is one entry here.
 - `ec_annotation_source.py` - Enzyme Commission adapter (`run_dcgo_human.py --ontology ec`): parses Expasy `enzyme.dat` (already UniProt-keyed, so no id mapping) and provides `propagate_ec_annotations`/`ec_ancestors` for EC True Path propagation (hierarchy is implicit in the numbering — no OBO). First non-GO ontology on the seam.
-- `uniprot_annotation_source.py` - UniProt-native adapters (`--ontology reactome|keyword|disease|xref`): harvest DR cross-references and KW keywords straight from the Swiss-Prot flat file. `disease` = `DR MIM` phenotype-only; `xref --xref-db NAME` opens any DR database (KEGG/Orphanet/DisGeNET/…), with an optional `--xref-type` filter. UniProt is the protein universe, so these terms are already accession-keyed — no id mapping. Also parses the Reactome/keyword hierarchies (`parse_reactome_relations`, `parse_keyword_hierarchy`) for True Path propagation.
-- `hierarchy.py` - Shared, ontology-agnostic True Path engine: `closure_ancestors` (child→parents map → transitive-ancestors fn) and `propagate_via_ancestors`. EC, Reactome, and keywords all propagate through it (GO keeps its obonet `OntologyProcessor` path).
+- `uniprot_annotation_source.py` - UniProt-native adapters. Three layers of the Swiss-Prot flat file: `DR` cross-references (`reactome`, `disease`, `orphanet`, `tcdb`, `merops`, `cazy`, `unipathway`, `complex`, `drugbank`, `pharos`, `condensate`, plus `xref --xref-db NAME` for anything else), `KW` keywords, and — new — the layers curated into the entry *body*: `CC SUBCELLULAR LOCATION` (mapped to `SL-` terms via `subcell.txt`), `FT /ligand_id` ChEBI ligands, `CC COFACTOR` ChEBI cofactors and `CC CATALYTIC ACTIVITY` Rhea reactions. UniProt is the protein universe, so all of these are already accession-keyed — no id mapping. Also parses the Reactome/keyword/subcellular hierarchies for True Path propagation.
+- `hierarchy.py` - Shared, ontology-agnostic True Path engine: `closure_ancestors` (child→parents map → transitive-ancestors fn) and `propagate_via_ancestors`, plus the hierarchy *loaders* — `dotted_ancestors` (TCDB), `alpha_prefix_ancestors` (MEROPS/CAZy) and `parse_obo_child_parents` (a light OBO reader used for ChEBI). Everything except GO propagates through this engine (GO keeps its obonet `OntologyProcessor` path, which also does parental-background filtering).
+- `surprise_score.py` - Ranks *emergent* supra-domain associations: a binomial test of the combination against what its parts already predict, times a redundant-signature penalty, times a novelty discount vs InterPro2GO. Driver: `scripts/rank_surprising_associations.py`; method and results in `SURPRISE_SCORE.md`.
 - `goa_parser.py` - Parses GOA GAF files (protein → GO), with evidence-code filtering. `parse_goa` is the species-agnostic API (`parse_goa_human` is a kept alias).
 - `domain_annotation_parser.py` - Parses `protein2ipr` domain mappings and builds domain architectures.
 - `sparse_fisher.py` - Sparse contingency-table construction for domain × GO.
@@ -79,6 +81,13 @@ uv run python run_dcgo_human.py --num-cores 8 # statistical inference
 # With True Path Rule propagation
 uv run python run_dcgo_human.py --num-cores 8 \
     --enable-true-path --go-ontology data/raw/go_ontology/go-basic.obo
+
+# Other ontologies (see src/ontology_registry.py or --help for all 19)
+uv run python run_dcgo_human.py --ontology subcellular --enable-true-path
+uv run python run_dcgo_human.py --ontology ligand      # FT /ligand_id (ChEBI)
+
+# Rank the emergent domain-combination predictions
+uv run python scripts/rank_surprising_associations.py --ontology go
 
 # HPC batch script
 sbatch scripts/run_dcgo_hpc.sh
@@ -129,7 +138,11 @@ A full multi-organism run would be substantially heavier and is not yet implemen
 ## Known Limitations
 
 - No local domain scanning — only pre-computed InterPro annotations are consumed.
-- True Path Rule is opt-in (`--enable-true-path`), not part of the default run.
+- True Path Rule is opt-in (`--enable-true-path`), not part of the default run;
+  it now errors out for ontologies with no hierarchy instead of silently skipping.
+- The surprise score re-ranks associations that already passed the dcGO FDR
+  filter, using the same proteins — it measures internal consistency of the
+  evidence, not out-of-sample performance.
 - Validation covers InterPro2GO coverage (§1, ~65%) and a temporal CAFA-style
   benchmark (§2, `validation/temporal_benchmark.py`: dcGO beats the random-domain
   null 1.7–3.2× but trails the naive F_max baseline). Still open: ablation (§4),
@@ -141,11 +154,15 @@ A full multi-organism run would be substantially heavier and is not yet implemen
 run_dcgo_human.py            # Main entry point
 extract_human_interpro.py    # Human subset extraction
 scripts/download_data.py     # Dataset downloader
+scripts/rank_surprising_associations.py  # Surprise score driver
+scripts/survey_uniprot_ontologies.py     # Which UniProt vocabularies are usable
 src/
 ├── annotation_source.py     # AnnotationSource seam (protein → ontology term)
+├── ontology_registry.py     # --ontology dispatch table (sources + hierarchies)
 ├── ec_annotation_source.py  # Enzyme Commission adapter (Expasy enzyme.dat)
-├── uniprot_annotation_source.py # UniProt-native adapters (Reactome/keywords/disease/xref)
-├── hierarchy.py             # Shared True Path engine (ancestors + propagation)
+├── uniprot_annotation_source.py # UniProt-native adapters (DR / KW / CC / FT layers)
+├── hierarchy.py             # Shared True Path engine (ancestors + propagation + loaders)
+├── surprise_score.py        # Emergent supra-domain ranking (see SURPRISE_SCORE.md)
 ├── goa_parser.py            # GOA GAF parsing
 ├── domain_annotation_parser.py  # protein2ipr parsing
 ├── sparse_fisher.py         # Sparse contingency tables
