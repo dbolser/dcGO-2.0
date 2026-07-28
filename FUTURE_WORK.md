@@ -19,50 +19,81 @@
 > **Strategy: UniProt is the protein universe → prefer UniProt-native terms.**
 > Because the domain side (`protein2ipr`), GOA, and Expasy ENZYME are all keyed
 > by UniProt accession, the cheapest annotations are the ones UniProt already
-> carries per accession — they need *no* identifier mapping. `src/uniprot_annotation_source.py`
-> harvests these directly from the Swiss-Prot flat file: any `DR` cross-reference
-> database (Reactome and keywords are wired up; KEGG/Orphanet/DisGeNET/MIM/
-> DrugBank/ChEMBL/… are one database name away) and the `KW` keyword vocabulary.
-> **This reframes the identifier-mapping backbone below** (§3): build it only for
-> annotations that are *not* obtainable UniProt-keyed (e.g. HPO gene–phenotype
-> assertions keyed by HGNC). Reach for UniProt-native cross-references first;
-> fall back to the mapping backbone only when a vocabulary isn't already in
-> UniProt. Hierarchies for the UniProt-native ontologies **have landed**:
-> `--enable-true-path` now propagates Reactome (via `ReactomePathwaysRelation.txt`)
-> and keywords (via `keywlist.txt`) through the shared `src/hierarchy.py` engine,
-> alongside EC and GO.
+> carries per accession — they need *no* identifier mapping.
+>
+> **Status (the UniProt-native sweep is done).** Every vocabulary reachable that
+> way has now been enumerated and, where usable, wired up.
+> `scripts/survey_uniprot_ontologies.py` measured all ~150 `DR` databases in the
+> human subset and sorted them by proteins-per-term
+> (`docs/uniprot_ontology_survey.md`); the usable ones are registered in
+> **`src/ontology_registry.py`**, which is now the single dispatch table for
+> `--ontology` (source factory + hierarchy factory + required inputs). 19 keys:
+> `go`, `ec`, `reactome`, `keyword`, `disease`, `orphanet`, `tcdb`, `merops`,
+> `cazy`, `unipathway`, `complex`, `drugbank`, `pharos`, `condensate`,
+> `subcellular`, `ligand`, `cofactor`, `rhea`, `xref`. Beyond `DR` lines, three
+> layers curated into the entry *body* are now harvested too: subcellular
+> location (`CC` prose matched against `subcell.txt`), ChEBI ligands (`FT
+> /ligand_id`) and cofactors, and Rhea reactions. Deliberately **not** registered:
+> ~1:1 accession mirrors (AlphaFoldDB/STRING/GeneCards/DisGeNET/KEGG-gene …,
+> where every term has one protein and no test has power) and domain databases
+> (Pfam/PANTHER/SUPFAM …, circular) — both still reachable via `xref` for
+> deliberate experiments. Hierarchies landed for all of GO, EC, Reactome,
+> keywords, subcellular locations, ChEBI (ligand/cofactor), TCDB, MEROPS and
+> CAZy; `--enable-true-path` now *fails* rather than silently skipping for the
+> flat ones.
+>
+> **What is left needs the identifier-mapping backbone** (§3), because it is not
+> UniProt-keyed: HPO gene–phenotype assertions (HGNC), MGI Mammalian Phenotype
+> (mouse gene + orthology projection), and Disease Ontology / Mondo proper (only
+> reachable today as OMIM/Orphanet ids via `disease`/`orphanet`, without the DO
+> DAG). Reach for UniProt-native cross-references first; build the backbone only
+> for these.
 
 ## Objectives
 - Extend dcGO beyond Gene Ontology (GO) annotations to cover a broader ontology landscape relevant to human protein function, disease, phenotypes, and enzymatic activity.
 - Establish a unified integration framework so new ontology layers can be ingested, transformed, and queried through existing dcGO interfaces without bespoke code.
 
 ## Target Ontologies and Primary Data Sources
-1. **Disease Ontology (DO)**
+
+> Progress markers below: **[done]** = selectable via `--ontology` today;
+> **[partial]** = a UniProt-native proxy is available but not the ontology
+> itself; **[open]** = still needs the identifier-mapping backbone (§3).
+
+1. **[partial]** **Disease Ontology (DO)** — `--ontology disease` (OMIM
+   phenotype) and `--ontology orphanet` cover the disease *annotations*
+   UniProt carries, but as OMIM/Orphanet ids without the DO/Mondo DAG, so there
+   is no disease-hierarchy propagation yet.
    - *Ontology*: Disease Ontology (OBO Foundry).
    - *Annotations*: 
      - Monarch Initiative (disease-phenotype/protein associations).
      - UniProtKB "Disease" section with DO and Mondo cross-references.
      - DisGeNET gene-disease associations (map to proteins via UniProt/Ensembl).
-2. **Human Phenotype Ontology (HPO)**
+2. **[open]** **Human Phenotype Ontology (HPO)**
    - *Ontology*: `HPO OBO/OWL`.
    - *Annotations*:
      - HPOA gene-phenotype annotation files (official releases) keyed by HGNC, OMIM, Ensembl.
      - Monarch Initiative phenogrid exports (for cross-species phenotype integration).
-3. **Mammalian Phenotype (MP)**
+3. **[open]** **Mammalian Phenotype (MP)**
    - *Ontology*: MGI Mammalian Phenotype.
    - *Annotations*:
      - Mouse Genome Informatics (MGI) gene-to-MP associations.
      - Monarch cross-species mapping to human orthologs (via HGNC/Ensembl).
-4. **Enzyme Commission (EC)**
+4. **[done]** **Enzyme Commission (EC)** — `--ontology ec`, plus the finer
+   `--ontology rhea` (individual catalysed reactions from `CC CATALYTIC
+   ACTIVITY`).
    - *Ontology*: IUBMB EC hierarchy.
    - *Annotations*:
      - UniProtKB enzyme annotations (EC numbers per protein, canonical source).
      - BRENDA (for supplemental enzyme function data; licensing check required).
-5. **Pathway/Process Ontologies**
+5. **[done]** **Pathway/Process Ontologies** — `--ontology reactome` (with
+   hierarchy) and `--ontology unipathway`. Pathway Commons and KEGG *pathways*
+   remain open: UniProt's `DR KEGG` line is a gene id, not a pathway id.
    - Reactome pathways (hierarchical, stable IDs) with UniProt mappings.
    - Pathway Ontology (PW) via Pathway Commons (covers KEGG, Reactome, WikiPathways).
    - KEGG Orthology (KO) to pathway relationships (check licensing for redistribution).
-6. **Chemical/Drug Ontologies (stretch goal)**
+6. **[done]** **Chemical/Drug Ontologies** — `--ontology ligand` and
+   `--ontology cofactor` (ChEBI, with the ChEBI hierarchy) and `--ontology
+   drugbank`. TTD remains open.
    - ChEBI for molecular functions/binding.
    - DrugBank or Therapeutic Target Database (TTD) for drug-protein associations (licensing dependent).
 
@@ -132,3 +163,15 @@
 - Evaluate need for ontology-specific propagation rules beyond `is_a` (e.g., HPO `part_of`, Reactome `hasEvent`).
 - Determine storage solution for large pathway/phenotype networks (flat files vs. graph DB).
 
+
+## Beyond ontologies: ranking what the method uniquely finds
+
+The breadth work above multiplies *what* domains can be associated with. The
+complementary question — which associations are worth reading — is answered by
+the **surprise score** (`src/surprise_score.py`,
+`scripts/rank_surprising_associations.py`, `SURPRISE_SCORE.md`), which ranks
+supra-domain associations by how much the combination beats what its
+constituents already predict, discounting redundant InterPro signatures and
+curated knowledge. Each new ontology gets this ranking for free; only the
+novelty factor needs a per-ontology curated reference (InterPro2GO exists for
+GO — an equivalent for EC/Reactome would be a small, self-contained addition).
