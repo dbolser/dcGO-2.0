@@ -5,6 +5,7 @@ Tests the parallel statistical testing implementation.
 """
 
 import numpy as np
+import pytest
 
 from src.vectorized_fisher import (
     fisher_exact_vectorized_batch,
@@ -385,3 +386,83 @@ class TestIntegration:
         assert n_significant > 0  # Should find some significant
         assert n_significant < len(tables)  # But not all (FDR control working)
         assert threshold >= 0  # Threshold should be non-negative
+
+
+class TestBenjaminiHochbergVectorizationEquivalence:
+    """The vectorized BH must be bit-identical to the loop it replaced.
+
+    That loop cost ~50 of the ~69 minutes of a default human run (1.64e9
+    tests) — three times the compiled Fisher stage it corrects. Replacing it is
+    only safe if the numbers do not move, so this pins the reference
+    implementation rather than trusting that the rewrite "looks equivalent".
+    """
+
+    @staticmethod
+    def _reference(pvalues: np.ndarray, alpha: float = 0.05):
+        """The pre-vectorization implementation, verbatim."""
+        n = len(pvalues)
+        sorted_indices = np.argsort(pvalues)
+        sorted_pvalues = pvalues[sorted_indices]
+        adjusted = np.zeros(n, dtype=np.float64)
+        for i in range(n - 1, -1, -1):
+            rank = i + 1
+            adjusted[sorted_indices[i]] = min(1.0, sorted_pvalues[i] * n / rank)
+            if i < n - 1:
+                adjusted[sorted_indices[i]] = min(
+                    adjusted[sorted_indices[i]], adjusted[sorted_indices[i + 1]]
+                )
+        significant = adjusted <= alpha
+        threshold = np.max(pvalues[significant]) if np.any(significant) else 0.0
+        return adjusted, threshold
+
+    @pytest.mark.parametrize("alpha", [0.01, 0.05])
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "uniform",
+            "underflow",
+            "ties",
+            "all_ones",
+            "all_zeros",
+            "single",
+            "mixed",
+        ],
+    )
+    def test_matches_the_reference_exactly(self, name: str, alpha: float) -> None:
+        rng = np.random.default_rng(0)
+        cases = {
+            # Ordinary case.
+            "uniform": rng.random(5000),
+            # p-values below 1e-300 are common and meaningful here.
+            "underflow": rng.random(2000) ** 40,
+            # Ties are where a naive rewrite diverges: the running minimum and
+            # the per-element loop must agree on every member of a tied block.
+            "ties": np.repeat(rng.random(50), 40),
+            "all_ones": np.ones(200),
+            "all_zeros": np.zeros(200),
+            "single": np.array([0.5]),
+            "mixed": np.concatenate([np.zeros(50), np.ones(50), rng.random(200)]),
+        }
+        pvalues = cases[name]
+
+        want_adjusted, want_threshold = self._reference(pvalues.copy(), alpha)
+        got_adjusted, got_threshold = benjamini_hochberg_correction(
+            pvalues.copy(), alpha
+        )
+
+        assert np.array_equal(want_adjusted, got_adjusted)
+        assert want_threshold == got_threshold
+
+    def test_empty_input_returns_empty(self) -> None:
+        """The reference indexed into an empty sort; this must not raise."""
+        adjusted, threshold = benjamini_hochberg_correction(np.array([]), alpha=0.05)
+        assert adjusted.shape == (0,)
+        assert threshold == 0.0
+
+    def test_adjusted_values_are_monotone_in_the_p_value_order(self) -> None:
+        """The property BH's step-up procedure exists to guarantee."""
+        rng = np.random.default_rng(7)
+        pvalues = rng.random(5000)
+        adjusted, _ = benjamini_hochberg_correction(pvalues, alpha=0.05)
+        in_p_order = adjusted[np.argsort(pvalues)]
+        assert np.all(np.diff(in_p_order) >= 0)

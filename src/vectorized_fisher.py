@@ -128,6 +128,19 @@ def benjamini_hochberg_correction(
     """
     Apply Benjamini-Hochberg FDR correction to p-values.
 
+    Vectorized. This used to be a Python loop over every p-value, which on the
+    default human run (1.64e9 tests) cost ~50 of the run's ~69 minutes — three
+    times the compiled Fisher stage it corrects. The arithmetic is unchanged:
+    scale each sorted p-value by ``n / rank``, enforce monotonicity by taking a
+    running minimum from the largest p-value down, and clip at 1.
+
+    Clipping commutes with the running minimum (``min(1, ·)`` is monotone), so
+    doing it once at the end is equivalent to the old per-element ``min(1.0, …)``.
+
+    Memory matters more than speed here: at 1.64e9 tests the sort indices alone
+    are 13 GB, so the intermediates are computed in place and released as soon
+    as they are dead rather than chained into one expression.
+
     Args:
         pvalues: Array of p-values
         alpha: FDR threshold (e.g., 0.01 for 1% FDR)
@@ -136,29 +149,31 @@ def benjamini_hochberg_correction(
         Tuple of (adjusted_pvalues, threshold) where threshold is the p-value cutoff
     """
     n = len(pvalues)
+    if n == 0:
+        return np.zeros(0, dtype=np.float64), 0.0
 
-    # Sort p-values and track original indices
-    sorted_indices = np.argsort(pvalues)
-    sorted_pvalues = pvalues[sorted_indices]
+    order = np.argsort(pvalues)
 
-    # Calculate BH-adjusted p-values
-    adjusted = np.zeros(n, dtype=np.float64)
+    # scaled = sorted_p * n / rank, built in place to avoid a second big temporary.
+    scaled = pvalues[order].astype(np.float64, copy=False)
+    if scaled is pvalues:  # already float64 and unsorted-copy elided
+        scaled = scaled.copy()
+    scaled *= n
+    scaled /= np.arange(1, n + 1, dtype=np.float64)
 
-    # Work backwards from largest p-value
-    for i in range(n - 1, -1, -1):
-        rank = i + 1
-        adjusted[sorted_indices[i]] = min(1.0, sorted_pvalues[i] * n / rank)
+    # Monotonicity: each adjusted value is the smallest scaled value at or above
+    # its rank. A reversed accumulate gives that in one pass.
+    scaled = np.minimum.accumulate(scaled[::-1])[::-1]
+    np.clip(scaled, None, 1.0, out=scaled)
 
-        # Ensure monotonicity
-        if i < n - 1:
-            adjusted[sorted_indices[i]] = min(
-                adjusted[sorted_indices[i]], adjusted[sorted_indices[i + 1]]
-            )
+    adjusted = np.empty(n, dtype=np.float64)
+    adjusted[order] = scaled
+    del scaled, order
 
     # Find threshold: largest p-value where adjusted p-value <= alpha
     significant = adjusted <= alpha
     if np.any(significant):
-        threshold = np.max(pvalues[significant])
+        threshold = float(np.max(pvalues[significant]))
     else:
         threshold = 0.0
 
