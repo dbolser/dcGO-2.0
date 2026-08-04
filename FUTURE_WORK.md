@@ -27,9 +27,10 @@
 > human subset and sorted them by proteins-per-term
 > (`docs/uniprot_ontology_survey.md`); the usable ones are registered in
 > **`src/ontology_registry.py`**, which is now the single dispatch table for
-> `--ontology` (source factory + hierarchy factory + required inputs). 19 keys:
-> `go`, `ec`, `reactome`, `keyword`, `disease`, `orphanet`, `tcdb`, `merops`,
-> `cazy`, `unipathway`, `complex`, `drugbank`, `pharos`, `condensate`,
+> `--ontology` (source factory + hierarchy factory + required inputs). 21 keys:
+> `go`, `ec`, `reactome`, `keyword`, `disease`, `doid`, `orphanet`,
+> `orphanet_doid`, `tcdb`, `merops`, `cazy`, `unipathway`, `complex`,
+> `drugbank`, `pharos`, `condensate`,
 > `subcellular`, `ligand`, `cofactor`, `rhea`, `xref`. Beyond `DR` lines, three
 > layers curated into the entry *body* are now harvested too: subcellular
 > location (`CC` prose matched against `subcell.txt`), ChEBI ligands (`FT
@@ -42,12 +43,16 @@
 > CAZy; `--enable-true-path` now *fails* rather than silently skipping for the
 > flat ones.
 >
+> The Disease Ontology has since landed too, and *without* the backbone: DO
+> carries the cross-ontology mapping itself (`xref: MIM:`, `xref: ORDO:`), so
+> `--ontology doid` / `orphanet_doid` re-key UniProt's own disease
+> cross-references onto DOID terms at parse time and then propagate up DO's
+> `is_a` DAG (`src/disease_ontology.py`). Mondo would work identically.
+>
 > **What is left needs the identifier-mapping backbone** (§3), because it is not
-> UniProt-keyed: HPO gene–phenotype assertions (HGNC), MGI Mammalian Phenotype
-> (mouse gene + orthology projection), and Disease Ontology / Mondo proper (only
-> reachable today as OMIM/Orphanet ids via `disease`/`orphanet`, without the DO
-> DAG). Reach for UniProt-native cross-references first; build the backbone only
-> for these.
+> UniProt-keyed: HPO gene–phenotype assertions (HGNC) and MGI Mammalian
+> Phenotype (mouse gene + orthology projection). Reach for UniProt-native
+> cross-references first; build the backbone only for these.
 
 ## Objectives
 - Extend dcGO beyond Gene Ontology (GO) annotations to cover a broader ontology landscape relevant to human protein function, disease, phenotypes, and enzymatic activity.
@@ -59,15 +64,19 @@
 > **[partial]** = a UniProt-native proxy is available but not the ontology
 > itself; **[open]** = still needs the identifier-mapping backbone (§3).
 
-1. **[partial]** **Disease Ontology (DO)** — `--ontology disease` (OMIM
-   phenotype) and `--ontology orphanet` cover the disease *annotations*
-   UniProt carries, but as OMIM/Orphanet ids without the DO/Mondo DAG, so there
-   is no disease-hierarchy propagation yet.
-   - *Ontology*: Disease Ontology (OBO Foundry).
-   - *Annotations*: 
-     - Monarch Initiative (disease-phenotype/protein associations).
-     - UniProtKB "Disease" section with DO and Mondo cross-references.
-     - DisGeNET gene-disease associations (map to proteins via UniProt/Ensembl).
+1. **[done]** **Disease Ontology (DO)** — `--ontology doid` and
+   `--ontology orphanet_doid` re-key UniProt's `DR MIM` (phenotype) and
+   `DR Orphanet` cross-references onto DOID terms at parse time, using DO's own
+   `xref: MIM:` / `xref: ORDO:` lines, and propagate up DO's `is_a` DAG. The
+   raw-id layers (`disease`, `orphanet`) remain for comparison.
+   - *Ontology*: Disease Ontology (OBO Foundry), pinned release + checksum in
+     `config/settings.py` (`disease_ontology`).
+   - *Implementation*: `src/disease_ontology.py`; the mapping policy for
+     unmapped, one-to-many and obsolete ids is documented there and counted at
+     parse time.
+   - *Still open*: Mondo as the unifying layer (same mechanism, different OBO);
+     annotation sources beyond UniProt's own cross-references (Monarch,
+     DisGeNET) — those would need §3.
 2. **[open]** **Human Phenotype Ontology (HPO)**
    - *Ontology*: `HPO OBO/OWL`.
    - *Annotations*:

@@ -42,8 +42,7 @@ dependencies = [
     # Optional: GO ontology processing (for True Path Rule)
     "obonet>=1.1.1",
     "networkx>=3.5",
-    # Optional: Database support
-    "sqlalchemy>=2.0.0",
+    # Plotting for validation/validate_results.py
     "matplotlib>=3.10.6",
     "seaborn>=0.13.2",
 ]
@@ -88,6 +87,8 @@ include = [
     "/config",
     "/examples",
     "/run_dcgo_human.py",
+    "/CITATION.cff",
+    "/REPRODUCIBILITY.md",
     "/README.md",
     "/LICENSE",
 ]

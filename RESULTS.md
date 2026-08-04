@@ -13,8 +13,15 @@ test), **dcGO beats the naive frequency baseline on F_max at face value in BP an
 CC**, and beats it in **every aspect once uninformative terms are excluded**,
 while staying **1.3–25× above the random-domain null**. Molecular Function is the
 one aspect where naive leads at face value — because its "truth" is dominated by a
-single near-universal term (`protein binding`, 84.6% of experimental MF
-annotations) — and dcGO overtakes it decisively the moment that noise is removed.
+single near-universal term (`protein binding`: 84.6% of experimental MF
+annotation lines, carried by 87.7% of annotated proteins, and the *only* MF
+term for 34.5% of them — see `validation/protein_binding_dominance.py`) — and dcGO overtakes it decisively the moment that noise is removed.
+
+**This headline is about F_max only.** On AUPRC, from the same run, naive leads
+in all three aspects at IC≥0 and in CC at IC≥2 and IC≥4 as well
+([VALIDATION_PLAN.md](VALIDATION_PLAN.md) §2). The primary endpoint was not
+pre-specified, so read the above as a descriptive retrospective result at one
+operating point, not as a general claim of superiority.
 
 ## Setup
 
@@ -59,8 +66,10 @@ Both were part of the original dcGO Predictor and had been dropped; restoring th
 was worth more than any parameter ablation. They are **complementary**:
 
 - **Per-target p-score** (now the default transfer) is the broad protein-centric
-  lever — it lifts F_max/AUPRC across the board and puts dcGO above naive at IC≥0
-  on BP and CC.
+  lever — it lifts dcGO's own F_max/AUPRC across the board relative to `max`
+  transfer, and puts dcGO above naive at IC≥0 on BP and CC **on F_max**. It does
+  not put dcGO above naive on AUPRC, which naive still wins at IC≥0 in all three
+  aspects; see the AUPRC note in `VALIDATION_PLAN.md` §2.
 - **Relative (parental-background) inference** barely moves protein-centric F_max
   but earns its keep on the **domain-centric** metric: scored directly against
   InterPro2GO it raises association precision **0.218 → 0.253** (recall 0.63 →

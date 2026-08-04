@@ -25,6 +25,7 @@ def paths(tmp_path):
         "keywlist",
         "subcell",
         "chebi_obo",
+        "doid_obo",
     ):
         path = tmp_path / name
         path.write_text("")
@@ -69,6 +70,8 @@ class TestTruePathSupport:
             "subcellular",
             "ligand",
             "cofactor",
+            "doid",
+            "orphanet_doid",
         ],
     )
     def test_hierarchical_ontologies_can_propagate(self, key):
@@ -160,3 +163,20 @@ class TestSourceConstruction:
         source = get_ontology("subcellular").build_source(paths, {})
         assert source.dat_path == paths["uniprot_dat"]
         assert source.subcell_path == paths["subcell"]
+
+    def test_doid_rekeys_the_phenotype_mim_layer(self, paths):
+        source = get_ontology("doid").build_source(paths, {})
+        assert (source.database, source.id_type) == ("MIM", "phenotype")
+        assert source.xref_prefix == "MIM"
+        assert source.doid_obo_path == paths["doid_obo"]
+
+    def test_orphanet_doid_rekeys_the_orphanet_layer(self, paths):
+        source = get_ontology("orphanet_doid").build_source(paths, {})
+        assert (source.database, source.id_type) == ("Orphanet", None)
+        assert source.xref_prefix == "ORDO"
+
+    def test_doid_needs_the_obo_even_without_true_path(self, paths, tmp_path):
+        # The OBO supplies the mapping table, not just the hierarchy, so a run
+        # without --enable-true-path must still fail loudly when it is absent.
+        paths["doid_obo"] = tmp_path / "gone.obo"
+        assert missing_inputs(get_ontology("doid"), paths)

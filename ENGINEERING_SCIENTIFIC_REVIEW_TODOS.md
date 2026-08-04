@@ -21,10 +21,12 @@ yet establish robust general performance, calibration, or superiority.
   `dcgo = "run_dcgo_human:main"`, but the wheel packages only `src`, not the
   top-level `run_dcgo_human.py`. Move the entry point into a packaged module and
   add a wheel-install smoke test.
-- [ ] Expand CI to cover the actual product. CI currently lints only `src/` and
-  `tests/`, omitting the main runner, validation programs, download scripts, and
-  packaging. A repository-wide Ruff check found nine errors, including six in
-  the main entry point.
+- [x] Expand CI to cover the actual product. CI now lints `src/ tests/ config/
+  scripts/ validation/ run_dcgo_human.py extract_human_interpro.py`, and already
+  builds both distributions and smoke-tests the installed `dcgo` CLI. The
+  reported Ruff errors are fixed (the last three, `E402` in
+  `validation/sprint1_validation.py`, by moving the logger setup below the
+  imports rather than suppressing the rule).
 - [ ] Add a small end-to-end test that invokes the installed CLI on fixtures and
   verifies schema-valid output. The unit and integration tests do not currently
   demonstrate that the installed command works.
@@ -34,8 +36,16 @@ yet establish robust general performance, calibration, or superiority.
 - [ ] Validate CLI parameters: FDR range, positive batch size and core count,
   shrinkage range, supported input/species selection, non-empty protein
   intersection, and non-empty feature spaces.
-- [ ] Pin every production input using a release identifier, source URL, and
-  checksum. The current GOA and GO ontology URLs are mutable.
+- [x] Pin every production input using a release identifier, source URL, and
+  checksum. Each run now records the SHA-256, byte size, source URL and embedded
+  release header of every input the selected ontology consumed (GAF
+  `!gaf-version`/`!date-generated`, OBO `data-version`, UniProt vocabulary
+  `Release:`, Expasy `Release of`), so a reported number can always be traced to
+  the exact bytes behind it. See `REPRODUCIBILITY.md`.
+- [ ] Still mutable upstream: recording the hash identifies what was consumed
+  but does not make it re-fetchable. Switch the production runs to dated or
+  archived releases (`scripts/download_data.py --goa-archive` already fetches
+  dated GOA snapshots) and verify the recorded hashes on download.
 
 ## P0: Publication blockers
 
@@ -77,9 +87,13 @@ yet establish robust general performance, calibration, or superiority.
 
 ## P1: Engineering and reproducibility
 
-- [ ] Generate a machine-readable run manifest containing the Git commit,
+- [x] Generate a machine-readable run manifest containing the Git commit,
   command line, dependency-lock hash, input releases and checksums, timestamps,
   evidence filter, ontology relations, and every threshold.
+  `run_manifest_<ontology>.json`, written by `src/run_manifest.py`. The recorded
+  inputs are whatever the selected registry entry declares, so all 19 ontologies
+  are covered, including their True Path hierarchy files. Not yet done for the
+  surprise-score driver or the `validation/` benchmarks.
 - [ ] Commit or archive the exact benchmark artifacts used by the manuscript.
   The `bench_A` through `bench_D` outputs and logs were untracked at review time,
   leaving their provenance unclear.
@@ -99,7 +113,8 @@ yet establish robust general performance, calibration, or superiority.
 - [ ] Provide clean-checkout reproduction automation, ideally a container or
   workflow that downloads pinned inputs, verifies hashes, runs inference, and
   regenerates every manuscript table.
-- [ ] Add release essentials: semantic-versioning policy, `CITATION.cff`,
+- [ ] Add release essentials. `CITATION.cff` is done (software metadata plus the
+  Fang & Gough method reference). Still missing: semantic-versioning policy,
   changelog, archived DOI, supported-platform statement, and resource estimates.
 
 ## P1: Scientific analysis and reporting
