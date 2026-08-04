@@ -49,9 +49,11 @@ This file is just loose notes.
   side by side, in `SURPRISE_SCORE.md`.
 - ~~**Predictive power across the breadth**~~ — `validation/temporal_breadth.py`.
   One archived Swiss-Prot release (2021_02) gives t0 for every UniProt-native
-  layer. GO 11.3×, reactome 8.0×, cofactor 3.2×, subcellular 2.9×, keyword 1.7×;
-  complex degenerate, disease undefined, ligand untestable. See
-  `VALIDATION_PLAN.md` §2 breadth subsection.
+  layer. **Corrected 2026-08-04** after `restrict_to_universe` (#26): GO 11.5×,
+  reactome 11.4×, subcellular 3.7×, cofactor 3.5×, keyword 3.4×; complex has no
+  demonstrated signal (CI includes zero), disease undefined, ligand untestable.
+  The contamination was suppressing the signal — every layer went *up*, keyword
+  doubling. See `VALIDATION_PLAN.md` §2 breadth subsection.
 
 ## Next (see VALIDATION_PLAN.md "Next steps")
 - ~~Method-vs-paper audit~~ done — their validation is protein-centric CAFA

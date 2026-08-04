@@ -564,45 +564,68 @@ which by construction leaves almost nothing outstanding to predict `[E15]`. Any
 revised score should trade emergence off against how many standing predictions it
 leaves.
 
-### 3.7 Breadth across vocabularies — PROVISIONAL, PENDING RECOMPUTATION
+### 3.7 Breadth across vocabularies
 
-> **This entire subsection must be regenerated before submission.** The
-> UniProt-native annotation sources parse all of Swiss-Prot rather than the
-> selected species, and the contingency-table row space is the union of the
+> **Recomputed 2026-08-04.** The values first committed for this subsection were
+> produced before the species defect described in §2 was fixed: the
+> UniProt-native annotation sources parsed all of Swiss-Prot rather than the
+> selected species, and the contingency-table row space was the union of the
 > annotation and domain protein sets, so the Fisher protein universe for every
-> UniProt-sourced vocabulary is inflated from ~20k human proteins toward the
-> 575,503 entries of the flat file `[A11, F]`. This inflates the "neither" cell
-> and therefore the significance of every association trained from that file. The
-> Gene Ontology anchor is drawn from the species-specific annotation file and is
-> **not** affected by this defect; every other row below is. The numbers are
-> reproduced here **only** so that the corrected run can be diffed against them.
+> UniProt-sourced vocabulary was inflated from ~20k human proteins toward the
+> 575,503 entries of the flat file. Restricting the annotation map to the
+> domain-annotated intersection corrects it. Every row below has been
+> regenerated; the superseded values are retained in the last column, and the
+> Gene Ontology anchor — drawn from the species-specific annotation file and
+> therefore never affected — serves as the control showing that the change is
+> the correction rather than a change of protocol.
 
 Applying the held-out enrichment statistic of §3.6 to seven vocabularies trained
 on an archived April 2021 Swiss-Prot release gives the values in Table 3.
 
-**Table 3.** PROVISIONAL. Held-out enrichment by vocabulary, 2021 → 2026.
-Values as currently committed in `validation/temporal_breadth_metrics.tsv` and
-`validation/temporal_breadth_go.tsv` `[F1–F9]`.
+**Table 3.** Held-out enrichment by vocabulary, 2021 → 2026, after the
+species correction. Values from `validation/temporal_breadth_metrics.tsv`.
 
-| Vocabulary | assoc. | predictions | hits | hit rate | expected | enrichment [95% CI] | status |
-|---|--:|--:|--:|--:|--:|---|---|
-| GO (anchor) | 92,377 | 3,139,544 | 106,816 | 3.40% | 0.30% | 11.3 [10.9, 11.8] | not affected by the species defect |
-| Reactome | 54,685 | 1,487,359 | 2,056 | 0.14% | 0.02% | 8.0 [6.7, 9.6] | affected — recompute |
-| Cofactor (ChEBI) | 363 | 1,744 | 221 | 12.67% | 3.97% | 3.2 [1.7, 4.0] | affected — recompute |
-| Subcellular location | 13,373 | 507,262 | 7,005 | 1.38% | 0.49% | 2.9 [2.7, 3.0] | affected — recompute |
-| UniProt keyword | 85,323 | 2,619,504 | 35,350 | 1.35% | 0.79% | 1.7 [1.6, 1.8] | affected — recompute |
-| ComplexPortal | 3,606 | 31,076 | 24 | 0.08% | ≈ 0% | *degenerate* | affected; ratio uninterpretable |
-| OMIM phenotype | 27 | 90 | 0 | 0% | ≈ 0% | *undefined* | affected; underpowered |
-| ChEBI ligand | — | — | — | — | — | *not testable* | see below |
+| Vocabulary | assoc. | predictions | hits | hit rate | expected | enrichment [95% CI] | superseded |
+|---|--:|--:|--:|--:|--:|---|--:|
+| GO (anchor) | 91,830 | 3,106,234 | 106,224 | 3.42% | 0.30% | 11.5 [11.1, 12.0] | 11.3 |
+| Reactome | 34,397 | 760,073 | 1,430 | 0.19% | 0.02% | 11.4 [8.9, 14.6] | 8.0 |
+| Subcellular location | 6,340 | 172,679 | 3,798 | 2.20% | 0.59% | 3.7 [3.5, 3.9] | 2.9 |
+| Cofactor (ChEBI) | 291 | 1,404 | 235 | 16.74% | 4.72% | 3.5 [2.1, 4.5] | 3.2 |
+| UniProt keyword | 35,981 | 889,117 | 13,140 | 1.48% | 0.44% | 3.4 [3.2, 3.6] | 1.7 |
+| ComplexPortal | 958 | 9,904 | 2 | 0.02% | ≈ 0% | 61 [0.0, 131] | 265 |
+| OMIM phenotype | 27 | 90 | 0 | 0% | ≈ 0% | *undefined* | undefined |
+| ChEBI ligand | — | — | — | — | — | *not testable* | — |
 
-Three rows must not be read at face value even after recomputation. **Complex**
-gives a nominal enrichment in the hundreds only because ComplexPortal averages
-~1.5 proteins per complex, so the base rate rounds to zero and any hit at all
-divides by nearly nothing; 24 hits establish that signal exists, but the
-magnitude is meaningless `[F8]`. **Disease** returned 0 hits on 369 predictions
-with an expected count also near zero — an uninformative cell, not a negative
-result, and a direct consequence of 6,904 OMIM phenotypes spread over 5,029
-proteins, which yielded only 53 significant associations at t0 `[F9, F17]`.
+The correction moved the results in a direction worth stating explicitly: the
+contamination was **suppressing** the cross-vocabulary signal, not manufacturing
+it. Every affected layer enriches more strongly once the non-human proteins
+leave the universe, and the UniProt keyword layer doubles (1.7 → 3.4) with
+non-overlapping intervals. The GO anchor does not move (11.3 → 11.5), which is
+what a correct correction should look like.
+
+Two conclusions in the superseded analysis do not survive. First, Reactome at
+11.4 [8.9, 14.6] now overlaps GO at 11.5 [11.1, 12.0], so the ordering "GO
+strongest, Reactome second" is not supported; because Reactome rests on 1,430
+hits against GO's 106,224 its interval is far wider, and the defensible
+statement is that the two are indistinguishable at this power rather than that
+Reactome matches GO. Second, ComplexPortal falls from 24 hits to 2 and its
+interval now includes zero, so the layer shows no demonstrated signal at all.
+
+Three rows must not be read at face value. **Complex** never had an
+interpretable magnitude: ComplexPortal averages ~1.5 proteins per complex, so
+the base rate rounds to zero and any hit at all divides by nearly nothing. The
+superseded run's 24 hits gave a nominal enrichment in the hundreds with an
+interval excluding one; after correction 2 hits give an interval including zero,
+so the earlier reading of "signal exists, magnitude meaningless" was itself too
+generous. **Disease** returned 0 hits on 369 predictions with an expected count
+also near zero — an uninformative cell, not a negative result, and a direct
+consequence of 6,904 OMIM phenotypes spread over 5,029 proteins, which yielded
+only 53 significant associations at t0. This layer is unchanged by the species
+correction, because OMIM phenotype cross-references are essentially human-only
+already. Re-keying the same curation onto the Disease Ontology has since been
+implemented and does not repair it: the residual sparsity is at the protein
+level, roughly 0.8 proteins per Disease Ontology term, which no amount of term
+pooling can fix.
 **Ligand** cannot be tested at this split at all: UniProt's structured
 `FT /ligand_id="ChEBI:…"` qualifier postdates the April 2021 release, so the layer
 consists entirely of post-2022 annotation `[F10]`.
