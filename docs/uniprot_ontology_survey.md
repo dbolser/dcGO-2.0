@@ -176,17 +176,19 @@ hierarchy is deep, so True Path there produces many generic terms
 Coverage is not usefulness. `validation/temporal_breadth.py` trains each layer on
 an archived 2021 Swiss-Prot release and scores it against 2026 curation
 (`VALIDATION_PLAN.md` §2, breadth subsection). Enrichment is the hit rate over
-the term's own acquisition rate:
+the term's own acquisition rate. **Corrected 2026-08-04**: the first published
+version of this table scored association sets built before `restrict_to_universe`
+(#26) and understated every layer — see the banner in `VALIDATION_PLAN.md` §2.
 
 | `--ontology` | enrichment (95% CI) | verdict |
 | --- | --- | --- |
-| `go` (anchor) | 11.3× [10.9, 11.8] | strongest |
-| `reactome` | 8.0× [6.7, 9.6] | strong |
-| `cofactor` | 3.2× [1.7, 4.0] | real, term-specific |
-| `subcellular` | 2.9× [2.7, 3.0] | real |
-| `keyword` | 1.7× [1.6, 1.8] | weak — 720 near-universal terms leave little headroom |
-| `complex` | detectable, magnitude meaningless | ~1.5 proteins per complex, so the base rate ≈ 0 |
-| `disease` | undefined (0 hits / 369) | too sparse to test; see the DO plan in `TODO.md` |
+| `go` (anchor) | 11.5× [11.1, 12.0] | strongest |
+| `reactome` | 11.4× [8.9, 14.6] | indistinguishable from GO at this power (1,430 hits vs GO's 106,224) |
+| `subcellular` | 3.7× [3.5, 3.9] | real |
+| `cofactor` | 3.5× [2.1, 4.5] | real, term-specific |
+| `keyword` | 3.4× [3.2, 3.6] | real; its 0.44% base rate is the highest of any layer, which caps the ratio |
+| `complex` | no demonstrated signal | 2 hits / 9,904; CI [0.00, 130.93] includes zero |
+| `disease` | undefined (0 hits / 369) | too sparse to test — 6,904 raw OMIM ids over 5,029 proteins. Superseded by `doid`, which re-keys the same curation onto the Disease Ontology (`src/disease_ontology.py`); re-running the breadth test on `doid` is outstanding |
 | `ligand` | untestable at this split | `/ligand_id` postdates 2021 (see below) |
 
 The layers not listed were not trained at t0. Note that `ligand` is *entirely

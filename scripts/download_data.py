@@ -35,11 +35,16 @@ Notes
 -----
 * Existing complete files are skipped. Use --force to re-download.
 * ``interpro_mappings`` (protein2ipr.dat.gz) is ~20 GB — this can take a while.
+* Sources pinned to an immutable release URL carry a ``checksum`` in
+  settings.py (e.g. ``disease_ontology``). It is verified every time, including
+  when an existing file is skipped, so a corrupted or swapped input fails the
+  download step instead of quietly changing a run's results.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import sys
 from pathlib import Path
 from urllib.parse import urlparse
@@ -76,6 +81,38 @@ def _human_size(num_bytes: float) -> str:
             return f"{num_bytes:.1f} {unit}"
         num_bytes /= 1024
     return f"{num_bytes:.1f} TB"
+
+
+class ChecksumError(RuntimeError):
+    """A downloaded file did not match the checksum pinned in settings.py."""
+
+
+def file_digest(path: Path, algorithm: str) -> str:
+    """Hex digest of ``path``, streamed so large files never load into memory."""
+    digest = hashlib.new(algorithm)
+    with open(path, "rb") as fh:
+        for block in iter(lambda: fh.read(CHUNK_SIZE), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def verify_checksum(path: Path, expected: tuple[str, str]) -> None:
+    """Check ``path`` against an ``(algorithm, hex digest)`` pair.
+
+    Only pinned (immutable-URL) sources carry a checksum, and this is what makes
+    the pinning worth anything: a run's inputs are then reproducible by content,
+    not merely by URL.
+
+    Raises:
+        ChecksumError: on a mismatch.
+    """
+    algorithm, want = expected
+    got = file_digest(path, algorithm)
+    if got != want:
+        raise ChecksumError(
+            f"{algorithm} mismatch for {path}: expected {want}, got {got}"
+        )
+    print(f"  ✔ {algorithm} verified: {want}")
 
 
 def download_one(url: str, dest: Path, *, force: bool, timeout: int) -> bool:
@@ -247,7 +284,12 @@ def main() -> int:
         print(f"[{name}] {description}")
         try:
             download_one(url, dest, force=args.force, timeout=args.timeout)
-        except (requests.RequestException, OSError) as exc:
+            # Verify whether or not we just fetched it: a checksum is only set
+            # for immutable-release URLs, and an already-present file is exactly
+            # the case where silent corruption would go unnoticed.
+            if (expected := ds.checksum_parts()) is not None:
+                verify_checksum(dest, expected)
+        except (requests.RequestException, OSError, ChecksumError) as exc:
             print(f"  ✘ FAILED: {exc}")
             failures.append(name)
         print()

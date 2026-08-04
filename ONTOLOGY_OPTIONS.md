@@ -138,7 +138,9 @@ Fisher/FDR engine is unchanged, because everything enters through the
 | `merops` | peptidase families | `DR MEROPS` | implicit |
 | `cazy` | CAZy families | `DR CAZy` | implicit |
 | `disease` | OMIM phenotypes | `DR MIM` (phenotype) | — |
+| `doid` | Disease Ontology | `DR MIM`, re-keyed via `doid.obo` xrefs | `doid.obo` |
 | `orphanet` | rare diseases | `DR Orphanet` | — |
+| `orphanet_doid` | Disease Ontology | `DR Orphanet`, re-keyed via `doid.obo` xrefs | `doid.obo` |
 | `unipathway` | metabolic pathways | `DR UniPathway` | — |
 | `complex` | protein complexes | `DR ComplexPortal` | — |
 | `drugbank` | drugs | `DR DrugBank` | — |
@@ -155,11 +157,18 @@ own `DR GO` lines, which include IEA.
 
 ### What is still missing, and why
 
-HPO, MP and the Disease Ontology proper are **not** UniProt-keyed: HPO annotates
-HGNC genes, MGI annotates mouse genes, and DO/Mondo need a cross-ontology
-mapping from the OMIM/Orphanet ids UniProt does carry. Those need the identifier
-mapping backbone described in `FUTURE_WORK.md` §3 — the only remaining reason to
-build it.
+HPO and MP are **not** UniProt-keyed: HPO annotates HGNC genes and MGI annotates
+mouse genes. Those need the identifier mapping backbone described in
+`FUTURE_WORK.md` §3 — the only remaining reason to build it.
+
+The Disease Ontology *is* now reachable (`doid`, `orphanet_doid`), but by a
+different route: DO carries the cross-ontology mapping itself, as `xref: MIM:`
+and `xref: ORDO:` lines, so re-keying UniProt's own disease cross-references at
+parse time needs no protein-identifier mapping at all — only a term-space
+translation (`src/disease_ontology.py`). Mondo, which dcGO 2023 switched to,
+would work the same way. Note that this is a mapping *through* OMIM/Orphanet, so
+it inherits their coverage: a disease UniProt does not cross-reference, or that
+DO does not cross-reference back, is invisible to it.
 
 Deliberately excluded, though reachable through `xref`:
 

@@ -13,7 +13,10 @@ from loguru import logger
 
 from src.domain_annotation_parser import DomainAnnotationParser
 from src.goa_parser import parse_goa_human
-from src.sparse_fisher import build_sparse_matrices, DomainType
+from src.sparse_fisher import DomainType, build_sparse_matrices
+
+logger.remove()
+logger.add(sys.stderr, level="INFO", format="<level>{message}</level>")
 
 logger.remove()
 logger.add(sys.stderr, level="INFO", format="<level>{message}</level>")

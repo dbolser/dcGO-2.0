@@ -147,7 +147,9 @@ registered in `src/ontology_registry.py`:
 | `merops` | peptidase families | `DR MEROPS` | implicit (`S01.151 → S01 → S`) |
 | `cazy` | CAZy families | `DR CAZy` | implicit (`GT32 → GT`) |
 | `disease` | OMIM phenotypes | `DR MIM` (phenotype) | — |
+| `doid` | Disease Ontology | `DR MIM` re-keyed via `doid.obo` | `doid.obo` |
 | `orphanet` | rare diseases | `DR Orphanet` | — |
+| `orphanet_doid` | Disease Ontology | `DR Orphanet` re-keyed via `doid.obo` | `doid.obo` |
 | `unipathway` | metabolic pathways | `DR UniPathway` | — |
 | `complex` | protein complexes | `DR ComplexPortal` | — |
 | `drugbank` | drugs | `DR DrugBank` | — |
@@ -177,6 +179,48 @@ For an ontology with no hierarchy (`disease`, `rhea`, `xref`, …),
 `--enable-true-path` now **fails with an explicit error** rather than running
 without propagation, and any missing input is reported before the expensive
 stages start.
+
+#### Disease: re-keying OMIM onto the Disease Ontology
+
+OMIM is a catalogue, not an ontology. Its ids have no DAG, and it splits one
+disease across many locus-specific entries, so `--ontology disease` is both
+un-propagatable and badly underpowered. The Human Disease Ontology supplies the
+missing structure: it is an `is_a` DAG *and* it cross-references OMIM
+(`xref: MIM:<id>`) and Orphanet (`xref: ORDO:<id>`).
+
+```bash
+uv run python scripts/download_data.py --datasets disease_ontology
+uv run python run_dcgo_human.py --ontology doid --enable-true-path
+uv run python run_dcgo_human.py --ontology orphanet_doid --enable-true-path
+```
+
+The translation happens **at parse time**, in the protein→term map the Fisher
+engine consumes, so sparse OMIM phenotypes pool into a better-supported DO class
+*before* any test is run; a post-hoc re-labelling of the output could only
+rename terms that had already reached significance. `disease` and `orphanet`
+keep emitting the raw ids, so the two hypothesis universes stay comparable.
+
+The mapping is not one-to-one, and `src/disease_ontology.py` documents (and
+counts, at parse time) what happens to each case: **unmapped** ids are dropped
+but logged with their annotation counts, **one-to-many** ids expand to every DO
+term, and **obsolete** DO terms are skipped unless `replaced_by` resolves. It
+also reports mapping coverage — over distinct ids *and* over protein
+annotations — because a layer that reaches significance by shrinking its own
+term space has not learned anything.
+
+The `disease_ontology` dataset is pinned to an immutable OBO Foundry release
+PURL with a SHA-256 checksum in `config/settings.py`, which
+`scripts/download_data.py` verifies on every run.
+
+**What it actually bought** (human, current UniProt, FDR<0.01): 74% annotation
+coverage, a hierarchy where there was none — 160 True Path annotations, 16
+direct + 144 propagated — and interpretable term labels. It did *not* buy more
+significant associations: 16 for `doid` against 17 for `disease`, on a term
+space shrunk from 6,904 to 4,917 and a protein universe from 5,029 to 3,928.
+Both layers return **0** associations under `--permute-annotations 7`, so
+neither count is an FDR artefact. The remaining sparsity is at the protein level
+(≈0.8 proteins per DO term), which pooling through a hierarchy cannot fix. See
+`TODO.md` for the full before/after table.
 
 > **Note on evidence:** these are UniProt-native *cross-references*, not GO
 > annotations, so there is no IEA/evidence code to filter. (GO is the exception —
@@ -316,18 +360,33 @@ Two independent checks live in `validation/` (see
 ## Development
 
 ```bash
-# Tests (155 tests, ~5 s)
+# Tests (396 tests, ~8 s)
 uv run pytest
 
-# Lint + format (CI uses ruff)
-uv run ruff check src/ tests/
+# Lint + format (the same set CI checks)
+uv run ruff check src/ tests/ config/ scripts/ validation/ \
+    run_dcgo_human.py extract_human_interpro.py
 uv run ruff format --check
 
 # Coverage
 uv run pytest --cov=src --cov-report=html
 ```
 
-CI (`.github/workflows/ci.yml`) runs ruff + pytest on every push and PR.
+CI (`.github/workflows/ci.yml`) runs ruff + pytest on every push and PR, then
+builds the wheel and sdist and smoke-tests the installed `dcgo` CLI.
+
+### Reproducible runs
+
+Every analysis run writes `run_manifest_<ontology>.json` in its output
+directory. The manifest records the SHA-256 (and embedded release header, where
+the format has one) of every input the chosen ontology consumed, the Git
+revision and dirty state, the `uv.lock` hash, the full command line, every
+effective parameter and threshold, runtime metadata, timestamps, summary counts
+and output hashes. A completed run has `"status": "completed"`; an interrupted
+one leaves `"status": "running"` for diagnosis.
+
+See [REPRODUCIBILITY.md](REPRODUCIBILITY.md) for the publication/release
+checklist. Citation metadata is in [CITATION.cff](CITATION.cff).
 
 ---
 
@@ -345,18 +404,17 @@ dcGO-2.0/
 │   ├── vectorized_fisher.py     # Vectorized Fisher's exact test + BH-FDR
 │   ├── sparse_fisher.py         # Sparse contingency-table construction
 │   ├── hierarchical_inference.py    # Supra-domains + shrinkage
-│   ├── ontology_processor.py    # True Path Rule / GO DAG propagation
-│   ├── data_acquisition.py      # (async downloader library — see note below)
-│   └── database_manager.py      # SQLite storage/export helpers
+│   └── ontology_processor.py    # True Path Rule / GO DAG propagation
 ├── config/settings.py           # Dataset URLs + configuration
 ├── tests/                       # unit / integration tests
 ├── validation/                  # validate_results.py (§1) + temporal_benchmark.py (§2)
 └── docs/                        # Reference papers
 ```
 
-> **Note:** `src/data_acquisition.py` is an older async (aiohttp) download
-> library and is **not** on the supported path. Use `scripts/download_data.py`
-> instead — it reads the same URLs from `config/settings.py`.
+> **Downloading data:** use `scripts/download_data.py`, which reads its URLs
+> from `config/settings.py`. An older async (aiohttp) downloader and a SQLite
+> storage layer used to sit in `src/`; both were unreachable from any supported
+> entry point and were removed.
 
 ---
 

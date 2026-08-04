@@ -34,9 +34,11 @@ The human path runs as a sequence of scripts backed by modules in `src/`:
 Key `src/` modules:
 - `annotation_source.py` - `AnnotationSource` abstraction (protein → ontology term). `GAFAnnotationSource` is the GO reference implementation; the seam for adding non-GO ontologies.
 - `ontology_registry.py` - the `--ontology` dispatch table: one `OntologyEntry` per ontology, holding its `AnnotationSource` factory, its ancestors factory (or `None` when it has no hierarchy), and the input files each needs so a run fails early on a missing input. Adding an ontology is one entry here.
+- `disease_ontology.py` - Disease Ontology adapter (`--ontology doid` / `orphanet_doid`). UniProt's disease layer is OMIM/Orphanet ids with no DAG; DO cross-references both (`xref: MIM:`, `xref: ORDO:`), so this re-keys the annotations onto DOID terms **at parse time** — sparse per-locus phenotypes pool into a DO class before the Fisher tests, then propagate up DO's `is_a` DAG. The module docstring states the policy for unmapped / one-to-many / obsolete ids, and every case is counted and logged (`XrefMapping`, `RemapCoverage`).
 - `ec_annotation_source.py` - Enzyme Commission adapter (`run_dcgo_human.py --ontology ec`): parses Expasy `enzyme.dat` (already UniProt-keyed, so no id mapping) and provides `propagate_ec_annotations`/`ec_ancestors` for EC True Path propagation (hierarchy is implicit in the numbering — no OBO). First non-GO ontology on the seam.
 - `uniprot_annotation_source.py` - UniProt-native adapters. Three layers of the Swiss-Prot flat file: `DR` cross-references (`reactome`, `disease`, `orphanet`, `tcdb`, `merops`, `cazy`, `unipathway`, `complex`, `drugbank`, `pharos`, `condensate`, plus `xref --xref-db NAME` for anything else), `KW` keywords, and — new — the layers curated into the entry *body*: `CC SUBCELLULAR LOCATION` (mapped to `SL-` terms via `subcell.txt`), `FT /ligand_id` ChEBI ligands, `CC COFACTOR` ChEBI cofactors and `CC CATALYTIC ACTIVITY` Rhea reactions. UniProt is the protein universe, so all of these are already accession-keyed — no id mapping. Also parses the Reactome/keyword/subcellular hierarchies for True Path propagation.
 - `hierarchy.py` - Shared, ontology-agnostic True Path engine: `closure_ancestors` (child→parents map → transitive-ancestors fn) and `propagate_via_ancestors`, plus the hierarchy *loaders* — `dotted_ancestors` (TCDB), `alpha_prefix_ancestors` (MEROPS/CAZy) and `parse_obo_child_parents` (a light OBO reader used for ChEBI). Everything except GO propagates through this engine (GO keeps its obonet `OntologyProcessor` path, which also does parental-background filtering).
+- `run_manifest.py` - Machine-readable run provenance (`run_manifest_<ontology>.json`): input/output SHA-256s and release headers, Git state, `uv.lock` hash, command line, every parameter and threshold, timestamps and summary counts. Written by `start_run_manifest`/`manifest.complete` in `run_dcgo_human.py`; checklist in `REPRODUCIBILITY.md`.
 - `surprise_score.py` - Ranks *emergent* supra-domain associations: a binomial test of the combination against what its parts already predict, times a redundant-signature penalty, times a novelty discount vs InterPro2GO. Driver: `scripts/rank_surprising_associations.py`; method and results in `SURPRISE_SCORE.md`.
 - `goa_parser.py` - Parses GOA GAF files (protein → GO), with evidence-code filtering. `parse_goa` is the species-agnostic API (`parse_goa_human` is a kept alias).
 - `domain_annotation_parser.py` - Parses `protein2ipr` domain mappings and builds domain architectures.
@@ -44,8 +46,6 @@ Key `src/` modules:
 - `vectorized_fisher.py` - Vectorized Fisher's exact tests (Cython `fisher`) + Benjamini–Hochberg FDR.
 - `hierarchical_inference.py` - Supra-domain generation and the optional `--enable-shrinkage` step. **The step is a heuristic, not empirical Bayes** — it interpolates a supra-domain's log p-value toward its constituents' geometric mean with a hand-set decay `alpha = strength * exp(-n/3)`, which *lowers* 56% of them and nearly triples the FDR<0.01 count. See `VALIDATION_PLAN.md` §4.
 - `ontology_processor.py` - True Path Rule / GO DAG propagation (opt-in).
-- `database_manager.py` - SQLite storage/export helpers.
-- `data_acquisition.py` - Older async (aiohttp) downloader library; **not** on the supported path (use `scripts/download_data.py`).
 
 ## Development Commands
 
@@ -58,14 +58,15 @@ uv sync --group dev  # + dev deps (pytest, ruff, mypy)
 ### Code Quality
 CI (`.github/workflows/ci.yml`) uses ruff:
 ```bash
-uv run ruff check src/ tests/ validation/
+uv run ruff check src/ tests/ config/ scripts/ validation/ \
+    run_dcgo_human.py extract_human_interpro.py
 uv run ruff format --check
 ```
 `mypy` is available via the dev group (`uv run mypy src/`) but is not enforced in CI.
 
 ### Testing
 ```bash
-uv run pytest                          # all tests (417, ~5 s)
+uv run pytest                          # all tests (TESTCOUNT, ~8 s)
 uv run pytest tests/unit -v            # unit tests
 uv run pytest tests/integration -v     # integration tests
 uv run pytest --cov=src --cov-report=html
@@ -82,9 +83,14 @@ uv run python run_dcgo_human.py --num-cores 8 # statistical inference
 uv run python run_dcgo_human.py --num-cores 8 \
     --enable-true-path --go-ontology data/raw/go_ontology/go-basic.obo
 
-# Other ontologies (see src/ontology_registry.py or --help for all 19)
+# Other ontologies (see src/ontology_registry.py or --help for all 21)
 uv run python run_dcgo_human.py --ontology subcellular --enable-true-path
 uv run python run_dcgo_human.py --ontology ligand      # FT /ligand_id (ChEBI)
+uv run python run_dcgo_human.py --ontology doid --enable-true-path  # OMIM re-keyed to DO
+
+# Calibration control: shuffle protein↔term-set assignment; a well-behaved layer
+# returns ~0 significant associations. Writes domain_<ontology>_permuted<seed>_*.
+uv run python run_dcgo_human.py --ontology doid --permute-annotations 7
 
 # Rank the emergent domain-combination predictions
 uv run python scripts/rank_surprising_associations.py --ontology go
@@ -113,7 +119,7 @@ download_data.py → extract_human_interpro.py → run_dcgo_human.py
     goa_parser + domain_annotation_parser
         → sparse_fisher → vectorized_fisher (+ hierarchical_inference)
         → ontology_processor (optional)
-        → results TSV / database_manager
+        → results TSV
 ```
 
 ## Configuration System
@@ -164,15 +170,20 @@ A full multi-organism run would be substantially heavier and is not yet implemen
   on the human t0 run). That is a defect, not a tuning choice.
 - The surprise score re-ranks associations that already passed the dcGO FDR
   filter, using the same proteins — it measures internal consistency of the
-  evidence, not out-of-sample performance.
+  evidence, not out-of-sample performance. It is also **not a total order**: on
+  the GO run 9,923 of 10,136 evaluated associations score exactly 0.000, so any
+  comparison reaching deeper than its ~213 scored associations is comparing an
+  arbitrary tie-break. `validation/temporal_surprise.py` detects this and refuses
+  to quote an interval rather than reporting one — see `SURPRISE_SCORE.md`.
 - Validation covers InterPro2GO coverage (§1, ~65%), a temporal CAFA-style
-  benchmark (§2, `validation/temporal_benchmark.py`) and the §4 ablation with
-  bootstrap CIs and a permutation null (`validation/ablation.py`,
-  `validation/resampling.py`). dcGO clears a 100–200-permutation random-domain
-  null in every cell at the attainable p-floor, and beats the naive **F_max**
-  baseline on informative terms — but **loses to naive on AUPRC** at IC≥0 in all
-  aspects. Still open: score calibration (§5), original-dcGO comparison (§3), an
-  untouched evaluation interval. See `VALIDATION_PLAN.md`.
+  benchmark (§2, `validation/temporal_benchmark.py`), the multi-ontology breadth
+  test (§2, `validation/temporal_breadth.py`) and the §4 ablation with bootstrap
+  CIs and a permutation null (`validation/ablation.py`, `validation/resampling.py`).
+  dcGO clears a 100–200-permutation random-domain null in every cell at the
+  attainable p-floor, and beats the naive **F_max** baseline on informative terms
+  — but **loses to naive on AUPRC** at IC≥0 in all aspects. Still open: score
+  calibration (§5), original-dcGO comparison (§3), an untouched evaluation
+  interval. See `VALIDATION_PLAN.md`.
 
 ## Package Structure
 
@@ -189,18 +200,18 @@ validation/
 src/
 ├── annotation_source.py     # AnnotationSource seam (protein → ontology term)
 ├── ontology_registry.py     # --ontology dispatch table (sources + hierarchies)
+├── disease_ontology.py      # OMIM/Orphanet → DOID re-keying (--ontology doid)
 ├── ec_annotation_source.py  # Enzyme Commission adapter (Expasy enzyme.dat)
 ├── uniprot_annotation_source.py # UniProt-native adapters (DR / KW / CC / FT layers)
 ├── hierarchy.py             # Shared True Path engine (ancestors + propagation + loaders)
+├── run_manifest.py          # Run provenance manifest (see REPRODUCIBILITY.md)
 ├── surprise_score.py        # Emergent supra-domain ranking (see SURPRISE_SCORE.md)
 ├── goa_parser.py            # GOA GAF parsing
 ├── domain_annotation_parser.py  # protein2ipr parsing
 ├── sparse_fisher.py         # Sparse contingency tables
 ├── vectorized_fisher.py     # Fisher's exact tests + BH-FDR
 ├── hierarchical_inference.py    # Supra-domains + shrinkage
-├── ontology_processor.py    # True Path Rule
-├── database_manager.py      # SQLite operations
-└── data_acquisition.py      # Legacy async downloader (unused by supported path)
+└── ontology_processor.py    # True Path Rule
 config/settings.py           # Dataset URLs + configuration
 ```
 
