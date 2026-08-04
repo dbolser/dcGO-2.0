@@ -10,30 +10,30 @@ the same file in both roles (subcellular).
 
 import argparse
 import json
+from pathlib import Path
 
 import pytest
 
-from run_dcgo_human import start_run_manifest
+from run_dcgo_human import build_ontology_paths, start_run_manifest
 from src.ontology_registry import ONTOLOGIES, get_ontology
 
 
 @pytest.fixture
 def fake_inputs(tmp_path):
-    """A stand-in file for every path the runner can resolve."""
+    """A stand-in file for every path the runner can resolve.
+
+    The key set comes from ``build_ontology_paths`` rather than a copy kept
+    here. A hand-maintained copy went stale the first time an ontology was
+    added (``doid``): the guard below then failed for a registry entry that was
+    wired up correctly, which invites fixing the fixture instead of the runner —
+    the opposite of what the guard is for.
+    """
+    template = build_ontology_paths(make_args(tmp_path))
     paths = {}
-    for name, filename in {
-        "gaf": "goa_human.gaf.gz",
-        "go_obo": "go-basic.obo",
-        "enzyme_dat": "enzyme.dat",
-        "uniprot_dat": "uniprot_sprot.dat.gz",
-        "reactome_relations": "ReactomePathwaysRelation.txt",
-        "keywlist": "keywlist.txt",
-        "subcell": "subcell.txt",
-        "chebi_obo": "chebi_lite.obo",
-    }.items():
-        path = tmp_path / filename
-        path.write_text(f"contents of {name}\n", encoding="utf-8")
-        paths[name] = path
+    for name, path in template.items():
+        stand_in = tmp_path / Path(path).name
+        stand_in.write_text(f"contents of {name}\n", encoding="utf-8")
+        paths[name] = stand_in
     return paths
 
 
@@ -50,6 +50,18 @@ def make_args(tmp_path, **overrides):
         num_cores=4,
         batch_size=50000,
         output_dir=tmp_path / "out",
+        # The path options `build_ontology_paths` reads. Values are irrelevant
+        # (the fixture substitutes stand-ins by basename); the *names* are the
+        # point — renaming an option without updating this raises AttributeError
+        # here, which is the drift signal we want.
+        go_ontology=Path("data/raw/go_ontology/go-basic.obo"),
+        enzyme_dat=Path("data/raw/enzyme/enzyme.dat"),
+        uniprot_dat=Path("data/raw/uniprot_sprot_dat/uniprot_sprot.dat.gz"),
+        reactome_relations=Path("data/raw/reactome_relations/rel.txt"),
+        keyword_list=Path("data/raw/uniprot_keywlist/keywlist.txt"),
+        subcell=Path("data/raw/uniprot_subcell/subcell.txt"),
+        chebi_obo=Path("data/raw/chebi/chebi_lite.obo"),
+        doid_obo=Path("data/raw/disease_ontology/doid.obo"),
     )
     defaults.update(overrides)
     return argparse.Namespace(**defaults)

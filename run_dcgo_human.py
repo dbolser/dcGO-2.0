@@ -18,9 +18,11 @@ Options:
     --species STR            Species to analyze: 'human', 'mouse', etc. (default: human)
     --ontology STR           Ontology to associate domains with (default: go). See
                              src/ontology_registry.py, or --help, for the full list:
-                             go, ec, reactome, keyword, disease, orphanet, tcdb, merops,
-                             cazy, unipathway, complex, drugbank, pharos, condensate,
-                             subcellular, ligand, cofactor, rhea, xref
+                             go, ec, reactome, keyword, disease, doid, orphanet,
+                             orphanet_doid, tcdb, merops, cazy, unipathway, complex,
+                             drugbank, pharos, condensate, subcellular, ligand,
+                             cofactor, rhea, xref
+    --doid-obo PATH          Path to doid.obo, used when --ontology doid|orphanet_doid
     --xref-db STR            UniProt DR database name, required when --ontology xref (e.g. KEGG, BRENDA)
     --xref-type STR          Optional DR third-field filter for --ontology xref (e.g. 'phenotype')
     --enzyme-dat PATH        Path to Expasy enzyme.dat, used when --ontology ec
@@ -32,6 +34,7 @@ Options:
     --num-cores INT          Number of CPU cores for parallel processing (default: 8)
     --output-dir PATH        Output directory for results (default: results/)
     --batch-size INT         Batch size for Fisher tests (default: 50000)
+    --permute-annotations N  Calibration control: shuffle protein↔term-set assignment (null run)
     --enable-true-path       True Path propagation (GO via OBO DAG, EC via numbering, reactome/keyword via hierarchy files)
     --go-ontology PATH       Path to GO ontology file (default: data/raw/go_ontology/go-basic.obo)
 
@@ -48,7 +51,8 @@ Examples:
     # UniProt-native vocabularies (all keyed by accession, no id mapping)
     uv run python run_dcgo_human.py --ontology reactome
     uv run python run_dcgo_human.py --ontology keyword
-    uv run python run_dcgo_human.py --ontology disease            # OMIM phenotype (DR MIM)
+    uv run python run_dcgo_human.py --ontology disease            # OMIM phenotype (DR MIM), flat
+    uv run python run_dcgo_human.py --ontology doid --enable-true-path  # same curation, on the DO DAG
     uv run python run_dcgo_human.py --ontology subcellular        # CC SUBCELLULAR LOCATION
     uv run python run_dcgo_human.py --ontology ligand             # FT /ligand_id (ChEBI)
     uv run python run_dcgo_human.py --ontology tcdb               # transporter classification
@@ -198,6 +202,30 @@ def calculate_hypergeometric_score(a: int, b: int, c: int, d: int) -> float:
 
     except (ValueError, OverflowError, ZeroDivisionError):
         return 50.0  # Neutral score for edge cases
+
+
+def build_ontology_paths(args: argparse.Namespace) -> dict:
+    """Resolve every input any ontology might need, keyed as the registry names them.
+
+    One place, so the registry (``src/ontology_registry.py``) is free to say
+    which of these a given ontology actually uses for its annotations and for
+    its hierarchy. An entry whose ``needs`` names a key missing here would fail
+    at run time and, worse, be absent from the run manifest — so
+    ``tests/unit/test_run_manifest_wiring.py`` calls this function to check that
+    every registered ontology is resolvable. That guard is only meaningful while
+    the test reads the keys from *here* rather than keeping its own copy.
+    """
+    return {
+        "gaf": Path(f"data/raw/goa_annotations/goa_{args.species}.gaf.gz"),
+        "go_obo": args.go_ontology,
+        "enzyme_dat": args.enzyme_dat,
+        "uniprot_dat": args.uniprot_dat,
+        "reactome_relations": args.reactome_relations,
+        "keywlist": args.keyword_list,
+        "subcell": args.subcell,
+        "chebi_obo": args.chebi_obo,
+        "doid_obo": args.doid_obo,
+    }
 
 
 def start_run_manifest(
@@ -411,6 +439,26 @@ def main():
         "ligand/cofactor --enable-true-path",
     )
     parser.add_argument(
+        "--doid-obo",
+        type=Path,
+        default=Path("data/raw/disease_ontology/doid.obo"),
+        help="Path to the Human Disease Ontology OBO, for --ontology "
+        "doid/orphanet_doid (supplies both the OMIM/Orphanet cross-references "
+        "used to re-key the annotations and the DAG they propagate up)",
+    )
+    parser.add_argument(
+        "--permute-annotations",
+        type=int,
+        default=None,
+        metavar="SEED",
+        help="Calibration control: shuffle which protein carries which term set "
+        "(within the analysed universe) before testing. Term and per-protein "
+        "annotation marginals are preserved exactly and only the domain↔term "
+        "link is broken, so a correctly calibrated run should return ~0 "
+        "significant associations. Use it to check that a layer's significant "
+        "count reflects signal rather than its hypothesis universe.",
+    )
+    parser.add_argument(
         "--enable-supra-domains",
         action="store_true",
         default=True,
@@ -474,16 +522,7 @@ def main():
     # registry (src/ontology_registry.py) says which of these it actually uses
     # for its annotations and for its hierarchy.
     ontology_entry = get_ontology(args.ontology)
-    ontology_paths = {
-        "gaf": Path(f"data/raw/goa_annotations/goa_{args.species}.gaf.gz"),
-        "go_obo": args.go_ontology,
-        "enzyme_dat": args.enzyme_dat,
-        "uniprot_dat": args.uniprot_dat,
-        "reactome_relations": args.reactome_relations,
-        "keywlist": args.keyword_list,
-        "subcell": args.subcell,
-        "chebi_obo": args.chebi_obo,
-    }
+    ontology_paths = build_ontology_paths(args)
 
     # True Path Rule propagation needs a term hierarchy: GO's OBO DAG, an
     # implicit one in the term ids (EC, TCDB, MEROPS, CAZy), or a companion
@@ -573,6 +612,25 @@ def main():
             f"  Restricted annotations to the domain-annotated universe: "
             f"{annotated_proteins:,} → {len(protein_go_map):,} proteins "
             f"({annotated_proteins - len(protein_go_map):,} dropped, no domain data)"
+        )
+
+    # Calibration control. Comparing two ontology layers by their significant
+    # counts is only meaningful if neither count is manufactured by its
+    # hypothesis universe (test count, term sparsity, marginals). Permuting which
+    # protein carries which term set preserves all of that and destroys only the
+    # domain↔term relationship, so the significant count under permutation is the
+    # layer's own false-positive floor, directly comparable across layers.
+    if args.permute_annotations is not None:
+        rng = np.random.default_rng(args.permute_annotations)
+        proteins = sorted(protein_go_map)
+        donors = [proteins[i] for i in rng.permutation(len(proteins))]
+        protein_go_map = {
+            protein: protein_go_map[donor] for protein, donor in zip(proteins, donors)
+        }
+        logger.warning(
+            "CALIBRATION CONTROL: term sets permuted across "
+            f"{len(proteins):,} proteins (seed {args.permute_annotations}). "
+            "These results are a null, not predictions."
         )
 
     # Build protein-domain map (using lists for compatibility with ontology processor)
@@ -846,7 +904,12 @@ def main():
     # names exactly (domain_go_associations_*.tsv, "go_term" column); EC gets its
     # own files and an "ec_term" column so no consumer of the GO output is affected.
     term_col = f"{ontology_label}_term"
-    assoc_stem = f"domain_{ontology_label}_associations"
+    # A permutation control must never overwrite the real results it is meant to
+    # be compared against.
+    output_label = ontology_label
+    if args.permute_annotations is not None:
+        output_label = f"{ontology_label}_permuted{args.permute_annotations}"
+    assoc_stem = f"domain_{output_label}_associations"
 
     # Export significant associations with hypergeometric scores and domain types
     output_file = args.output_dir / f"{assoc_stem}_significant.tsv"
@@ -917,7 +980,7 @@ def main():
     # Export propagated annotations if True Path Rule was applied
     if propagated_annotations:
         annotations_file = (
-            args.output_dir / f"domain_{ontology_label}_annotations_propagated.tsv"
+            args.output_dir / f"domain_{output_label}_annotations_propagated.tsv"
         )
         with open(annotations_file, "w") as f:
             f.write(

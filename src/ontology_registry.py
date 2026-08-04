@@ -30,6 +30,13 @@ and so need their own extractors (in
 :mod:`src.uniprot_annotation_source`): subcellular location, ChEBI ligands /
 cofactors, and Rhea reactions.
 
+A fourth kind of entry re-keys one of those vocabularies into a *different term
+space* before the statistics see it. ``doid`` / ``orphanet_doid`` take UniProt's
+OMIM and Orphanet disease cross-references and translate them to Disease
+Ontology terms (:mod:`src.disease_ontology`), which is what gives the disease
+layer a hierarchy at all. Note this is a mapping of *terms*, not of proteins —
+the protein key space is still UniProt accessions.
+
 Adding an ontology is now a single :class:`OntologyEntry` — the Fisher/FDR
 engine and the True Path machinery are untouched.
 """
@@ -46,6 +53,7 @@ from src.annotation_source import (
     GAFAnnotationSource,
     OntologySpec,
 )
+from src.disease_ontology import DOID_SPEC, DiseaseOntologyAnnotationSource
 from src.ec_annotation_source import EC_SPEC, ECAnnotationSource, ec_ancestors
 from src.hierarchy import (
     alpha_prefix_ancestors,
@@ -136,6 +144,17 @@ def _chebi_ancestors(paths: Dict[str, Path]) -> AncestorsFn:
     return closure_ancestors(parse_obo_child_parents(paths["chebi_obo"]))
 
 
+def _doid_ancestors(paths: Dict[str, Path]) -> AncestorsFn:
+    """Disease Ontology ``is_a`` closure, for the DOID-keyed disease layers.
+
+    ``doid.obo`` carries no ``relationship:`` lines at all — the disease
+    classification is pure ``is_a`` — so no extra relations are traversed.
+    Obsolete stanzas are excluded (the default), which is what makes the
+    ``replaced_by`` resolution in :mod:`src.disease_ontology` necessary.
+    """
+    return closure_ancestors(parse_obo_child_parents(paths["doid_obo"], relations=()))
+
+
 def _subcell_ancestors(paths: Dict[str, Path]) -> AncestorsFn:
     """Subcellular-location closure over ``subcell.txt`` HI/HP edges."""
     return closure_ancestors(
@@ -216,19 +235,52 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
     "disease": OntologyEntry(
         key="disease",
         spec=DISEASE_SPEC,
-        description="OMIM disease phenotypes (DR MIM, phenotype-typed)",
+        description="OMIM disease phenotypes (DR MIM, phenotype-typed); flat",
         build_source=_dr("MIM", DISEASE_SPEC, id_type="phenotype"),
         needs=("uniprot_dat",),
+    ),
+    # The same UniProt disease curation, re-keyed onto Disease Ontology terms at
+    # parse time. Kept as its own key rather than replacing 'disease': the two
+    # test different hypothesis universes (DO pools OMIM's per-locus entries and
+    # drops what it does not cross-reference), so comparing them requires both
+    # to stay runnable. See src/disease_ontology.py for the mapping policy.
+    "doid": OntologyEntry(
+        key="doid",
+        spec=DOID_SPEC,
+        description="Disease Ontology terms, re-keyed from DR MIM at parse time",
+        build_source=lambda paths, options: DiseaseOntologyAnnotationSource(
+            paths["uniprot_dat"], paths["doid_obo"]
+        ),
+        build_ancestors=_doid_ancestors,
+        needs=("uniprot_dat", "doid_obo"),
+        hierarchy_needs=("doid_obo",),
     ),
     "orphanet": OntologyEntry(
         key="orphanet",
         spec=OntologySpec(ontology_id="Orphanet", name="Orphanet rare disease"),
-        description="Orphanet rare diseases (DR Orphanet)",
+        description="Orphanet rare diseases (DR Orphanet); flat",
         build_source=_dr(
             "Orphanet",
             OntologySpec(ontology_id="Orphanet", name="Orphanet rare disease"),
         ),
         needs=("uniprot_dat",),
+    ),
+    # DO cross-references Orphanet too (xref: ORDO:<id>), so the same machinery
+    # gives the Orphanet layer a hierarchy for the price of a different prefix.
+    "orphanet_doid": OntologyEntry(
+        key="orphanet_doid",
+        spec=DOID_SPEC,
+        description="Disease Ontology terms, re-keyed from DR Orphanet at parse time",
+        build_source=lambda paths, options: DiseaseOntologyAnnotationSource(
+            paths["uniprot_dat"],
+            paths["doid_obo"],
+            database="Orphanet",
+            id_type=None,
+            xref_prefix="ORDO",
+        ),
+        build_ancestors=_doid_ancestors,
+        needs=("uniprot_dat", "doid_obo"),
+        hierarchy_needs=("doid_obo",),
     ),
     "tcdb": OntologyEntry(
         key="tcdb",
