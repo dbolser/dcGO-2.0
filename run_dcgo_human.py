@@ -70,6 +70,7 @@ Examples:
 """
 
 import argparse
+import math
 import sys
 import time
 from dataclasses import dataclass
@@ -239,6 +240,40 @@ def calculate_hypergeometric_score(a: int, b: int, c: int, d: int) -> float:
             "Reporting NaN."
         )
         return float("nan")
+
+
+def odds_ratio_interval(a: int, b: int, c: int, d: int) -> tuple:
+    """Woolf log-interval for the odds ratio, Haldane–Anscombe corrected.
+
+    FDR significance alone can keep biologically fragile associations built on
+    sparse tables — a P1 review item asks for the contingency cells and an
+    odds-ratio interval so a reader can see that fragility instead of inferring
+    it from a bare p-value.
+
+    Method, stated because it is a choice and not the only one: 0.5 is added to
+    every cell when any cell is zero (Haldane–Anscombe), then the interval is
+    ``exp(log OR ± 1.96 × sqrt(1/a + 1/b + 1/c + 1/d))``. This is the standard
+    large-sample interval; it is *not* the exact conditional interval, so on the
+    smallest tables treat it as indicative. `VALIDATION_PLAN.md` §5 carries the
+    open decision about adopting the Haldane-corrected OR as the point estimate
+    too — this changes no existing column.
+
+    Returns ``(low, high)``, or ``(nan, nan)`` when the table is unusable.
+    """
+    if min(a, b, c, d) < 0:
+        return (float("nan"), float("nan"))
+    cells = [a, b, c, d]
+    if min(cells) == 0:
+        cells = [value + 0.5 for value in cells]
+    ca, cb, cc, cd = cells
+    if cb == 0 or cc == 0:
+        return (float("nan"), float("nan"))
+    try:
+        log_or = math.log((ca * cd) / (cb * cc))
+        se = math.sqrt(1 / ca + 1 / cb + 1 / cc + 1 / cd)
+    except (ValueError, ZeroDivisionError, OverflowError):
+        return (float("nan"), float("nan"))
+    return (math.exp(log_or - 1.96 * se), math.exp(log_or + 1.96 * se))
 
 
 def validate_arguments(
@@ -1027,8 +1062,10 @@ def main():
     output_file = args.output_dir / f"{assoc_stem}_significant.tsv"
     with open(output_file, "w") as f:
         f.write(
-            f"domain\t{term_col}\tp_value\tadj_p_value\todds_ratio\thyper_score\t"
-            f"domain_type\tconstituent_domains\tn_observations{xref_header}\n"
+            f"domain\t{term_col}\tp_value\tadj_p_value\todds_ratio\t"
+            f"odds_ratio_ci_low\todds_ratio_ci_high\thyper_score\t"
+            f"domain_type\tconstituent_domains\tn_observations\ta\tb\tc\td"
+            f"{xref_header}\n"
         )
         for idx in significant_indices:
             domain_idx = idx // len(go_list)
@@ -1047,10 +1084,14 @@ def main():
                 ",".join(meta.constituent_domains) if meta.constituent_domains else "-"
             )
 
+            or_low, or_high = odds_ratio_interval(a, b, c, d)
+
             f.write(
                 f"{domain_id}\t{go_list[go_idx]}\t"
-                f"{pvalues[idx]:.6e}\t{adjusted_pvalues[idx]:.6e}\t{odds_ratios[idx]:.4f}\t{hyper_score:.2f}\t"
-                f"{meta.domain_type.value}\t{constituents}\t{meta.observation_count}"
+                f"{pvalues[idx]:.6e}\t{adjusted_pvalues[idx]:.6e}\t{odds_ratios[idx]:.4f}\t"
+                f"{or_low:.4f}\t{or_high:.4f}\t{hyper_score:.2f}\t"
+                f"{meta.domain_type.value}\t{constituents}\t{meta.observation_count}\t"
+                f"{a}\t{b}\t{c}\t{d}"
                 f"{xref_field(domain_id)}\n"
             )
 
