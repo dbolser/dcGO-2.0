@@ -59,8 +59,10 @@ Both were part of the original dcGO Predictor and had been dropped; restoring th
 was worth more than any parameter ablation. They are **complementary**:
 
 - **Per-target p-score** (now the default transfer) is the broad protein-centric
-  lever — it lifts F_max/AUPRC across the board and puts dcGO above naive at IC≥0
-  on BP and CC.
+  lever — it lifts dcGO's own F_max/AUPRC across the board relative to `max`
+  transfer, and puts dcGO above naive at IC≥0 on BP and CC **on F_max**. It does
+  not put dcGO above naive on AUPRC, which naive still wins at IC≥0 in all three
+  aspects; see the AUPRC note in `VALIDATION_PLAN.md` §2.
 - **Relative (parental-background) inference** barely moves protein-centric F_max
   but earns its keep on the **domain-centric** metric: scored directly against
   InterPro2GO it raises association precision **0.218 → 0.253** (recall 0.63 →
