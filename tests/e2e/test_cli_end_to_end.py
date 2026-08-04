@@ -42,10 +42,17 @@ EXPECTED_COLUMNS = [
     "p_value",
     "adj_p_value",
     "odds_ratio",
+    "odds_ratio_ci_low",
+    "odds_ratio_ci_high",
     "hyper_score",
     "domain_type",
     "constituent_domains",
     "n_observations",
+    # The contingency cells, so any association can be recomputed from its row.
+    "a",
+    "b",
+    "c",
+    "d",
 ]
 
 #: Carried by exactly the GO:0000001-annotated proteins — the pair that must be found.
@@ -214,6 +221,14 @@ class TestOutputSchema:
             assert 0.0 <= float(row["hyper_score"]) <= 100.0
             assert row["domain_type"] in {"single", "supra_pair", "supra_triple"}
             assert int(row["n_observations"]) > 0
+            for cell in ("a", "b", "c", "d"):
+                assert int(row[cell]) >= 0
+            # An interval, not a point: low <= high, or both NaN.
+            low, high = (
+                float(row["odds_ratio_ci_low"]),
+                float(row["odds_ratio_ci_high"]),
+            )
+            assert (low <= high) or (low != low and high != high)
 
     def test_q_values_are_never_smaller_than_p_values(
         self, completed_run: tuple[subprocess.CompletedProcess, Path]

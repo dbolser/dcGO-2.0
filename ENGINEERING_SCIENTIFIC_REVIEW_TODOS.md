@@ -159,9 +159,13 @@ yet establish robust general performance, calibration, or superiority.
   them against standard tooling.
 - [ ] Report sensitivity to evidence filters, FDR threshold, minimum domain
   support, effect-size floor, supra-domain length, GO release, and transfer rule.
-- [ ] Introduce and justify a minimum-support/effect-size policy. FDR significance
+- [~] Introduce and justify a minimum-support/effect-size policy. FDR significance
   alone can retain biologically fragile associations from sparse tables. Report
   contingency cells and odds-ratio confidence intervals.
+  *(Cells `a/b/c/d` and a Haldane-corrected Woolf odds-ratio interval are now
+  exported per association, so fragility is visible and every row is
+  recomputable. The **policy** — an actual minimum-support or effect-size
+  cutoff — is still an open method decision, tracked in VALIDATION_PLAN §5.)*
 - [ ] Treat InterPro2GO recovery strictly as coverage/recall against an incomplete
   positive reference. It does not measure precision or constitute fully
   independent validation.

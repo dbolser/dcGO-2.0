@@ -115,3 +115,55 @@ class TestHypergeometricScoreFailureValue:
     def test_a_real_table_scores_in_range(self) -> None:
         score = calculate_hypergeometric_score(30, 5, 5, 200)
         assert 1.0 <= score <= 100.0
+
+
+class TestOddsRatioInterval:
+    """The interval published beside each association's contingency cells."""
+
+    def test_brackets_the_point_estimate(self) -> None:
+        from run_dcgo_human import odds_ratio_interval
+
+        a, b, c, d = 30, 5, 5, 200
+        low, high = odds_ratio_interval(a, b, c, d)
+        point = (a * d) / (b * c)
+        assert low < point < high
+
+    def test_a_sparse_table_gives_a_wide_interval(self) -> None:
+        """The whole point: FDR significance alone hides fragility."""
+        from run_dcgo_human import odds_ratio_interval
+
+        sparse_low, sparse_high = odds_ratio_interval(2, 1, 1, 100)
+        dense_low, dense_high = odds_ratio_interval(200, 100, 100, 10000)
+        # Same odds ratio, two orders of magnitude apart in support.
+        assert (sparse_high / sparse_low) > (dense_high / dense_low)
+
+    def test_zero_cell_is_haldane_corrected_not_infinite(self) -> None:
+        from run_dcgo_human import odds_ratio_interval
+
+        low, high = odds_ratio_interval(10, 0, 5, 100)
+        assert math.isfinite(low) and math.isfinite(high)
+        assert low > 0
+
+    def test_negative_cells_are_nan(self) -> None:
+        from run_dcgo_human import odds_ratio_interval
+
+        low, high = odds_ratio_interval(-1, 5, 5, 100)
+        assert math.isnan(low) and math.isnan(high)
+
+    def test_cells_reconstruct_the_reported_odds_ratio(self) -> None:
+        """Publishing a/b/c/d is only useful if they reproduce the row.
+
+        `fisher_exact_vectorized_batch` computes the odds ratio as (a*d)/(b*c);
+        a reader recomputing from the exported cells must land on the same
+        number, or the columns are decoration.
+        """
+        import numpy as np
+
+        from src.vectorized_fisher import fisher_exact_vectorized_batch
+
+        tables = np.array([[[30, 5], [5, 200]], [[7, 2], [3, 88]]], dtype=np.int32)
+        odds_ratios, _pvalues = fisher_exact_vectorized_batch(tables)
+        for table, reported in zip(tables, odds_ratios):
+            a, b = int(table[0, 0]), int(table[0, 1])
+            c, d = int(table[1, 0]), int(table[1, 1])
+            assert (a * d) / (b * c) == pytest.approx(reported)
