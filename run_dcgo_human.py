@@ -204,6 +204,30 @@ def calculate_hypergeometric_score(a: int, b: int, c: int, d: int) -> float:
         return 50.0  # Neutral score for edge cases
 
 
+def build_ontology_paths(args: argparse.Namespace) -> dict:
+    """Resolve every input any ontology might need, keyed as the registry names them.
+
+    One place, so the registry (``src/ontology_registry.py``) is free to say
+    which of these a given ontology actually uses for its annotations and for
+    its hierarchy. An entry whose ``needs`` names a key missing here would fail
+    at run time and, worse, be absent from the run manifest — so
+    ``tests/unit/test_run_manifest_wiring.py`` calls this function to check that
+    every registered ontology is resolvable. That guard is only meaningful while
+    the test reads the keys from *here* rather than keeping its own copy.
+    """
+    return {
+        "gaf": Path(f"data/raw/goa_annotations/goa_{args.species}.gaf.gz"),
+        "go_obo": args.go_ontology,
+        "enzyme_dat": args.enzyme_dat,
+        "uniprot_dat": args.uniprot_dat,
+        "reactome_relations": args.reactome_relations,
+        "keywlist": args.keyword_list,
+        "subcell": args.subcell,
+        "chebi_obo": args.chebi_obo,
+        "doid_obo": args.doid_obo,
+    }
+
+
 def start_run_manifest(
     args: argparse.Namespace,
     *,
@@ -498,17 +522,7 @@ def main():
     # registry (src/ontology_registry.py) says which of these it actually uses
     # for its annotations and for its hierarchy.
     ontology_entry = get_ontology(args.ontology)
-    ontology_paths = {
-        "gaf": Path(f"data/raw/goa_annotations/goa_{args.species}.gaf.gz"),
-        "go_obo": args.go_ontology,
-        "enzyme_dat": args.enzyme_dat,
-        "uniprot_dat": args.uniprot_dat,
-        "reactome_relations": args.reactome_relations,
-        "keywlist": args.keyword_list,
-        "subcell": args.subcell,
-        "chebi_obo": args.chebi_obo,
-        "doid_obo": args.doid_obo,
-    }
+    ontology_paths = build_ontology_paths(args)
 
     # True Path Rule propagation needs a term hierarchy: GO's OBO DAG, an
     # implicit one in the term ids (EC, TCDB, MEROPS, CAZy), or a companion
