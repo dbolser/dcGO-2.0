@@ -386,31 +386,31 @@ synthetic split (mirror the §1 test approach — pure functions, tiny fixtures)
 
 ---
 
-### Breadth: does the predictive signal hold beyond GO? (2026-07-28) — **NUMBERS SUPERSEDED, RE-RUN IN PROGRESS**
+### Breadth: does the predictive signal hold beyond GO? (2026-08-04, corrected) — DONE
 
-> **Every non-GO row in the table below is provisional and should not be cited.**
-> The t0 association tables these were scored against were produced before
-> `restrict_to_universe` (2026-08-04). Until then, a `--species human` run of a
-> UniProt-native ontology built its contingency tables over the whole of
-> Swiss-Prot rather than the human proteome, because `protein2ipr` is extracted
-> per species but `uniprot_sprot.dat` is not. The measured inflation, per
-> ontology:
+> **These numbers replace the 2026-07-28 table, which was wrong.** The earlier
+> run scored association tables built before `restrict_to_universe` (#26), when
+> a `--species human` run of a UniProt-native ontology built its contingency
+> tables over the whole of Swiss-Prot rather than the human proteome —
+> `protein2ipr` is extracted per species, `uniprot_sprot.dat` is not. The
+> t0 universes were inflated 3–70×, and every non-GO association set was
+> substantially wrong:
 >
-> | Ontology | universe before | universe after | non-human rows dropped |
-> | --- | ---: | ---: | ---: |
-> | reactome | 39,418 | 11,320 | 28,098 |
-> | subcellular | 361,976 | 16,750 | 345,226 |
+> | Ontology | t0 universe before | after | t0 associations before | after |
+> | --- | ---: | ---: | ---: | ---: |
+> | reactome | 35,849 | 10,736 | 93,172 | 59,426 |
+> | keyword | 555,986 | 18,797 | 166,924 | 83,739 |
+> | subcellular | ~362k | 16,750 | 22,106 | 10,867 |
+> | complex | — | — | 4,482 | 1,385 |
+> | cofactor | ~124k | 1,801 | 2,284 | 1,725 |
+> | disease | — | — | 53 | 53 |
+> | **go** (anchor) | 18,735 | 18,382 | 164,549 | 163,277 |
 >
-> Those extra proteins entered every contingency table as domain-negative
-> observations. Re-running `reactome` with the fix takes it from 109,589 to
-> 67,672 significant associations — a 38% reduction — so the association *sets*
-> scored here are substantially wrong.
->
-> `temporal_breadth.py` builds its own universe correctly, so its arithmetic is
-> sound and the **go** row is very close to unaffected (GOA is already
-> species-specific; the correction there is 19,089 → 18,909 proteins, 0.9%).
-> What is wrong is the input: which associations were significant enough to be
-> tested. Tracked as the "redo the breadth validation" item.
+> **The contamination was suppressing the signal, not creating it.** Every
+> enrichment below is *higher* than the superseded figure. GO is the control
+> that shows the correction is real rather than a change of protocol: GOA is
+> already species-specific, so its universe moves 1.9% and its enrichment does
+> not move at all (11.3× → 11.5×).
 
 `validation/temporal_breadth.py` applies the §2 split to the ontologies added in
 `src/ontology_registry.py`. One archived Swiss-Prot release (**2021_02**,
@@ -426,33 +426,46 @@ the anchor — without it, "weaker than GO" could not be said, because the 12.5�
 figure came from a different subset (supra-domains only) and a stricter truth
 (experimental evidence only).
 
-| Ontology | assoc. | predictions | hits | hit rate | expected | enrichment (95% CI) |
-| --- | ---: | ---: | ---: | ---: | ---: | --- |
-| **go** (anchor) | 92,377 | 3,139,544 | 106,816 | 3.40% | 0.30% | **11.3× [10.9, 11.8]** |
-| reactome | 54,685 | 1,487,359 | 2,056 | 0.14% | 0.02% | **8.0× [6.7, 9.6]** |
-| cofactor | 363 | 1,744 | 221 | 12.67% | 3.97% | **3.2× [1.7, 4.0]** |
-| subcellular | 13,373 | 507,262 | 7,005 | 1.38% | 0.49% | **2.9× [2.7, 3.0]** |
-| keyword | 85,323 | 2,619,504 | 35,350 | 1.35% | 0.79% | **1.7× [1.6, 1.8]** |
-| complex | 3,606 | 31,076 | 24 | 0.08% | ~0% | *degenerate, see below* |
-| disease | 44 | 369 | 0 | 0% | ~0% | *undefined* |
-| ligand | — | — | — | — | — | *not testable, see below* |
+| Ontology | assoc. | predictions | hits | hit rate | expected | enrichment (95% CI) | superseded |
+| --- | ---: | ---: | ---: | ---: | ---: | --- | ---: |
+| **go** (anchor) | 91,830 | 3,106,234 | 106,224 | 3.42% | 0.30% | **11.5× [11.1, 12.0]** | 11.3× |
+| reactome | 34,397 | 760,073 | 1,430 | 0.19% | 0.02% | **11.4× [8.9, 14.6]** | 8.0× |
+| cofactor | 291 | 1,404 | 235 | 16.74% | 4.72% | **3.5× [2.1, 4.5]** | 3.2× |
+| subcellular | 6,340 | 172,679 | 3,798 | 2.20% | 0.59% | **3.7× [3.5, 3.9]** | 2.9× |
+| keyword | 35,981 | 889,117 | 13,140 | 1.48% | 0.44% | **3.4× [3.2, 3.6]** | 1.7× |
+| complex | 958 | 9,904 | 2 | 0.02% | ~0% | *artefact, see below* | 265× |
+| disease | 27 | 90 | 0 | 0% | ~0% | *undefined* | undefined |
+| ligand | — | — | — | — | — | *not testable, see below* | — |
 
 (In-scope universe where it differs from all-domains; keyword and GO annotate
 essentially every protein, so the two coincide.)
 
-**The signal generalises.** Every ontology with enough data enriches above 1
-with the interval excluding it — dcGO's association-finding is not a GO artefact.
-GO remains strongest and Reactome follows; the ordering tracks how structured and
-curated the vocabulary is. Keywords come last because 720 near-universal terms
-sit at a 0.79% base rate, leaving little headroom.
+**The signal generalises, and Reactome is no longer behind GO.** Every ontology
+with enough data enriches above 1 with the interval excluding it — dcGO's
+association-finding is not a GO artefact. The correction changes one conclusion
+outright: Reactome at **11.4× [8.9, 14.6]** now overlaps GO at **11.5×
+[11.1, 12.0]**, so the earlier "GO remains strongest and Reactome follows" is
+not supported. Reactome's interval is much wider (1,430 hits against GO's
+106,224), so the honest statement is that the two are *indistinguishable at this
+power*, not that Reactome matches GO.
+
+The remaining ordering — subcellular 3.7×, keyword 3.4×, cofactor 3.5× — is a
+band well clear of 1 but well below the two pathway/function vocabularies.
+Keywords are no longer the outlier they appeared to be (1.7× → 3.4×): that gap
+was contamination, not a property of the vocabulary. Their base rate is still
+the highest of any layer (0.44%), which is what caps the achievable ratio.
 
 **Three results that must not be quoted at face value:**
 
-- **`complex` is a degenerate ratio, not a 265× triumph.** ComplexPortal averages
-  ~1.5 proteins per complex, so the base rate rounds to zero and any hit at all
-  divides by nearly nothing. 24 hits. The interval excludes 1, so signal exists;
-  the *magnitude* is uninterpretable. Report as "detectable, magnitude
-  meaningless".
+- **`complex` was an artefact, and the correction exposed it.** The superseded
+  run reported 265× on 24 hits and an interval excluding 1, which was already
+  flagged as a degenerate ratio (ComplexPortal averages ~1.5 proteins per
+  complex, so the base rate rounds to zero and any hit divides by nearly
+  nothing). With the contaminating proteins removed it falls to **2 hits** on
+  9,904 predictions and the interval becomes **[0.00, 130.93]** — it now
+  includes zero. There is no demonstrated signal in this layer at all. The
+  earlier "detectable, magnitude meaningless" was too generous: it was not
+  detectable either.
 - **`disease` scored 0 hits on 369 predictions** — no signal, and enrichment is
   undefined because expected hits ≈ 0 as well. This is the 53-association t0 run
   playing out as predicted: 6,904 OMIM phenotypes over 5,029 proteins is too thin
@@ -475,7 +488,7 @@ sit at a 0.79% base rate, leaving little headroom.
 - **No evidence filter exists off GO.** GO trains on non-IEA and scores against
   experimental only; the UniProt layers have no such split, so an automated
   annotation added between snapshots counts as a hit. The anchor row bounds how
-  much that matters: GO scores **11.3×** under the loose protocol against
+  much that matters: GO scores **11.5×** under the loose protocol against
   **12.5×** under the strict one, i.e. the looser truth did not inflate GO — but
   that is one ontology's worth of reassurance, not a general guarantee.
 - Same look-ahead caveat as §2: architectures come from the current
