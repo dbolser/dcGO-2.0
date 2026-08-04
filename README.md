@@ -360,7 +360,7 @@ Two independent checks live in `validation/` (see
 ## Development
 
 ```bash
-# Tests (396 tests, ~8 s)
+# Tests (525 tests, ~8 s)
 uv run pytest
 
 # Lint + format (the same set CI checks)

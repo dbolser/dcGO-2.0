@@ -66,7 +66,7 @@ uv run ruff format --check
 
 ### Testing
 ```bash
-uv run pytest                          # all tests (TESTCOUNT, ~8 s)
+uv run pytest                          # all tests (525, ~8 s)
 uv run pytest tests/unit -v            # unit tests
 uv run pytest tests/integration -v     # integration tests
 uv run pytest --cov=src --cov-report=html
