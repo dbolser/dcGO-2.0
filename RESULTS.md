@@ -13,8 +13,9 @@ test), **dcGO beats the naive frequency baseline on F_max at face value in BP an
 CC**, and beats it in **every aspect once uninformative terms are excluded**,
 while staying **1.3–25× above the random-domain null**. Molecular Function is the
 one aspect where naive leads at face value — because its "truth" is dominated by a
-single near-universal term (`protein binding`, 84.6% of experimental MF
-annotations) — and dcGO overtakes it decisively the moment that noise is removed.
+single near-universal term (`protein binding`: 84.6% of experimental MF
+annotation lines, carried by 87.7% of annotated proteins, and the *only* MF
+term for 34.5% of them — see `validation/protein_binding_dominance.py`) — and dcGO overtakes it decisively the moment that noise is removed.
 
 **This headline is about F_max only.** On AUPRC, from the same run, naive leads
 in all three aspects at IC≥0 and in CC at IC≥2 and IC≥4 as well
