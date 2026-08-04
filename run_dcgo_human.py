@@ -34,7 +34,7 @@ Options:
                              signature, the published dcGO's domain universe)
     --evidence-filter STR    Evidence code filter: 'all', 'manual', 'experimental' (default: manual)
     --fdr-threshold FLOAT    FDR significance threshold (default: 0.01)
-    --num-cores INT          Number of CPU cores for parallel processing (default: 8)
+    --num-cores INT          Accepted for compatibility; the Fisher stage is in-process Cython (default: 8)
     --output-dir PATH        Output directory for results (default: results/)
     --batch-size INT         Batch size for Fisher tests (default: 50000)
     --permute-annotations N  Calibration control: shuffle protein↔term-set assignment (null run)
@@ -182,12 +182,25 @@ def calculate_hypergeometric_score(a: int, b: int, c: int, d: int) -> float:
         d: Proteins with neither
 
     Returns:
-        float: Association score between 1.0 and 100.0
+        float: Association score between 1.0 and 100.0, or NaN when the score
+        could not be computed. NaN is deliberate: this column is exported and
+        read downstream, so a numerical failure must be visibly missing rather
+        than a plausible mid-range number. It used to return 50.0 here, which is
+        indistinguishable from a genuine medium-confidence association.
     """
     n = a + b + c + d  # total proteins
     k = a + c  # proteins with domain
     m = a + b  # proteins with GO term
     x = a  # proteins with both
+
+    # A contingency cell cannot be negative. Reject rather than hand the values
+    # to hypergeom, which returns NaN for them without raising — see below.
+    if min(a, b, c, d) < 0:
+        logger.warning(
+            f"Hypergeometric score: negative contingency cell "
+            f"(a={a} b={b} c={c} d={d}). Reporting NaN."
+        )
+        return float("nan")
 
     if k == 0 or m == 0 or x == 0:
         return 0.0
@@ -197,18 +210,69 @@ def calculate_hypergeometric_score(a: int, b: int, c: int, d: int) -> float:
         # P(X ≥ x) where X ~ Hypergeometric(n, k, m)
         p_hyper = hypergeom.sf(x - 1, n, k, m)
 
-        if p_hyper > 0 and not np.isnan(p_hyper):
+        # NaN and zero must not share a branch. `scipy.stats.hypergeom.sf`
+        # returns NaN for invalid parameters *without raising*, so folding NaN
+        # into the "p is too small to represent" case reported the maximum
+        # score, 100.0, for a table that could not be evaluated at all — the
+        # loudest possible answer to an unanswerable question.
+        if np.isnan(p_hyper):
+            logger.warning(
+                f"Hypergeometric score is NaN for a={a} b={b} c={c} d={d}. "
+                "Reporting NaN."
+            )
+            return float("nan")
+
+        if p_hyper > 0:
             # Convert to -log10 scale
             score = -np.log10(p_hyper)
             # Scale to 1-100 range (typical values 1e-50 to 1e-1 give scores 1-500)
-            scaled_score = min(100.0, max(1.0, score * 10))
-        else:
-            scaled_score = 100.0  # Maximum score for p ≈ 0
+            return float(min(100.0, max(1.0, score * 10)))
 
-        return scaled_score
+        # A genuine underflow to exactly 0: the association is as strong as this
+        # scale can express.
+        return 100.0
 
-    except (ValueError, OverflowError, ZeroDivisionError):
-        return 50.0  # Neutral score for edge cases
+    except (ValueError, OverflowError, ZeroDivisionError) as exc:
+        # Explicitly missing, not "neutral". See the Returns note above.
+        logger.warning(
+            f"Hypergeometric score failed for a={a} b={b} c={c} d={d}: {exc}. "
+            "Reporting NaN."
+        )
+        return float("nan")
+
+
+def validate_arguments(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> None:
+    """Reject nonsensical parameters before the expensive stages start.
+
+    argparse checks types, not ranges. Without this an ``--fdr-threshold 5``
+    accepts every test as significant, a ``--shrinkage-strength 2`` extrapolates
+    past the prior instead of interpolating toward it, and a non-positive
+    ``--batch-size`` makes the progress callback divide by zero — each of them an
+    hour into a run, or worse, silently. ``parser.error`` exits 2 with usage,
+    which is what a caller checking the exit status expects.
+    """
+    if not 0.0 < args.fdr_threshold <= 1.0:
+        parser.error(
+            f"--fdr-threshold must be in (0, 1], got {args.fdr_threshold}. "
+            "A threshold above 1 calls every test significant."
+        )
+    if args.batch_size <= 0:
+        parser.error(f"--batch-size must be positive, got {args.batch_size}")
+    if args.num_cores <= 0:
+        parser.error(f"--num-cores must be positive, got {args.num_cores}")
+    if not 0.0 <= args.shrinkage_strength <= 1.0:
+        parser.error(
+            f"--shrinkage-strength must be in [0, 1], got "
+            f"{args.shrinkage_strength}. Outside that range the p-value is "
+            "extrapolated past the prior rather than interpolated toward it."
+        )
+    if not args.species or "/" in args.species:
+        parser.error(
+            f"--species must be a bare name used in the input filenames, got "
+            f"{args.species!r}"
+        )
 
 
 def build_ontology_paths(args: argparse.Namespace) -> dict:
@@ -353,7 +417,12 @@ def main():
         help="FDR significance threshold (default: 0.01)",
     )
     parser.add_argument(
-        "--num-cores", type=int, default=8, help="Number of CPU cores (default: 8)"
+        "--num-cores",
+        type=int,
+        default=8,
+        help="Retained for compatibility with existing scripts and the HPC "
+        "batch file. The Fisher stage is compiled Cython and runs in-process, "
+        "so this currently has no effect on runtime (default: 8)",
     )
     parser.add_argument(
         "--output-dir",
@@ -500,6 +569,8 @@ def main():
 
     args = parser.parse_args()
 
+    validate_arguments(args, parser)
+
     # Validate the arbitrary-cross-reference selection and derive a short label
     # used for logging, the term column, and output filenames. For everything
     # except 'xref' the label is the ontology name (so 'go' stays byte-identical);
@@ -525,7 +596,12 @@ def main():
     logger.info(f"  Domain key: {args.domain_key}")
     logger.info(f"  Evidence filter: {args.evidence_filter}")
     logger.info(f"  FDR threshold: {args.fdr_threshold}")
-    logger.info(f"  CPU cores: {args.num_cores}")
+    # Not "CPU cores: N". The Fisher stage is compiled Cython (fisher.pvalue_npy)
+    # and runs in-process; --num-cores has no effect on it. Advertising a core
+    # count the run does not use is the kind of overstatement the review flagged.
+    logger.info(
+        f"  CPU cores requested: {args.num_cores} (Fisher stage is single-process)"
+    )
     logger.info(
         f"  Supra-domains: {'ENABLED' if args.enable_supra_domains else 'DISABLED'}"
     )
@@ -735,7 +811,7 @@ def main():
     logger.info("")
     logger.info("STAGE 4: Running Fisher's Exact Tests")
     logger.info("─" * 70)
-    logger.info(f"Processing {len(tables):,} tests with {args.num_cores} cores...")
+    logger.info(f"Processing {len(tables):,} tests (vectorized Cython, in-process)...")
     start_time = time.time()
 
     # Progress callback
