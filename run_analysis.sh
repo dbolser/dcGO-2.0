@@ -1,168 +1,147 @@
 #!/usr/bin/env bash
 #
-# Comprehensive dcGO Pipeline Comparison
-# Runs all meaningful configuration combinations for validation
+# Run the pipeline across its configuration space, for side-by-side comparison.
 #
+# Each configuration writes a full result set (plus its provenance manifest)
+# into its own directory under a timestamped analysis directory, so the
+# configurations can be diffed against each other afterwards.
+#
+# NOTE: this produces association tables, not evaluation metrics. To score the
+# configurations against held-out annotation, feed the resulting
+# `domain_go_associations_significant.tsv` files to
+# `validation/temporal_benchmark.py --predictions ...`.
+#
+set -euo pipefail
 
-set -e  # Exit on error
+CORES="${CORES:-8}"
+SPECIES="${SPECIES:-human}"
+# Full runs are memory-hungry (contingency-table construction dominates), so
+# they are throttled rather than all launched at once as this script used to.
+JOBS="${JOBS:-2}"
+GO_OBO="${GO_OBO:-data/raw/go_ontology/go-basic.obo}"
 
-CORES=8
-SPECIES="human"
+# Configuration name, then the flags that define it. The pipeline's defaults are
+# supra-domains ON, True Path OFF, shrinkage OFF, so "disabling" True Path or
+# shrinkage means omitting their flags — there are deliberately no
+# --disable-true-path / --disable-shrinkage options, and earlier versions of
+# this script passed both, which made every configuration fail immediately.
+CONFIGS=(
+  "01_baseline|--disable-supra-domains"
+  "02_true_path_only|--disable-supra-domains --enable-true-path --go-ontology ${GO_OBO}"
+  "03_supra_only|"
+  "04_supra_true_path|--enable-true-path --go-ontology ${GO_OBO}"
+  "05_supra_shrinkage|--enable-shrinkage --shrinkage-strength 0.5"
+  "06_full_dcgo_05|--enable-true-path --go-ontology ${GO_OBO} --enable-shrinkage --shrinkage-strength 0.5"
+  "07_full_dcgo_07|--enable-true-path --go-ontology ${GO_OBO} --enable-shrinkage --shrinkage-strength 0.7"
+  "08_full_dcgo_03|--enable-true-path --go-ontology ${GO_OBO} --enable-shrinkage --shrinkage-strength 0.3"
+)
+
+INTERPRO="data/interim/protein2ipr_${SPECIES}.dat.gz"
+GAF="data/raw/goa_annotations/goa_${SPECIES}.gaf.gz"
 
 echo "=========================================="
 echo "  dcGO Pipeline Configuration Comparison"
 echo "=========================================="
-echo ""
-echo "Running 8 configuration combinations..."
-echo "Cores: $CORES"
-echo "Species: $SPECIES"
-echo ""
-
-# Create timestamp for this analysis run
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-ANALYSIS_DIR="analysis_${TIMESTAMP}"
-mkdir -p "$ANALYSIS_DIR"
-
-# Configuration 1: Baseline (single domains only, no true path)
-echo "[1/8] Running BASELINE (single domains only, no true path)..."
-uv run python run_dcgo_human.py \
-  --species "$SPECIES" \
-  --disable-supra-domains \
-  --disable-true-path \
-  --num-cores "$CORES" \
-  --output-dir "$ANALYSIS_DIR/01_baseline" \
-  > "$ANALYSIS_DIR/01_baseline.log" 2>&1 &
-PID1=$!
-
-# Configuration 2: True path only (single domains)
-echo "[2/8] Running TRUE PATH ONLY (single domains)..."
-uv run python run_dcgo_human.py \
-  --species "$SPECIES" \
-  --disable-supra-domains \
-  --enable-true-path \
-  --num-cores "$CORES" \
-  --output-dir "$ANALYSIS_DIR/02_true_path_only" \
-  > "$ANALYSIS_DIR/02_true_path_only.log" 2>&1 &
-PID2=$!
-
-# Configuration 3: Supra-domains only (no true path, no shrinkage)
-echo "[3/8] Running SUPRA-DOMAINS ONLY (no true path, no shrinkage)..."
-uv run python run_dcgo_human.py \
-  --species "$SPECIES" \
-  --enable-supra-domains \
-  --disable-true-path \
-  --disable-shrinkage \
-  --num-cores "$CORES" \
-  --output-dir "$ANALYSIS_DIR/03_supra_only" \
-  > "$ANALYSIS_DIR/03_supra_only.log" 2>&1 &
-PID3=$!
-
-# Configuration 4: Supra-domains + true path (no shrinkage)
-echo "[4/8] Running SUPRA-DOMAINS + TRUE PATH (no shrinkage)..."
-uv run python run_dcgo_human.py \
-  --species "$SPECIES" \
-  --enable-supra-domains \
-  --enable-true-path \
-  --disable-shrinkage \
-  --num-cores "$CORES" \
-  --output-dir "$ANALYSIS_DIR/04_supra_true_path" \
-  > "$ANALYSIS_DIR/04_supra_true_path.log" 2>&1 &
-PID4=$!
-
-# Configuration 5: Supra-domains + shrinkage (no true path)
-echo "[5/8] Running SUPRA-DOMAINS + SHRINKAGE (no true path)..."
-uv run python run_dcgo_human.py \
-  --species "$SPECIES" \
-  --enable-supra-domains \
-  --disable-true-path \
-  --enable-shrinkage \
-  --shrinkage-strength 0.5 \
-  --num-cores "$CORES" \
-  --output-dir "$ANALYSIS_DIR/05_supra_shrinkage" \
-  > "$ANALYSIS_DIR/05_supra_shrinkage.log" 2>&1 &
-PID5=$!
-
-# Configuration 6: Full dcGO (supra + true path + shrinkage, strength=0.5)
-echo "[6/8] Running FULL DCGO (supra + true path + shrinkage 0.5)..."
-uv run python run_dcgo_human.py \
-  --species "$SPECIES" \
-  --enable-supra-domains \
-  --enable-true-path \
-  --enable-shrinkage \
-  --shrinkage-strength 0.5 \
-  --num-cores "$CORES" \
-  --output-dir "$ANALYSIS_DIR/06_full_dcgo_05" \
-  > "$ANALYSIS_DIR/06_full_dcgo_05.log" 2>&1 &
-PID6=$!
-
-# Configuration 7: Full dcGO with high shrinkage (strength=0.7)
-echo "[7/8] Running FULL DCGO HIGH SHRINKAGE (strength=0.7)..."
-uv run python run_dcgo_human.py \
-  --species "$SPECIES" \
-  --enable-supra-domains \
-  --enable-true-path \
-  --enable-shrinkage \
-  --shrinkage-strength 0.7 \
-  --num-cores "$CORES" \
-  --output-dir "$ANALYSIS_DIR/07_full_dcgo_07" \
-  > "$ANALYSIS_DIR/07_full_dcgo_07.log" 2>&1 &
-PID7=$!
-
-# Configuration 8: Full dcGO with low shrinkage (strength=0.3)
-echo "[8/8] Running FULL DCGO LOW SHRINKAGE (strength=0.3)..."
-uv run python run_dcgo_human.py \
-  --species "$SPECIES" \
-  --enable-supra-domains \
-  --enable-true-path \
-  --enable-shrinkage \
-  --shrinkage-strength 0.3 \
-  --num-cores "$CORES" \
-  --output-dir "$ANALYSIS_DIR/08_full_dcgo_03" \
-  > "$ANALYSIS_DIR/08_full_dcgo_03.log" 2>&1 &
-PID8=$!
-
-echo ""
-echo "All 8 configurations launched in background."
-echo ""
-echo "Monitor progress:"
-echo "  tail -f $ANALYSIS_DIR/*.log"
-echo ""
-echo "Check running processes:"
-echo "  ps aux | grep run_dcgo_human"
-echo ""
-echo "Results will be saved to: $ANALYSIS_DIR/"
+echo "  Species:     ${SPECIES}"
+echo "  Cores/run:   ${CORES}"
+echo "  Concurrency: ${JOBS}"
+echo "  Configs:     ${#CONFIGS[@]}"
 echo ""
 
-# Wait for all processes to complete
-echo "Waiting for all jobs to complete..."
-wait $PID1 && echo "✓ [1/8] Baseline complete"
-wait $PID2 && echo "✓ [2/8] True path only complete"
-wait $PID3 && echo "✓ [3/8] Supra-domains only complete"
-wait $PID4 && echo "✓ [4/8] Supra-domains + true path complete"
-wait $PID5 && echo "✓ [5/8] Supra-domains + shrinkage complete"
-wait $PID6 && echo "✓ [6/8] Full dcGO (0.5) complete"
-wait $PID7 && echo "✓ [7/8] Full dcGO (0.7) complete"
-wait $PID8 && echo "✓ [8/8] Full dcGO (0.3) complete"
+# Check the inputs up front. Discovering a missing 20 GB extract after an hour
+# of running seven other configurations is a waste of everybody's afternoon.
+missing=0
+for path in "${INTERPRO}" "${GAF}"; do
+  if [[ ! -f "${path}" ]]; then
+    echo "ERROR: missing required input: ${path}" >&2
+    missing=1
+  fi
+done
+if [[ ! -f "${GO_OBO}" ]]; then
+  echo "ERROR: missing GO ontology: ${GO_OBO}" >&2
+  echo "       (needed by the --enable-true-path configurations)" >&2
+  missing=1
+fi
+if (( missing )); then
+  echo "" >&2
+  echo "Fetch them with: uv run python scripts/download_data.py" >&2
+  echo "then:            uv run python extract_human_interpro.py --species ${SPECIES}" >&2
+  exit 1
+fi
+
+ANALYSIS_DIR="analysis_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "${ANALYSIS_DIR}"
+echo "Output directory: ${ANALYSIS_DIR}/"
+echo ""
+
+# Failures are recorded as marker files, not as a shell variable. Each
+# configuration runs in a backgrounded subshell, so an increment inside one is
+# lost when it exits — an earlier version of this counted that way and cheerfully
+# reported "All 8 configurations complete" after all 8 had failed.
+FAILURE_DIR="${ANALYSIS_DIR}/.failures"
+mkdir -p "${FAILURE_DIR}"
+
+run_config() {
+  local name="$1" flags="$2"
+  local log="${ANALYSIS_DIR}/${name}.log"
+  local associations="${ANALYSIS_DIR}/${name}/domain_go_associations_significant.tsv"
+  echo "  [start] ${name}"
+  # shellcheck disable=SC2086  # flags are intentionally word-split
+  if uv run python run_dcgo_human.py \
+       --species "${SPECIES}" \
+       --num-cores "${CORES}" \
+       --output-dir "${ANALYSIS_DIR}/${name}" \
+       ${flags} > "${log}" 2>&1 && [[ -f "${associations}" ]]; then
+    echo "  [ok]    ${name} — $(( $(wc -l < "${associations}") - 1 )) significant associations"
+  else
+    echo "  [FAIL]  ${name} — see ${log}" >&2
+    touch "${FAILURE_DIR}/${name}"
+  fi
+}
+
+running=0
+for entry in "${CONFIGS[@]}"; do
+  name="${entry%%|*}"
+  flags="${entry#*|}"
+  run_config "${name}" "${flags}" &
+  running=$(( running + 1 ))
+  if (( running >= JOBS )); then
+    wait -n
+    running=$(( running - 1 ))
+  fi
+done
+wait
+
+failures=$(find "${FAILURE_DIR}" -type f | wc -l)
+rmdir "${FAILURE_DIR}" 2>/dev/null || true
 
 echo ""
 echo "=========================================="
-echo "  All configurations complete!"
+if (( failures )); then
+  echo "  Completed with ${failures} of ${#CONFIGS[@]} configuration(s) FAILED"
+else
+  echo "  All ${#CONFIGS[@]} configurations complete"
+fi
 echo "=========================================="
 echo ""
-echo "Results directory: $ANALYSIS_DIR/"
+echo "Results: ${ANALYSIS_DIR}/"
 echo ""
-echo "Compare results:"
-echo "  01_baseline                - Single domains only"
-echo "  02_true_path_only          - Single domains + ontology propagation"
-echo "  03_supra_only              - Multi-domain combinations"
-echo "  04_supra_true_path         - Multi-domain + ontology"
-echo "  05_supra_shrinkage         - Multi-domain + hierarchical inference"
-echo "  06_full_dcgo_05            - Complete methodology (recommended)"
-echo "  07_full_dcgo_07            - Complete with high shrinkage"
-echo "  08_full_dcgo_03            - Complete with low shrinkage"
+echo "  01_baseline          Single domains only"
+echo "  02_true_path_only    Single domains + GO DAG propagation"
+echo "  03_supra_only        + contiguous domain combinations (the default)"
+echo "  04_supra_true_path   + GO DAG propagation"
+echo "  05_supra_shrinkage   + shrinkage toward constituent domains (0.5)"
+echo "  06_full_dcgo_05      Everything, shrinkage 0.5"
+echo "  07_full_dcgo_07      Everything, shrinkage 0.7"
+echo "  08_full_dcgo_03      Everything, shrinkage 0.3"
 echo ""
-echo "Key files to compare:"
-echo "  - domain_go_associations_top100.tsv   (top predictions)"
-echo "  - validation/performance_metrics.tsv   (AUPR, precision)"
-echo "  - validation/architecture_contribution.tsv (supra-domain impact)"
+echo "Per configuration:"
+echo "  domain_go_associations_significant.tsv   all associations at FDR < 0.01"
+echo "  domain_go_associations_top100.tsv        strongest 100"
+echo "  run_manifest_go.json                     inputs, hashes, thresholds, git commit"
 echo ""
+echo "To score them against held-out annotation, pass each"
+echo "significant-associations file to validation/temporal_benchmark.py."
+echo ""
+
+exit $(( failures > 0 ))
