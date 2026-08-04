@@ -23,7 +23,8 @@ value in BP (0.248 vs 0.115) and CC (0.380 vs 0.343)**, and beats it in **every
 aspect on informative terms** (IC-filtered), while staying **1.3–25× above the
 random-domain null**. MF is the one aspect naive leads at IC≥0 (0.360 vs 0.464),
 because its truth is dominated by `protein binding` (84.6% of experimental MF
-annotations, near-zero IC) — and dcGO overtakes it decisively the moment that
+annotation *lines*, and carried by 87.7% of proteins with any experimental MF
+term — 34.5% have nothing else; `validation/protein_binding_dominance.py`) — and dcGO overtakes it decisively the moment that
 noise is excluded (IC≥2: 0.365 vs 0.053). This confirms the concern that a
 temporal CAFA benchmark rewards recovery of the popularity-weighted curation
 frontier; **on informative function, and measured by F_max, dcGO is ahead**.
@@ -186,8 +187,14 @@ snapshots fetched via `scripts/download_data.py --goa-archive <version>`.
 - [x] Sweep an **information-content floor** (`--min-ic`) that excludes
       near-universal, low-IC terms from truth and all methods alike — the fair,
       principled way to stop rewarding base-rate recovery of terms like
-      GO:0005515 `protein binding` (**84.6%** of human experimental MF
-      annotations, near-zero IC).
+      GO:0005515 `protein binding`, near-zero IC. Quantified by
+      `validation/protein_binding_dominance.py` (metrics:
+      `validation/protein_binding_dominance.tsv`): it is **84.6%** of
+      experimental MF annotation *lines*, but the measure that explains the
+      benchmark is protein coverage — **87.7%** of the 15,260 proteins with any
+      experimental MF term carry it, and **34.5%** carry nothing else, so a
+      baseline that always predicts it is right about the entire truth for a
+      third of the cohort.
 
 ### Results — 2021→2026 temporal split (2026-07-09, p-score transfer)
 
