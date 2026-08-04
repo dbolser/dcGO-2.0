@@ -21,10 +21,12 @@ yet establish robust general performance, calibration, or superiority.
   `dcgo = "run_dcgo_human:main"`, but the wheel packages only `src`, not the
   top-level `run_dcgo_human.py`. Move the entry point into a packaged module and
   add a wheel-install smoke test.
-- [ ] Expand CI to cover the actual product. CI currently lints only `src/` and
-  `tests/`, omitting the main runner, validation programs, download scripts, and
-  packaging. A repository-wide Ruff check found nine errors, including six in
-  the main entry point.
+- [x] Expand CI to cover the actual product. CI now lints `src/ tests/ config/
+  scripts/ validation/ run_dcgo_human.py extract_human_interpro.py`, and already
+  builds both distributions and smoke-tests the installed `dcgo` CLI. The
+  reported Ruff errors are fixed (the last three, `E402` in
+  `validation/sprint1_validation.py`, by moving the logger setup below the
+  imports rather than suppressing the rule).
 - [ ] Add a small end-to-end test that invokes the installed CLI on fixtures and
   verifies schema-valid output. The unit and integration tests do not currently
   demonstrate that the installed command works.
@@ -34,8 +36,16 @@ yet establish robust general performance, calibration, or superiority.
 - [ ] Validate CLI parameters: FDR range, positive batch size and core count,
   shrinkage range, supported input/species selection, non-empty protein
   intersection, and non-empty feature spaces.
-- [ ] Pin every production input using a release identifier, source URL, and
-  checksum. The current GOA and GO ontology URLs are mutable.
+- [x] Pin every production input using a release identifier, source URL, and
+  checksum. Each run now records the SHA-256, byte size, source URL and embedded
+  release header of every input the selected ontology consumed (GAF
+  `!gaf-version`/`!date-generated`, OBO `data-version`, UniProt vocabulary
+  `Release:`, Expasy `Release of`), so a reported number can always be traced to
+  the exact bytes behind it. See `REPRODUCIBILITY.md`.
+- [ ] Still mutable upstream: recording the hash identifies what was consumed
+  but does not make it re-fetchable. Switch the production runs to dated or
+  archived releases (`scripts/download_data.py --goa-archive` already fetches
+  dated GOA snapshots) and verify the recorded hashes on download.
 
 ## P0: Publication blockers
 
@@ -44,18 +54,40 @@ yet establish robust general performance, calibration, or superiority.
   using the same 2021-to-2026 benchmark used for the headline result. Freeze
   choices on a development interval or nested temporal split, then evaluate once
   on an untouched interval.
-- [ ] Add protein-level bootstrap confidence intervals for F-max, AUPRC, and
-  paired differences versus baselines.
-- [ ] Replace the single random-domain shuffle with many seeded permutations.
+- [x] Add protein-level bootstrap confidence intervals for F-max, AUPRC, and
+  paired differences versus baselines. **Done 2026-08-04** —
+  `validation/resampling.py` (`paired_bootstrap`, one protein resample per
+  replicate shared by every method), driven by `validation/ablation.py`;
+  1,000 replicates; results in `validation/ablation_paired_bootstrap.tsv` and
+  VALIDATION_PLAN §4. The paired test changes a headline: dcGO's AUPRC advantage
+  over naive does **not** survive it at IC≥0 in any aspect.
+- [x] Replace the single random-domain shuffle with many seeded permutations.
   Report the null distribution, confidence interval, and empirical p-value.
-- [ ] Complete the planned ablation: single domains; plus supra-domains; plus
-  shrinkage; plus True Path Rule; and the full method.
+  **Done 2026-08-04** — `validation/temporal_benchmark.py --n-permutations`
+  (default 100; permutation 0 is the old single shuffle) and the same in
+  `validation/ablation.py` (200). Null mean/sd/percentile interval and empirical
+  p in `validation/temporal_benchmark_permutation_null.tsv` and
+  `validation/ablation_permutation_null.tsv`. dcGO clears the null in all 24
+  aspect × IC × metric cells at the attainable floor 1/(n+1). The exchangeability
+  assumption, what the permutation preserves (term base rates, architectures,
+  prediction coverage) and what it cannot test (the Fisher+BH stage) are stated
+  in VALIDATION_PLAN §2.
+- [x] Complete the planned ablation: single domains; plus supra-domains; plus
+  shrinkage; plus True Path Rule; and the full method. **Done 2026-08-04** —
+  `validation/ablation.py`; VALIDATION_PLAN §4. **The result is negative:**
+  supra-domains 0/12 cells improved, shrinkage 0/12, True Path 12/12 *worse*.
+  The best configuration on this benchmark is single domains only.
 - [ ] Establish the statistical validity of the claimed empirical-Bayes
   shrinkage, or rename it as a heuristic. The implementation geometrically
   interpolates observed and constituent p-values using a hand-set decay. It is
   not presently a fitted empirical-Bayes model, and the transformed quantities
   have not been shown to be valid p-values. BH correction of those values does
   not therefore guarantee nominal FDR control.
+  **Still open, and now empirically confirmed (2026-08-04):** enabling it takes
+  the FDR<0.01 association count from 163,277 to 463,924 (+184%), because 56.4%
+  of supra-domain p-values are *decreased*, not increased. A shrinkage toward a
+  null prior cannot increase rejections. It also buys nothing: 0/12 ablation
+  cells move. Rename it, or replace it with a fitted hierarchical model.
 - [ ] Pre-specify the primary endpoint. The unfiltered result loses to the naive
   method for MF, while the headline superiority depends on IC filtering. The
   IC-filtered analysis is scientifically reasonable, but should be a
@@ -77,9 +109,13 @@ yet establish robust general performance, calibration, or superiority.
 
 ## P1: Engineering and reproducibility
 
-- [ ] Generate a machine-readable run manifest containing the Git commit,
+- [x] Generate a machine-readable run manifest containing the Git commit,
   command line, dependency-lock hash, input releases and checksums, timestamps,
   evidence filter, ontology relations, and every threshold.
+  `run_manifest_<ontology>.json`, written by `src/run_manifest.py`. The recorded
+  inputs are whatever the selected registry entry declares, so all 19 ontologies
+  are covered, including their True Path hierarchy files. Not yet done for the
+  surprise-score driver or the `validation/` benchmarks.
 - [ ] Commit or archive the exact benchmark artifacts used by the manuscript.
   The `bench_A` through `bench_D` outputs and logs were untracked at review time,
   leaving their provenance unclear.
@@ -99,16 +135,24 @@ yet establish robust general performance, calibration, or superiority.
 - [ ] Provide clean-checkout reproduction automation, ideally a container or
   workflow that downloads pinned inputs, verifies hashes, runs inference, and
   regenerates every manuscript table.
-- [ ] Add release essentials: semantic-versioning policy, `CITATION.cff`,
+- [ ] Add release essentials. `CITATION.cff` is done (software metadata plus the
+  Fang & Gough method reference). Still missing: semantic-versioning policy,
   changelog, archived DOI, supported-platform statement, and resource estimates.
 
 ## P1: Scientific analysis and reporting
 
-- [ ] Report counts at every selection stage: t0 proteins, t1 proteins,
+- [x] Report counts at every selection stage: t0 proteins, t1 proteins,
   no-knowledge candidates, proteins with domains, aspect-specific cohorts, and
-  cohorts retained at each IC threshold.
-- [ ] Report prediction coverage alongside F-max. CAFA-style precision can omit
-  proteins without predictions while recall includes them.
+  cohorts retained at each IC threshold. **Done 2026-08-04** —
+  `validation/ablation_selection_counts.tsv`. The concern is confirmed: MF keeps
+  only 41% of its cohort at IC≥2, CC only 27% at IC≥6, so cross-floor
+  comparisons are not paired. Every paired test in §4 is within one (aspect, IC)
+  cell.
+- [x] Report prediction coverage alongside F-max. CAFA-style precision can omit
+  proteins without predictions while recall includes them. **Done 2026-08-04** —
+  `coverage_at_fmax` and `coverage_any` columns of
+  `validation/ablation_metrics.tsv`. dcGO covers 42–71% of the cohort; the naive
+  baseline covers 100%.
 - [ ] Verify F-max and AUPRC against an independent CAFA evaluation
   implementation. The current evaluator samples 51 score quantiles and computes
   trapezoidal AUPRC using an upper envelope; document these choices and check

@@ -42,13 +42,18 @@ This file is just loose notes.
   in `docs/uniprot_ontology_survey.md` + `docs/dr_survey.tsv`.
 - ~~**Held-out validation of the surprise score**~~ — `validation/temporal_surprise.py`.
   The *associations* predict future curation (12.5×); the *ranking* is not
-  demonstrably better than the dcGO q-value (paired bootstrap spans zero at every
-  prediction budget). Verdict written up in `SURPRISE_SCORE.md`.
+  demonstrably better than the dcGO q-value, and at matched prediction budgets
+  the comparison is not resolvable at all — 9,923 of 10,136 associations score
+  exactly 0.000, so most of a budget slice is an arbitrary tie-break. Verdict,
+  the bootstrap diagnosis behind it, and the percentile/basic/BCa intervals
+  side by side, in `SURPRISE_SCORE.md`.
 - ~~**Predictive power across the breadth**~~ — `validation/temporal_breadth.py`.
   One archived Swiss-Prot release (2021_02) gives t0 for every UniProt-native
-  layer. GO 11.3×, reactome 8.0×, cofactor 3.2×, subcellular 2.9×, keyword 1.7×;
-  complex degenerate, disease undefined, ligand untestable. See
-  `VALIDATION_PLAN.md` §2 breadth subsection.
+  layer. **Corrected 2026-08-04** after `restrict_to_universe` (#26): GO 11.5×,
+  reactome 11.4×, subcellular 3.7×, cofactor 3.5×, keyword 3.4×; complex has no
+  demonstrated signal (CI includes zero), disease undefined, ligand untestable.
+  The contamination was suppressing the signal — every layer went *up*, keyword
+  doubling. See `VALIDATION_PLAN.md` §2 breadth subsection.
 
 ## Next (see VALIDATION_PLAN.md "Next steps")
 - ~~Method-vs-paper audit~~ done — their validation is protein-centric CAFA
@@ -85,30 +90,54 @@ This file is just loose notes.
 - **`validation/bench_A`–`bench_D` are still untracked** — the review flagged
   their provenance as unclear. Either commit or archive them.
 
-- **Give the disease layers a hierarchy via the Disease Ontology.** `--ontology
-  disease` is raw OMIM phenotype ids with no DAG, so `--enable-true-path`
-  refuses, and the sparsity shows: the 2021 t0 run yielded only **53**
-  significant associations from 6,904 terms over 5,029 proteins. DO supplies the
-  missing structure.
-  - Download: `http://purl.obolibrary.org/obo/doid.obo` (checked 2026-07-28:
-    live, 7.2 MB, 14,735 terms, release 2026-06-30). MONDO —
-    `http://purl.obolibrary.org/obo/mondo.obo` — is the alternative, and is what
-    dcGO 2023 switched to.
-  - The join already exists: DO cross-references OMIM as **`xref: MIM:<id>`**
-    (note the prefix is `MIM`, *not* `OMIM`) — 6,467 xrefs over 6,123 distinct
-    MIM ids — and Orphanet as `xref: ORDO:<id>` (2,319), which would give
-    `--ontology orphanet` a hierarchy too.
-  - Two ways to use it, and the choice matters: post-hoc mapping of existing
-    output is nearly worthless here (the 53 t0 associations use just 9 distinct
-    OMIM terms, 6 mappable), so the value is in **re-keying at parse time** — a
-    disease source that emits DOIDs, letting sparse OMIM phenotypes pool into
-    better-supported DO classes *before* the Fisher tests, then propagating up
-    the DO DAG.
-  - Machinery needed: none new. `parse_obo_child_parents` already reads DO's
-    `is_a` edges, and the registry takes the ancestors factory. The work is an
-    OMIM→DOID translation in the annotation source plus a registry entry.
-  - Acceptance: more significant associations than the OMIM-keyed run, and a
-    `disease` row in the breadth test that is no longer underpowered.
+## Done — Disease Ontology re-keying
+
+- ~~**Give the disease layers a hierarchy via the Disease Ontology.**~~ —
+  `src/disease_ontology.py`, `--ontology doid` and `--ontology orphanet_doid`.
+  UniProt's `DR MIM` (phenotype) and `DR Orphanet` ids are re-keyed onto DOID
+  terms **at parse time**, using DO's own `xref: MIM:` / `xref: ORDO:` lines,
+  and then propagate up DO's `is_a` DAG. `disease`/`orphanet` keep emitting the
+  raw ids so the two hypothesis universes stay comparable. The DO release is
+  pinned to an immutable OBO Foundry release PURL with a SHA-256 checksum that
+  `scripts/download_data.py` now verifies.
+
+  **The result is not the one the acceptance criterion asked for, and that is
+  the finding.** Current UniProt, human, FDR<0.01. These are *not* comparable to
+  the 53 significant associations the 2021 t0 run produced — different snapshot,
+  different term space:
+
+  | | `disease` (OMIM ids) | `doid` (re-keyed) |
+  | --- | ---: | ---: |
+  | proteins | 5,029 | 3,928 |
+  | domain features | 51,311 | 43,019 |
+  | terms | 6,904 | 4,917 |
+  | Fisher tests | 354,251,144 | 211,524,423 |
+  | BH threshold p | 4.72e-10 | 3.96e-10 |
+  | significant | 17 | **16** |
+  | distinct terms among them | 4 | 2 |
+  | permutation control (seed 7) | 0 | 0 |
+  | True Path annotations | *impossible* | 160 (16 direct + 144 propagated) |
+
+  So re-keying did **not** buy more significant associations — it bought a
+  hierarchy (144 propagated annotations the OMIM layer cannot produce at all)
+  and interpretable term labels, at the cost of ~26% of the annotations. Note
+  the direction of the arithmetic: a *smaller* term space with a *similar* count
+  is not a win, and the honest read is that this layer's sparsity is at the
+  protein level (3,928 proteins over 4,917 DO terms ≈ 0.8 proteins/term), which
+  pooling through DO does not fix.
+
+  Mapping coverage (the first-class number): 5,087 / 6,920 distinct OMIM ids
+  (73.5%) and 5,534 / 7,457 protein–term annotations (74.2%). 1,833 OMIM ids had
+  no DO term. One concrete loss: `IPR051503` (complement system regulators) →
+  MIM 235400 (atypical HUS) disappears, because DO cross-references
+  `DOID:0080301` only as `ORDO:2134`, with no `MIM:` xref — which is exactly why
+  `orphanet_doid` exists as a second, complementary route.
+
+- **Still open here:** re-run `validation/temporal_breadth.py` on `doid` at the
+  2021 t0 to replace the "undefined (0 hits / 369)" `disease` row; and try
+  MONDO (`https://purl.obolibrary.org/obo/mondo.obo`, what dcGO 2023 switched
+  to), which has broader OMIM coverage and would use the same machinery — only
+  the OBO and the xref prefix change.
 
 ## Loose ideas / nice-to-haves
 - Add InterPro names / gene names / GO term descriptions to the output TSVs

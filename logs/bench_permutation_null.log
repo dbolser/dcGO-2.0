@@ -1,0 +1,136 @@
+2026-08-04 16:38:16.778 | INFO     | __main__:main:694 - Loading GO ontology (for propagation + aspects)...
+2026-08-04 16:38:16.778 | INFO     | src.ontology_processor:__init__:120 - Loading GO ontology from data/raw/go_ontology/go-basic.obo
+2026-08-04 16:38:21.370 | INFO     | src.ontology_processor:_prepare_graph:142 - Preparing GO graph for processing
+2026-08-04 16:38:22.680 | INFO     | src.ontology_processor:_prepare_graph:178 - GO graph ready: 38245 terms, 71895 relationships
+2026-08-04 16:38:22.692 | INFO     | src.ontology_processor:_compute_graph_metrics:191 - GO term distribution by namespace:
+2026-08-04 16:38:22.692 | INFO     | src.ontology_processor:_compute_graph_metrics:193 -   biological_process: 24129 terms
+2026-08-04 16:38:22.692 | INFO     | src.ontology_processor:_compute_graph_metrics:193 -   molecular_function: 10041 terms
+2026-08-04 16:38:22.692 | INFO     | src.ontology_processor:_compute_graph_metrics:193 -   cellular_component: 4075 terms
+2026-08-04 16:38:22.769 | INFO     | src.ontology_processor:_compute_graph_metrics:211 - Graph depth statistics: max=11, avg=4.8
+2026-08-04 16:38:22.784 | INFO     | __main__:main:699 - Parsing t0 (training) GOA — all non-IEA evidence...
+2026-08-04 16:38:22.784 | INFO     | src.goa_parser:__init__:113 - GOAParser initialized:
+2026-08-04 16:38:22.784 | INFO     | src.goa_parser:__init__:115 -   Evidence codes: ['EXP', 'IBA', 'IBD', 'IC', 'IDA', 'IEP', 'IGC', 'IGI', 'IKR', 'IMP', 'IPI', 'IRD', 'ISA', 'ISM', 'ISO', 'ISS', 'NAS', 'ND', 'RCA', 'TAS']
+2026-08-04 16:38:22.784 | INFO     | src.goa_parser:__init__:118 -   Aspects: ['C', 'F', 'P']
+2026-08-04 16:38:22.784 | INFO     | src.goa_parser:__init__:119 -   Exclude qualifiers: True
+2026-08-04 16:38:22.784 | INFO     | src.goa_parser:parse_gaf_file:131 - Parsing GAF file: data/raw/goa_archive/goa_human.gaf.205.gz
+2026-08-04 16:38:25.468 | INFO     | src.goa_parser:parse_gaf_file:206 - GAF parsing complete:
+2026-08-04 16:38:25.468 | INFO     | src.goa_parser:parse_gaf_file:207 -   Total lines: 618,369
+2026-08-04 16:38:25.468 | INFO     | src.goa_parser:parse_gaf_file:208 -   Accepted annotations: 533,251
+2026-08-04 16:38:25.468 | INFO     | src.goa_parser:parse_gaf_file:211 -   Unique proteins: 18,735
+2026-08-04 16:38:25.468 | INFO     | src.goa_parser:parse_gaf_file:212 -   Filtered by evidence: 83,804
+2026-08-04 16:38:25.468 | INFO     | src.goa_parser:parse_gaf_file:213 -   Filtered by aspect: 0
+2026-08-04 16:38:25.468 | INFO     | src.goa_parser:parse_gaf_file:214 -   Excluded qualifiers: 1,301
+2026-08-04 16:38:25.468 | INFO     | src.goa_parser:parse_gaf_file:223 -   Evidence code distribution:
+2026-08-04 16:38:25.468 | INFO     | src.goa_parser:parse_gaf_file:227 -     IPI: 210,155
+2026-08-04 16:38:25.468 | INFO     | src.goa_parser:parse_gaf_file:227 -     TAS: 108,983
+2026-08-04 16:38:25.469 | INFO     | src.goa_parser:parse_gaf_file:227 -     IDA: 83,442
+2026-08-04 16:38:25.469 | INFO     | src.goa_parser:parse_gaf_file:227 -     IBA: 63,362
+2026-08-04 16:38:25.469 | INFO     | src.goa_parser:parse_gaf_file:227 -     ISS: 27,522
+2026-08-04 16:38:25.469 | INFO     | src.goa_parser:parse_gaf_file:227 -     IMP: 24,107
+2026-08-04 16:38:25.469 | INFO     | src.goa_parser:parse_gaf_file:227 -     NAS: 7,240
+2026-08-04 16:38:25.469 | INFO     | src.goa_parser:parse_gaf_file:227 -     IGI: 1,989
+2026-08-04 16:38:25.469 | INFO     | src.goa_parser:parse_gaf_file:227 -     ND: 1,736
+2026-08-04 16:38:25.469 | INFO     | src.goa_parser:parse_gaf_file:227 -     ISA: 1,450
+2026-08-04 16:38:25.541 | INFO     | __main__:main:705 - Parsing t1 (test) GOA — experimental evidence only...
+2026-08-04 16:38:25.541 | INFO     | src.goa_parser:__init__:113 - GOAParser initialized:
+2026-08-04 16:38:25.541 | INFO     | src.goa_parser:__init__:115 -   Evidence codes: ['EXP', 'IDA', 'IEP', 'IGI', 'IMP', 'IPI']
+2026-08-04 16:38:25.541 | INFO     | src.goa_parser:__init__:118 -   Aspects: ['C', 'F', 'P']
+2026-08-04 16:38:25.541 | INFO     | src.goa_parser:__init__:119 -   Exclude qualifiers: True
+2026-08-04 16:38:25.541 | INFO     | src.goa_parser:parse_gaf_file:131 - Parsing GAF file: data/raw/goa_annotations/goa_human.gaf.gz
+2026-08-04 16:38:28.056 | INFO     | src.goa_parser:parse_gaf_file:206 - GAF parsing complete:
+2026-08-04 16:38:28.056 | INFO     | src.goa_parser:parse_gaf_file:207 -   Total lines: 826,062
+2026-08-04 16:38:28.056 | INFO     | src.goa_parser:parse_gaf_file:208 -   Accepted annotations: 414,996
+2026-08-04 16:38:28.056 | INFO     | src.goa_parser:parse_gaf_file:211 -   Unique proteins: 16,362
+2026-08-04 16:38:28.056 | INFO     | src.goa_parser:parse_gaf_file:212 -   Filtered by evidence: 409,768
+2026-08-04 16:38:28.056 | INFO     | src.goa_parser:parse_gaf_file:213 -   Filtered by aspect: 0
+2026-08-04 16:38:28.056 | INFO     | src.goa_parser:parse_gaf_file:214 -   Excluded qualifiers: 1,288
+2026-08-04 16:38:28.056 | INFO     | src.goa_parser:parse_gaf_file:223 -   Evidence code distribution:
+2026-08-04 16:38:28.056 | INFO     | src.goa_parser:parse_gaf_file:227 -     IPI: 265,090
+2026-08-04 16:38:28.056 | INFO     | src.goa_parser:parse_gaf_file:227 -     IDA: 105,696
+2026-08-04 16:38:28.056 | INFO     | src.goa_parser:parse_gaf_file:227 -     IMP: 26,030
+2026-08-04 16:38:28.056 | INFO     | src.goa_parser:parse_gaf_file:227 -     EXP: 15,315
+2026-08-04 16:38:28.056 | INFO     | src.goa_parser:parse_gaf_file:227 -     IGI: 1,944
+2026-08-04 16:38:28.056 | INFO     | src.goa_parser:parse_gaf_file:227 -     IEP: 921
+2026-08-04 16:38:28.057 | INFO     | __main__:main:709 - Parsing domain architectures...
+2026-08-04 16:38:28.057 | INFO     | src.domain_annotation_parser:__init__:89 - DomainAnnotationParser initialized:
+2026-08-04 16:38:28.057 | INFO     | src.domain_annotation_parser:__init__:90 -   Max supra-domain length: 3
+2026-08-04 16:38:28.057 | INFO     | src.domain_annotation_parser:__init__:91 -   Min domain length: 10
+2026-08-04 16:38:28.057 | INFO     | src.domain_annotation_parser:parse_protein2ipr_file:112 - Parsing domain annotations from data/interim/protein2ipr_human.dat.gz
+2026-08-04 16:38:28.940 | INFO     | src.domain_annotation_parser:parse_protein2ipr_file:202 - Parsing complete:
+2026-08-04 16:38:28.940 | INFO     | src.domain_annotation_parser:parse_protein2ipr_file:203 -   Total proteins: 18,908
+2026-08-04 16:38:28.940 | INFO     | src.domain_annotation_parser:parse_protein2ipr_file:204 -   Total annotations: 234,702
+2026-08-04 16:38:28.940 | INFO     | src.domain_annotation_parser:parse_protein2ipr_file:205 -   Unique domains: 19,449
+2026-08-04 16:38:28.940 | INFO     | src.domain_annotation_parser:_generate_domain_architectures:219 - Generating domain architectures with supra-domains...
+2026-08-04 16:38:29.514 | INFO     | src.domain_annotation_parser:_generate_domain_architectures:247 - Generated 18,908 domain architectures
+2026-08-04 16:38:29.514 | INFO     | src.domain_annotation_parser:_generate_domain_architectures:248 -   Total supra-domains: 413,251
+2026-08-04 16:38:29.548 | INFO     | __main__:main:720 - Building no-knowledge benchmark (per aspect, full t1-exp truth)...
+2026-08-04 16:38:30.314 | INFO     | __main__:main:730 -   BP: 324 no-knowledge benchmark proteins
+2026-08-04 16:38:30.314 | INFO     | __main__:main:730 -   MF: 418 no-knowledge benchmark proteins
+2026-08-04 16:38:30.314 | INFO     | __main__:main:730 -   CC: 572 no-knowledge benchmark proteins
+2026-08-04 16:38:30.314 | INFO     | __main__:main:738 - Loading t0 domain->GO associations (p_value)...
+2026-08-04 16:38:30.631 | INFO     | __main__:main:743 - Computing information content from t0 (propagated frequencies)...
+2026-08-04 16:38:31.445 | INFO     | __main__:main:754 - Transferring dcGO predictions to benchmark proteins (pscore)...
+2026-08-04 16:38:33.057 | INFO     | __main__:main:770 - Scoring at IC floors (bits): [0.0, 2.0, 4.0, 6.0]
+2026-08-04 16:38:38.724 | INFO     | __main__:main:790 -   [BP IC≥0] dcGO           F_max=0.248 S_min=99.701 AUPRC=0.137 (n=324)
+2026-08-04 16:39:17.166 | INFO     | __main__:main:790 -   [BP IC≥0] naive          F_max=0.115 S_min=104.858 AUPRC=0.314 (n=324)
+2026-08-04 16:39:18.052 | INFO     | __main__:main:790 -   [BP IC≥0] random_domain  F_max=0.158 S_min=103.850 AUPRC=0.071 (n=324)
+2026-08-04 16:39:18.512 | INFO     | __main__:main:790 -   [BP IC≥2] dcGO           F_max=0.170 S_min=93.110 AUPRC=0.069 (n=324)
+2026-08-04 16:39:56.646 | INFO     | __main__:main:790 -   [BP IC≥2] naive          F_max=0.071 S_min=96.221 AUPRC=0.049 (n=324)
+2026-08-04 16:39:57.476 | INFO     | __main__:main:790 -   [BP IC≥2] random_domain  F_max=0.053 S_min=96.405 AUPRC=0.008 (n=324)
+2026-08-04 16:39:57.836 | INFO     | __main__:main:790 -   [BP IC≥4] dcGO           F_max=0.115 S_min=75.643 AUPRC=0.032 (n=318)
+2026-08-04 16:40:35.083 | INFO     | __main__:main:790 -   [BP IC≥4] naive          F_max=0.031 S_min=77.619 AUPRC=0.012 (n=318)
+2026-08-04 16:40:35.744 | INFO     | __main__:main:790 -   [BP IC≥4] random_domain  F_max=0.019 S_min=77.619 AUPRC=0.001 (n=318)
+2026-08-04 16:40:35.973 | INFO     | __main__:main:790 -   [BP IC≥6] dcGO           F_max=0.077 S_min=55.146 AUPRC=0.017 (n=289)
+2026-08-04 16:41:08.574 | INFO     | __main__:main:790 -   [BP IC≥6] naive          F_max=0.010 S_min=55.817 AUPRC=0.003 (n=289)
+2026-08-04 16:41:09.091 | INFO     | __main__:main:790 -   [BP IC≥6] random_domain  F_max=0.003 S_min=55.817 AUPRC=0.000 (n=289)
+2026-08-04 16:41:14.064 | INFO     | __main__:main:790 -   [MF IC≥0] dcGO           F_max=0.360 S_min=12.636 AUPRC=0.195 (n=418)
+2026-08-04 16:41:24.392 | INFO     | __main__:main:790 -   [MF IC≥0] naive          F_max=0.464 S_min=14.251 AUPRC=0.325 (n=418)
+2026-08-04 16:41:24.784 | INFO     | __main__:main:790 -   [MF IC≥0] random_domain  F_max=0.262 S_min=14.513 AUPRC=0.099 (n=418)
+2026-08-04 16:41:24.900 | INFO     | __main__:main:790 -   [MF IC≥2] dcGO           F_max=0.365 S_min=27.138 AUPRC=0.227 (n=170)
+2026-08-04 16:41:30.597 | INFO     | __main__:main:790 -   [MF IC≥2] naive          F_max=0.053 S_min=33.598 AUPRC=0.025 (n=170)
+2026-08-04 16:41:30.798 | INFO     | __main__:main:790 -   [MF IC≥2] random_domain  F_max=0.088 S_min=33.478 AUPRC=0.015 (n=170)
+2026-08-04 16:41:30.898 | INFO     | __main__:main:790 -   [MF IC≥4] dcGO           F_max=0.337 S_min=26.368 AUPRC=0.210 (n=162)
+2026-08-04 16:41:36.381 | INFO     | __main__:main:790 -   [MF IC≥4] naive          F_max=0.045 S_min=31.931 AUPRC=0.011 (n=162)
+2026-08-04 16:41:36.561 | INFO     | __main__:main:790 -   [MF IC≥4] random_domain  F_max=0.072 S_min=31.931 AUPRC=0.007 (n=162)
+2026-08-04 16:41:36.632 | INFO     | __main__:main:790 -   [MF IC≥6] dcGO           F_max=0.217 S_min=22.051 AUPRC=0.121 (n=145)
+2026-08-04 16:41:41.583 | INFO     | __main__:main:790 -   [MF IC≥6] naive          F_max=0.018 S_min=24.761 AUPRC=0.006 (n=145)
+2026-08-04 16:41:41.709 | INFO     | __main__:main:790 -   [MF IC≥6] random_domain  F_max=0.009 S_min=24.761 AUPRC=0.000 (n=145)
+2026-08-04 16:41:45.452 | INFO     | __main__:main:790 -   [CC IC≥0] dcGO           F_max=0.380 S_min=20.044 AUPRC=0.240 (n=572)
+2026-08-04 16:41:51.018 | INFO     | __main__:main:790 -   [CC IC≥0] naive          F_max=0.343 S_min=21.343 AUPRC=0.513 (n=572)
+2026-08-04 16:41:51.324 | INFO     | __main__:main:790 -   [CC IC≥0] random_domain  F_max=0.291 S_min=21.286 AUPRC=0.170 (n=572)
+2026-08-04 16:41:51.441 | INFO     | __main__:main:790 -   [CC IC≥2] dcGO           F_max=0.239 S_min=22.213 AUPRC=0.073 (n=405)
+2026-08-04 16:41:55.655 | INFO     | __main__:main:790 -   [CC IC≥2] naive          F_max=0.153 S_min=22.572 AUPRC=0.117 (n=405)
+2026-08-04 16:41:55.835 | INFO     | __main__:main:790 -   [CC IC≥2] random_domain  F_max=0.072 S_min=23.159 AUPRC=0.010 (n=405)
+2026-08-04 16:41:55.903 | INFO     | __main__:main:790 -   [CC IC≥4] dcGO           F_max=0.134 S_min=24.618 AUPRC=0.029 (n=252)
+2026-08-04 16:41:58.891 | INFO     | __main__:main:790 -   [CC IC≥4] naive          F_max=0.099 S_min=25.586 AUPRC=0.038 (n=252)
+2026-08-04 16:41:58.993 | INFO     | __main__:main:790 -   [CC IC≥4] random_domain  F_max=0.031 S_min=25.570 AUPRC=0.002 (n=252)
+2026-08-04 16:41:59.030 | INFO     | __main__:main:790 -   [CC IC≥6] dcGO           F_max=0.124 S_min=20.384 AUPRC=0.025 (n=154)
+2026-08-04 16:42:01.156 | INFO     | __main__:main:790 -   [CC IC≥6] naive          F_max=0.044 S_min=20.923 AUPRC=0.012 (n=154)
+2026-08-04 16:42:01.211 | INFO     | __main__:main:790 -   [CC IC≥6] random_domain  F_max=0.015 S_min=20.923 AUPRC=0.000 (n=154)
+2026-08-04 16:42:01.216 | INFO     | __main__:main:811 - ✓ Saved metrics: validation/bench_permutation_null/temporal_benchmark_metrics.tsv
+2026-08-04 16:42:01.217 | INFO     | __main__:main:821 - Permutation null: 100 seeded domain-label permutations...
+2026-08-04 16:42:12.200 | INFO     | __main__:main:845 -   permutation 10/100
+2026-08-04 16:42:23.369 | INFO     | __main__:main:845 -   permutation 20/100
+2026-08-04 16:42:35.443 | INFO     | __main__:main:845 -   permutation 30/100
+2026-08-04 16:42:48.428 | INFO     | __main__:main:845 -   permutation 40/100
+2026-08-04 16:43:00.719 | INFO     | __main__:main:845 -   permutation 50/100
+2026-08-04 16:43:12.321 | INFO     | __main__:main:845 -   permutation 60/100
+2026-08-04 16:43:23.711 | INFO     | __main__:main:845 -   permutation 70/100
+2026-08-04 16:43:35.221 | INFO     | __main__:main:845 -   permutation 80/100
+2026-08-04 16:43:47.083 | INFO     | __main__:main:845 -   permutation 90/100
+2026-08-04 16:43:58.915 | INFO     | __main__:main:845 -   permutation 100/100
+2026-08-04 16:43:58.922 | INFO     | __main__:main:864 - ✓ Saved permutation null: validation/bench_permutation_null/temporal_benchmark_permutation_null.tsv
+2026-08-04 16:43:58.922 | INFO     | __main__:main:868 - ======================================================================
+2026-08-04 16:43:58.922 | INFO     | __main__:main:869 - TEMPORAL BENCHMARK COMPLETE — dcGO vs naive F_max by IC floor:
+2026-08-04 16:43:58.924 | INFO     | __main__:main:879 -   BP IC≥0: dcGO 0.248 vs naive 0.115 [✓ above floor]  (n=324)
+2026-08-04 16:43:58.925 | INFO     | __main__:main:879 -   BP IC≥2: dcGO 0.170 vs naive 0.071 [✓ above floor]  (n=324)
+2026-08-04 16:43:58.926 | INFO     | __main__:main:879 -   BP IC≥4: dcGO 0.115 vs naive 0.031 [✓ above floor]  (n=318)
+2026-08-04 16:43:58.926 | INFO     | __main__:main:879 -   BP IC≥6: dcGO 0.077 vs naive 0.010 [✓ above floor]  (n=289)
+2026-08-04 16:43:58.927 | INFO     | __main__:main:879 -   MF IC≥0: dcGO 0.360 vs naive 0.464 [✗ below floor]  (n=418)
+2026-08-04 16:43:58.928 | INFO     | __main__:main:879 -   MF IC≥2: dcGO 0.365 vs naive 0.053 [✓ above floor]  (n=170)
+2026-08-04 16:43:58.929 | INFO     | __main__:main:879 -   MF IC≥4: dcGO 0.337 vs naive 0.045 [✓ above floor]  (n=162)
+2026-08-04 16:43:58.929 | INFO     | __main__:main:879 -   MF IC≥6: dcGO 0.217 vs naive 0.018 [✓ above floor]  (n=145)
+2026-08-04 16:43:58.930 | INFO     | __main__:main:879 -   CC IC≥0: dcGO 0.380 vs naive 0.343 [✓ above floor]  (n=572)
+2026-08-04 16:43:58.931 | INFO     | __main__:main:879 -   CC IC≥2: dcGO 0.239 vs naive 0.153 [✓ above floor]  (n=405)
+2026-08-04 16:43:58.932 | INFO     | __main__:main:879 -   CC IC≥4: dcGO 0.134 vs naive 0.099 [✓ above floor]  (n=252)
+2026-08-04 16:43:58.932 | INFO     | __main__:main:879 -   CC IC≥6: dcGO 0.124 vs naive 0.044 [✓ above floor]  (n=154)

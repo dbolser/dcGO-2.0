@@ -12,8 +12,8 @@ engineering cleanup: the code runs; this is about showing the results are
 | §0 Pipeline correctness | ✅ done — 4 correctness bugs found & fixed with tests |
 | §1 Reframe InterPro2GO comparison | ✅ done (#14, #15) — ~65% coverage at FDR<0.01 |
 | **§2 Temporal held-out benchmark (CAFA-style)** | ✅ **done (#8)** — 2021→2026 CAFA split; see results below |
-| §3 Compare to original dcGO | ✅ **done** — SSF re-keying + published-dcGO join; precision 0.54–0.63, recall uninterpretable (see §3.1) |
-| §4 Supra-domain ablation | ⬜ open (#10) — **now unblocked** (reuses the §2 harness) |
+| §3 Compare to original dcGO | ✅ **done (2026-08-04)** — SSF re-keying + published-dcGO join; precision 0.54–0.63, recall uninterpretable (see §3.1) |
+| **§4 Component ablation + uncertainty** | ✅ **done (2026-08-04)** — ladder, permutation null, paired bootstrap CIs; **the result is negative for two of three components** |
 | §5 Pre-paper method decisions | ⬜ open (#11) |
 | §6 Reproducibility | ⬜ open (#12) |
 
@@ -23,10 +23,31 @@ value in BP (0.248 vs 0.115) and CC (0.380 vs 0.343)**, and beats it in **every
 aspect on informative terms** (IC-filtered), while staying **1.3–25× above the
 random-domain null**. MF is the one aspect naive leads at IC≥0 (0.360 vs 0.464),
 because its truth is dominated by `protein binding` (84.6% of experimental MF
-annotations, near-zero IC) — and dcGO overtakes it decisively the moment that
+annotation *lines*, and carried by 87.7% of proteins with any experimental MF
+term — 34.5% have nothing else; `validation/protein_binding_dominance.py`) — and dcGO overtakes it decisively the moment that
 noise is excluded (IC≥2: 0.365 vs 0.053). This confirms the concern that a
 temporal CAFA benchmark rewards recovery of the popularity-weighted curation
-frontier; on informative function, dcGO is clearly ahead.
+frontier; **on informative function, and measured by F_max, dcGO is ahead**.
+
+**All of that is F_max.** AUPRC, computed in the same run, points the other way
+at IC≥0 in every aspect (naive BP 0.314 vs 0.137, MF 0.325 vs 0.195, CC 0.513
+vs 0.240) and keeps pointing the other way in CC at IC≥2 and IC≥4. So the
+claim above is about one metric at one operating point, and the metric was
+chosen after both were computed. The defensible summary is the external
+review's: domain-derived associations contain predictive signal for later human
+GO annotations and outperform simple baselines in several retrospective
+settings, particularly for higher-information GO terms. See the AUPRC note in
+§2.
+
+> **Update (2026-08-04, §4).** Those §2 numbers now carry uncertainty, a real
+> null and a component ablation. Three things changed how they should be read:
+> (a) the random-domain null is now 100–200 seeded permutations, and dcGO clears
+> it in every aspect × IC × metric cell at the attainable floor of the empirical
+> p-value; (b) the F_max advantage over naive is confirmed by a **paired**
+> bootstrap, but the **AUPRC** advantage is not — naive wins AUPRC at IC≥0 in all
+> three aspects and at every floor in CC; (c) **neither supra-domains nor the
+> shrinkage adds measurable protein-centric value, and the True Path stage
+> significantly subtracts it.** See §4.
 
 ### Next steps (as of 2026-07-09, after the §2 benchmark + method audit)
 
@@ -176,8 +197,14 @@ snapshots fetched via `scripts/download_data.py --goa-archive <version>`.
 - [x] Sweep an **information-content floor** (`--min-ic`) that excludes
       near-universal, low-IC terms from truth and all methods alike — the fair,
       principled way to stop rewarding base-rate recovery of terms like
-      GO:0005515 `protein binding` (**84.6%** of human experimental MF
-      annotations, near-zero IC).
+      GO:0005515 `protein binding`, near-zero IC. Quantified by
+      `validation/protein_binding_dominance.py` (metrics:
+      `validation/protein_binding_dominance.tsv`): it is **84.6%** of
+      experimental MF annotation *lines*, but the measure that explains the
+      benchmark is protein coverage — **87.7%** of the 15,260 proteins with any
+      experimental MF term carry it, and **34.5%** carry nothing else, so a
+      baseline that always predicts it is right about the entire truth for a
+      third of the cohort.
 
 ### Results — 2021→2026 temporal split (2026-07-09, p-score transfer)
 
@@ -190,23 +217,37 @@ labels the model had already seen).
 it in every aspect once uninformative terms are excluded**, staying well above the
 random-domain null throughout:
 
-| Aspect | IC floor | dcGO F_max | naive F_max | random F_max | dcGO / random |
-|--------|:--------:|-----------:|------------:|-------------:|--------------:|
-| BP | ≥0 | **0.248** | 0.115 | 0.158 | 1.6× |
-| BP | ≥2 | **0.170** | 0.071 | 0.053 | 3.2× |
-| BP | ≥4 | **0.115** | 0.031 | 0.019 | 6.1× |
-| BP | ≥6 | **0.077** | 0.010 | 0.003 | 24× |
-| MF | ≥0 | 0.360 | **0.464** | 0.262 | 1.4× |
-| MF | ≥2 | **0.365** | 0.053 | 0.088 | 4.2× |
-| MF | ≥4 | **0.337** | 0.045 | 0.072 | 4.7× |
-| MF | ≥6 | **0.217** | 0.018 | 0.009 | 25× |
-| CC | ≥0 | **0.380** | 0.343 | 0.291 | 1.3× |
-| CC | ≥2 | **0.239** | 0.153 | 0.072 | 3.3× |
-| CC | ≥4 | **0.134** | 0.099 | 0.031 | 4.3× |
-| CC | ≥6 | **0.124** | 0.044 | 0.015 | 8.1× |
+| Aspect | IC floor | dcGO F_max | naive F_max | random F_max | dcGO / random | dcGO AUPRC | naive AUPRC |
+|--------|:--------:|-----------:|------------:|-------------:|--------------:|-----------:|------------:|
+| BP | ≥0 | **0.248** | 0.115 | 0.158 | 1.6× | 0.137 | **0.314** |
+| BP | ≥2 | **0.170** | 0.071 | 0.053 | 3.2× | **0.069** | 0.049 |
+| BP | ≥4 | **0.115** | 0.031 | 0.019 | 6.1× | **0.032** | 0.012 |
+| BP | ≥6 | **0.077** | 0.010 | 0.003 | 24× | **0.017** | 0.003 |
+| MF | ≥0 | 0.360 | **0.464** | 0.262 | 1.4× | 0.195 | **0.325** |
+| MF | ≥2 | **0.365** | 0.053 | 0.088 | 4.2× | **0.227** | 0.025 |
+| MF | ≥4 | **0.337** | 0.045 | 0.072 | 4.7× | **0.210** | 0.011 |
+| MF | ≥6 | **0.217** | 0.018 | 0.009 | 25× | **0.121** | 0.006 |
+| CC | ≥0 | **0.380** | 0.343 | 0.291 | 1.3× | 0.240 | **0.513** |
+| CC | ≥2 | **0.239** | 0.153 | 0.072 | 3.3× | 0.073 | **0.117** |
+| CC | ≥4 | **0.134** | 0.099 | 0.031 | 4.3× | 0.029 | **0.038** |
+| CC | ≥6 | **0.124** | 0.044 | 0.015 | 8.1× | **0.025** | 0.012 |
 
 (IC in bits; IC≥2 ⇒ term in ≤25% of proteins, IC≥6 ⇒ ≤1.6%. Full table with
-S_min/AUPRC in `validation/temporal_benchmark_metrics.tsv`.)
+S_min in `validation/temporal_benchmark_metrics.tsv`.)
+
+> **The AUPRC columns disagree with the F_max columns, and that has to be said
+> up front.** At IC≥0 the naive baseline has the higher AUPRC in *all three*
+> aspects — including BP and CC, the two where dcGO wins F_max — and in CC it
+> keeps the higher AUPRC at IC≥2 and IC≥4 as well, where dcGO's F_max lead is
+> otherwise clear. Only in BP and MF does dcGO take AUPRC once the IC floor
+> rises. So "dcGO beats naive" is a statement about F_max at a chosen operating
+> point, not a statement about the whole precision-recall curve, and CC is the
+> aspect where the two metrics most persistently disagree. The primary endpoint
+> was never pre-specified (a P0 item in
+> `ENGINEERING_SCIENTIFIC_REVIEW_TODOS.md`), so choosing F_max after seeing both
+> is exactly the freedom that review objects to. These AUPRC numbers were
+> present in `temporal_benchmark_metrics.tsv` from the start but were not
+> surfaced in any summary until 2026-08-04.
 
 **Read-out:**
 - **dcGO beats naive on F_max at IC≥0 in BP (0.248 vs 0.115) and CC (0.380 vs
@@ -225,9 +266,14 @@ S_min/AUPRC in `validation/temporal_benchmark_metrics.tsv`.)
   clearly ahead. The calibrated p-score (default) is what lifts it above naive
   even at IC≥0.
 
-**Acceptance: met.** dcGO clears both mandatory baselines (random null and naive)
-across all three aspects on informative terms, and beats naive at face value on 2
-of 3 aspects.
+**Acceptance: met on F_max, qualified on AUPRC.** dcGO clears both mandatory
+baselines (random null and naive) on F_max across all three aspects on
+informative terms, and beats naive at face value on 2 of 3 aspects. It does
+*not* clear naive on AUPRC at IC≥0 in any aspect, nor in CC at IC≥2 or ≥4. The
+defensible summary is the review's: domain-derived associations contain
+predictive signal for later human GO annotations and outperform simple
+baselines in several retrospective settings, particularly for higher-information
+GO terms — not that the method is generally superior.
 
 ### Method audit vs the original dcGO Predictor (2026-07-09)
 
@@ -304,14 +350,82 @@ follow-up: fetch an archived `interpro2go` and pass it as `--reference`.)
 ### Baselines
 - [x] **Naive baseline**: predict each GO term at its (propagated) t0 frequency
       (CAFA's standard `Naive`).
-- [x] **Random-domain baseline**: permute the domain→GO association labels
-      (seeded) and re-transfer — an empirical null for the transfer step. dcGO
-      sits far above it, confirming the associations are non-random.
+- [x] **Random-domain null — now a distribution, not one draw** (2026-08-04).
+      See "Permutation null" immediately below.
 - [ ] **BLAST/annotation-transfer baseline** *(optional, still open)*: transfer
       GO terms from the most similar annotated protein.
 - [ ] **Full-pipeline shuffle** *(stronger null, still open)*: shuffle labels and
       re-run Fisher end-to-end to confirm the FDR itself is calibrated (the
       current shuffle is at the association level, not the whole pipeline).
+
+### Permutation null (2026-08-04) — replaces the single shuffle
+
+The published "dcGO ÷ random" ratios came from **one** seeded shuffle. That is an
+anecdote: it gives no spread, no interval and no p-value, and a single draw can
+land anywhere in the null. `validation/temporal_benchmark.py` now takes
+`--n-permutations` (default 100; permutation 0 uses `--seed`, so the old
+`random_domain` row is the first draw of the reported distribution) and writes
+`validation/temporal_benchmark_permutation_null.tsv`.
+
+**What is permuted, and the exchangeability assumption.** The null hypothesis is
+*"a domain's identity carries no information about the functions of the proteins
+that carry it"*. The randomisation that hypothesis licenses is a permutation of
+the labels of the domain→GO map, and nothing else. It **preserves** every
+protein's real architecture, the multiset of GO-sets (so each GO term's marginal
+frequency across the table is exactly preserved — the null still predicts
+`protein binding` as often as the real method does), the number of domains making
+any prediction, and therefore the set of proteins that receive any prediction at
+all. It **destroys** the pairing between a domain and its terms, and with it the
+correlation between a domain's prevalence and the size/specificity of its term
+set. It is a *base-rate-preserving* null, which is why it scores in the same
+range as the naive baseline at IC≥0 rather than at zero.
+
+**What it does not test — stated plainly.** It permutes the *surviving,
+FDR-significant* table, so it inherits the real pipeline's decisions about which
+domains are predictive at all and how many terms each gets. It is a null for the
+**transfer step**, not for the whole method, and it cannot say whether Fisher+BH
+is calibrated. The end-to-end label shuffle above is still open and would be a
+harder null, because permuted training labels would yield far fewer significant
+associations rather than the same number of scrambled ones.
+
+F_max, 100 permutations, seeds 0–99, `--transfer pscore`:
+
+| Aspect | IC | observed | null mean ± sd | null 95% pct | obs ÷ null mean | *z* | empirical *p* |
+|---|--:|--:|--:|--:|--:|--:|--:|
+| BP | ≥0 | 0.2484 | 0.1552 ± 0.0086 | [0.140, 0.173] | 1.6× | 10.8 | 0.0099 |
+| BP | ≥2 | 0.1701 | 0.0536 ± 0.0070 | [0.042, 0.068] | 3.2× | 16.7 | 0.0099 |
+| BP | ≥4 | 0.1153 | 0.0167 ± 0.0050 | [0.009, 0.027] | 6.9× | 19.9 | 0.0099 |
+| BP | ≥6 | 0.0774 | 0.0057 ± 0.0031 | [0.002, 0.013] | 13.7× | 23.4 | 0.0099 |
+| MF | ≥0 | 0.3597 | 0.2010 ± 0.0198 | [0.166, 0.240] | 1.8× | 8.0 | 0.0099 |
+| MF | ≥2 | 0.3654 | 0.0488 ± 0.0120 | [0.032, 0.077] | **7.5×** | 26.3 | 0.0099 |
+| MF | ≥4 | 0.3367 | 0.0373 ± 0.0102 | [0.023, 0.060] | **9.0×** | 29.2 | 0.0099 |
+| MF | ≥6 | 0.2168 | 0.0097 ± 0.0053 | [0.003, 0.022] | 22.3× | 39.0 | 0.0099 |
+| CC | ≥0 | 0.3796 | 0.2758 ± 0.0149 | [0.242, 0.299] | 1.4× | 7.0 | 0.0099 |
+| CC | ≥2 | 0.2385 | 0.0708 ± 0.0102 | [0.058, 0.096] | 3.4× | 16.5 | 0.0099 |
+| CC | ≥4 | 0.1345 | 0.0302 ± 0.0078 | [0.017, 0.047] | 4.5× | 13.3 | 0.0099 |
+| CC | ≥6 | 0.1245 | 0.0176 ± 0.0070 | [0.006, 0.032] | 7.1× | 15.3 | 0.0099 |
+
+(AUPRC in the same file; its ratios are larger still — 1.5× to 500×.)
+
+**Read-out.**
+- **The result holds, and holds strongly.** In all 24 aspect × IC × metric cells,
+  *no* permutation out of 100 ever reached the observed value, so every empirical
+  *p* is at the attainable floor of 1/(n+1) = 0.0099. With 100 permutations that
+  is the smallest p obtainable; it is a limit of the design, not a measurement of
+  0.0099, and is reported as such.
+- **Two published ratios were understated by a single unlucky draw.** The one
+  shuffle behind `RESULTS.md` gave MF IC≥2 random = 0.088 and MF IC≥4 = 0.072 —
+  both in the *upper tail* of the null (95th percentiles 0.077 and 0.060; maxima
+  0.098 and 0.088). Against the null **mean** the correct ratios are **7.5× and
+  9.0×**, not the reported 4.2× and 4.7×. BP ≥0 (1.6×) and CC ≥0 (1.3× → 1.38×)
+  were essentially unaffected. **`RESULTS.md`'s "1.3–25×" range should be read as
+  "1.4–22× against the null mean, with the low end at IC≥0 and the high end at
+  IC≥6"; the individual per-cell ratios in that table are single draws and the
+  table above supersedes them.**
+- The null is **not** trivially weak. At IC≥0 it scores 0.155–0.276 F_max —
+  comparable to, and for BP and CC *above*, the naive baseline — because it
+  preserves term base rates. dcGO's margin over it grows with the IC floor
+  exactly as the specificity argument predicts.
 
 ### Implementation sketch (concrete next steps)
 
@@ -350,7 +464,31 @@ synthetic split (mirror the §1 test approach — pure functions, tiny fixtures)
 
 ---
 
-### Breadth: does the predictive signal hold beyond GO? (2026-07-28) — DONE
+### Breadth: does the predictive signal hold beyond GO? (2026-08-04, corrected) — DONE
+
+> **These numbers replace the 2026-07-28 table, which was wrong.** The earlier
+> run scored association tables built before `restrict_to_universe` (#26), when
+> a `--species human` run of a UniProt-native ontology built its contingency
+> tables over the whole of Swiss-Prot rather than the human proteome —
+> `protein2ipr` is extracted per species, `uniprot_sprot.dat` is not. The
+> t0 universes were inflated 3–70×, and every non-GO association set was
+> substantially wrong:
+>
+> | Ontology | t0 universe before | after | t0 associations before | after |
+> | --- | ---: | ---: | ---: | ---: |
+> | reactome | 35,849 | 10,736 | 93,172 | 59,426 |
+> | keyword | 555,986 | 18,797 | 166,924 | 83,739 |
+> | subcellular | ~362k | 16,750 | 22,106 | 10,867 |
+> | complex | — | — | 4,482 | 1,385 |
+> | cofactor | ~124k | 1,801 | 2,284 | 1,725 |
+> | disease | — | — | 53 | 53 |
+> | **go** (anchor) | 18,735 | 18,382 | 164,549 | 163,277 |
+>
+> **The contamination was suppressing the signal, not creating it.** Every
+> enrichment below is *higher* than the superseded figure. GO is the control
+> that shows the correction is real rather than a change of protocol: GOA is
+> already species-specific, so its universe moves 1.9% and its enrichment does
+> not move at all (11.3× → 11.5×).
 
 `validation/temporal_breadth.py` applies the §2 split to the ontologies added in
 `src/ontology_registry.py`. One archived Swiss-Prot release (**2021_02**,
@@ -366,33 +504,46 @@ the anchor — without it, "weaker than GO" could not be said, because the 12.5�
 figure came from a different subset (supra-domains only) and a stricter truth
 (experimental evidence only).
 
-| Ontology | assoc. | predictions | hits | hit rate | expected | enrichment (95% CI) |
-| --- | ---: | ---: | ---: | ---: | ---: | --- |
-| **go** (anchor) | 92,377 | 3,139,544 | 106,816 | 3.40% | 0.30% | **11.3× [10.9, 11.8]** |
-| reactome | 54,685 | 1,487,359 | 2,056 | 0.14% | 0.02% | **8.0× [6.7, 9.6]** |
-| cofactor | 363 | 1,744 | 221 | 12.67% | 3.97% | **3.2× [1.7, 4.0]** |
-| subcellular | 13,373 | 507,262 | 7,005 | 1.38% | 0.49% | **2.9× [2.7, 3.0]** |
-| keyword | 85,323 | 2,619,504 | 35,350 | 1.35% | 0.79% | **1.7× [1.6, 1.8]** |
-| complex | 3,606 | 31,076 | 24 | 0.08% | ~0% | *degenerate, see below* |
-| disease | 44 | 369 | 0 | 0% | ~0% | *undefined* |
-| ligand | — | — | — | — | — | *not testable, see below* |
+| Ontology | assoc. | predictions | hits | hit rate | expected | enrichment (95% CI) | superseded |
+| --- | ---: | ---: | ---: | ---: | ---: | --- | ---: |
+| **go** (anchor) | 91,830 | 3,106,234 | 106,224 | 3.42% | 0.30% | **11.5× [11.1, 12.0]** | 11.3× |
+| reactome | 34,397 | 760,073 | 1,430 | 0.19% | 0.02% | **11.4× [8.9, 14.6]** | 8.0× |
+| cofactor | 291 | 1,404 | 235 | 16.74% | 4.72% | **3.5× [2.1, 4.5]** | 3.2× |
+| subcellular | 6,340 | 172,679 | 3,798 | 2.20% | 0.59% | **3.7× [3.5, 3.9]** | 2.9× |
+| keyword | 35,981 | 889,117 | 13,140 | 1.48% | 0.44% | **3.4× [3.2, 3.6]** | 1.7× |
+| complex | 958 | 9,904 | 2 | 0.02% | ~0% | *artefact, see below* | 265× |
+| disease | 27 | 90 | 0 | 0% | ~0% | *undefined* | undefined |
+| ligand | — | — | — | — | — | *not testable, see below* | — |
 
 (In-scope universe where it differs from all-domains; keyword and GO annotate
 essentially every protein, so the two coincide.)
 
-**The signal generalises.** Every ontology with enough data enriches above 1
-with the interval excluding it — dcGO's association-finding is not a GO artefact.
-GO remains strongest and Reactome follows; the ordering tracks how structured and
-curated the vocabulary is. Keywords come last because 720 near-universal terms
-sit at a 0.79% base rate, leaving little headroom.
+**The signal generalises, and Reactome is no longer behind GO.** Every ontology
+with enough data enriches above 1 with the interval excluding it — dcGO's
+association-finding is not a GO artefact. The correction changes one conclusion
+outright: Reactome at **11.4× [8.9, 14.6]** now overlaps GO at **11.5×
+[11.1, 12.0]**, so the earlier "GO remains strongest and Reactome follows" is
+not supported. Reactome's interval is much wider (1,430 hits against GO's
+106,224), so the honest statement is that the two are *indistinguishable at this
+power*, not that Reactome matches GO.
+
+The remaining ordering — subcellular 3.7×, keyword 3.4×, cofactor 3.5× — is a
+band well clear of 1 but well below the two pathway/function vocabularies.
+Keywords are no longer the outlier they appeared to be (1.7× → 3.4×): that gap
+was contamination, not a property of the vocabulary. Their base rate is still
+the highest of any layer (0.44%), which is what caps the achievable ratio.
 
 **Three results that must not be quoted at face value:**
 
-- **`complex` is a degenerate ratio, not a 265× triumph.** ComplexPortal averages
-  ~1.5 proteins per complex, so the base rate rounds to zero and any hit at all
-  divides by nearly nothing. 24 hits. The interval excludes 1, so signal exists;
-  the *magnitude* is uninterpretable. Report as "detectable, magnitude
-  meaningless".
+- **`complex` was an artefact, and the correction exposed it.** The superseded
+  run reported 265× on 24 hits and an interval excluding 1, which was already
+  flagged as a degenerate ratio (ComplexPortal averages ~1.5 proteins per
+  complex, so the base rate rounds to zero and any hit divides by nearly
+  nothing). With the contaminating proteins removed it falls to **2 hits** on
+  9,904 predictions and the interval becomes **[0.00, 130.93]** — it now
+  includes zero. There is no demonstrated signal in this layer at all. The
+  earlier "detectable, magnitude meaningless" was too generous: it was not
+  detectable either.
 - **`disease` scored 0 hits on 369 predictions** — no signal, and enrichment is
   undefined because expected hits ≈ 0 as well. This is the 53-association t0 run
   playing out as predicted: 6,904 OMIM phenotypes over 5,029 proteins is too thin
@@ -415,7 +566,7 @@ sit at a 0.79% base rate, leaving little headroom.
 - **No evidence filter exists off GO.** GO trains on non-IEA and scores against
   experimental only; the UniProt layers have no such split, so an automated
   annotation added between snapshots counts as a hit. The anchor row bounds how
-  much that matters: GO scores **11.3×** under the loose protocol against
+  much that matters: GO scores **11.5×** under the loose protocol against
   **12.5×** under the strict one, i.e. the looser truth did not inflate GO — but
   that is one ontology's worth of reassurance, not a general guarantee.
 - Same look-ahead caveat as §2: architectures come from the current
@@ -696,28 +847,251 @@ What is **not** established, and should not be claimed:
 
 ---
 
-## 4. Ablation study  *(isolates the contribution)*
+## 4. Ablation study  *(isolates the contribution)*  — **DONE (2026-08-04)**
 
 The supra-domain + shrinkage machinery is the main methodological novelty. It
-must be shown to help, not just to exist. Run the temporal benchmark (§2) for
-each configuration:
+had to be shown to help, not just to exist. It does not.
 
-| Config | Flags |
-|--------|-------|
-| Single domains only | `--disable-supra-domains` |
-| + supra-domains | (default) |
-| + supra + shrinkage | `--enable-shrinkage` |
-| + True Path Rule | `--enable-true-path` |
-| Full | `--enable-shrinkage --enable-true-path` |
+**Acceptance was: "each enabled stage shows a measurable, explained effect (a
+stage that doesn't help is a finding too — report it)". The honest verdict is
+that two of the three stages show no effect and the third makes things
+significantly worse.** That is the finding, and this section reports it rather
+than burying it.
 
-- [ ] Report F_max / AUPRC per configuration and per GO aspect.
-- [ ] Quantify **how many supra-domains produce associations not obtainable
-      from their constituents**, and whether low-count supra-domains are
-      correctly regularized by shrinkage (they should not dominate the top
-      predictions).
+### How it was run
 
-**Acceptance:** each enabled stage shows a measurable, explained effect (a
-stage that doesn't help is a finding too — report it).
+`validation/ablation.py`, over the same §2 split (t0 = GOA release 205,
+2021-04; t1 = GOA 2026-06), the same CAFA no-knowledge cohort and the same
+`--transfer pscore`. Three pipeline runs plus the pipeline's own STAGE 5.5
+post-processing give five rungs:
+
+| Rung | What it adds | How produced | Significant associations |
+|---|---|---|---:|
+| `single` | — | `run_dcgo_human.py --disable-supra-domains` | 43,656 |
+| `supra` | supra-domains (len ≤ 3) | default | 163,277 |
+| `supra_shrink` | hierarchical shrinkage | `--enable-shrinkage` | **463,924** |
+| `supra_tpr` | True Path Rule | STAGE 5.5 on `supra` | 22,990 direct → 101,873 annotations |
+| `full` | shrinkage + True Path | STAGE 5.5 on `supra_shrink` | 42,129 direct → 131,456 annotations |
+
+`single` is a separate run because its BH hypothesis family is genuinely smaller
+(3.1×10⁸ tests, not 1.6×10⁹) and its FDR cut therefore differs. The True Path
+rungs run `OntologyProcessor.apply_optimal_level_filter` + `propagate_annotations`
+with the pipeline's own parameters (`min_background_size=3`,
+`alpha_threshold=0.05`) — i.e. exactly what `--enable-true-path` does — factored
+out so a 90-minute Fisher+BH pass is not repeated for a post-processing step that
+cannot change the upstream numbers.
+
+Every rung is scored on `-log10(q)` so the ladder is not confounded by the score
+column (the propagated True Path output carries no `p_value`). The `-log10(p)`
+variant of the three non-True-Path rungs is in the metrics file as `*__p`; the
+two never differ by more than 0.005 F_max.
+
+Uncertainty is a **protein-level paired bootstrap**, 1,000 replicates: the
+benchmark proteins are resampled *once per replicate* and every rung is
+recomputed on that same resample, so a difference between two rungs is a paired
+difference. (Two independent intervals over the same cohort are not a test of a
+difference — the lesson `SURPRISE_SCORE.md` paid for.)
+
+Artefacts: `validation/ablation_metrics.tsv`,
+`validation/ablation_paired_bootstrap.tsv`,
+`validation/ablation_permutation_null.tsv`,
+`validation/ablation_selection_counts.tsv`, `validation/ablation_provenance.tsv`.
+
+### F_max per rung (95% bootstrap CI)
+
+| Rung | BP ≥0 | BP ≥4 | MF ≥0 | MF ≥4 | CC ≥0 | CC ≥4 |
+|---|---|---|---|---|---|---|
+| single domains | 0.245 [0.217, 0.276] | 0.114 [0.091, 0.148] | **0.350** [0.315, 0.384] | **0.336** [0.271, 0.405] | 0.381 [0.356, 0.412] | **0.144** [0.107, 0.185] |
+| + supra-domains | 0.250 [0.221, 0.280] | 0.119 [0.094, 0.152] | 0.336 [0.306, 0.371] | 0.325 [0.267, 0.395] | 0.376 [0.352, 0.406] | 0.131 [0.102, 0.174] |
+| + shrinkage | **0.251** [0.223, 0.283] | **0.120** [0.097, 0.153] | 0.348 [0.313, 0.386] | 0.327 [0.266, 0.394] | **0.383** [0.359, 0.413] | 0.137 [0.106, 0.178] |
+| + True Path | 0.141 [0.112, 0.172] | 0.055 [0.031, 0.080] | 0.303 [0.274, 0.340] | 0.134 [0.089, 0.183] | 0.140 [0.114, 0.169] | 0.030 [0.008, 0.055] |
+| full (shrink+TP) | 0.143 [0.114, 0.175] | 0.055 [0.032, 0.081] | 0.311 [0.281, 0.348] | 0.135 [0.091, 0.184] | 0.140 [0.113, 0.169] | 0.030 [0.008, 0.054] |
+| naive baseline | 0.115 [0.107, 0.125] | 0.031 [0.027, 0.034] | 0.464 [0.439, 0.489] | 0.045 [0.039, 0.053] | 0.343 [0.330, 0.354] | 0.099 [0.089, 0.108] |
+
+(IC ≥2 and ≥6, and AUPRC for every cell, in `validation/ablation_metrics.tsv`.)
+
+### Did each component earn its place? — paired differences, 12 aspect × IC cells
+
+| Component | cells where it **helps** | cells where it **hurts** | typical paired ΔF_max |
+|---|---:|---:|---|
+| **supra-domains** (`supra − single`) | **0 / 12** | 1 / 12 | −0.014 … +0.006, CI spans 0 in 11/12 |
+| **shrinkage** (`supra_shrink − supra`) | **0 / 12** | **0 / 12** | −0.007 … +0.007, CI spans 0 in 12/12 |
+| **True Path Rule** (`supra_tpr − supra`) | 0 / 12 | **12 / 12** | −0.041 … −0.236 |
+| **full vs single** | 0 / 12 | **12 / 12** | −0.041 … −0.241 |
+
+**1. Supra-domains do not improve protein-centric prediction.** Not one of the
+twelve cells shows a significant gain. The largest point estimate is +0.006
+(BP IC≥4, CI [−0.002, +0.011]). The single "significant" cell is a *loss* —
+MF IC≥0, −0.014 [−0.025, −0.000], p = 0.048 — which at 12 uncorrected
+comparisons is what one expects by chance and should not be read as a real
+effect either. The honest summary is **no measurable effect in either
+direction**. Supra-domains cost a 5.3× larger feature space (19,230 → 102,206
+features) and a 5.3× larger multiple-testing family (3.1×10⁸ → 1.6×10⁹ tests)
+to buy that.
+
+This does **not** say supra-domains are worthless. It says they do not move
+*this* metric: F_max is dominated by whether a protein's terms are recovered at
+all, and a supra-domain's terms are usually a subset of its constituents'. The
+value demonstrated elsewhere in this repository is different in kind — the
+*emergent* combinations that predict a term no constituent does, which
+`SURPRISE_SCORE.md` §"held-out validation" shows anticipate later curation
+(2,181 predictions confirmed against ~175 expected). A protein-centric F_max
+averaged over a 324–572 protein cohort cannot see a few thousand emergent
+associations. **Both facts should be stated in the paper; neither cancels the
+other.**
+
+**2. Shrinkage does nothing to predictions, and nearly triples the number of
+"significant" associations.** Zero of twelve cells move (all CIs span zero;
+largest |Δ| = 0.007). But the same step takes the significant-association count
+from **163,277 to 463,924 (+184%)** at FDR < 0.01, moving the BH p-value cut from
+9.95×10⁻⁷ to 2.83×10⁻⁶.
+
+The mechanism is visible in the run log: of the 1.33×10⁹ supra-domain tests,
+only **43.6%** had their p-value *increased*; **56.4% were decreased**. That is
+not shrinkage. The step geometrically interpolates each supra-domain's observed
+p-value toward the geometric mean of its constituents' p-values with weight
+`α = 0.5·exp(−n/3)`, and when the constituents are individually stronger than the
+combination — the common case — the interpolation makes the supra-domain p-value
+*smaller*, i.e. manufactures significance.
+
+This is direct empirical support for the review's objection that the procedure
+is "not presently a fitted empirical-Bayes model" and that "the transformed
+quantities have not been shown to be valid p-values": **a genuine shrinkage
+toward a null prior cannot increase the count of rejections, and this one nearly
+triples it. BH applied to these values does not control FDR at the nominal
+level, and 300,647 of the 463,924 associations in the `--enable-shrinkage`
+output exist only because of a transformation with no error-rate guarantee.**
+Recommended action: rename the option to what it is (a heuristic re-weighting),
+or replace it with a fitted hierarchical model, before any claim about the
+`--enable-shrinkage` output is published. It is off by default, which is the
+right default.
+
+**3. The True Path Rule stage makes protein-centric prediction significantly
+worse in every cell** — by 0.04 to 0.24 F_max, and by more on AUPRC. Two
+mechanisms, both measured:
+
+- *It is almost all filter, and the propagation half is redundant here.* The
+  parental-background filter keeps only **22,990 of 163,277** associations
+  (14%). The propagation half adds nothing on this benchmark because the CAFA
+  transfer step already propagates every predicted term to its ancestors — so
+  what the rung actually measures is the filter alone.
+- *Most of the filtering is untested rejection.* **54,951 parent tests could not
+  be evaluated at all** and their associations were rejected by the code's
+  conservative `except` branch. The reason is a genuine defect: the parental
+  background is built from the **unpropagated** t0 annotation map, so a parent
+  term that no protein is *directly* annotated to has an empty background, the
+  test raises, and every child of that parent is discarded untested. Under the
+  True Path Rule a protein annotated to a child *is* annotated to the parent, so
+  the background should be computed on the propagated map. Until that is fixed,
+  `--enable-true-path` should not be described as an optional refinement — on
+  this benchmark it is a substantial regression. (`src/ontology_processor.py`
+  now reports the count in one line instead of 110k warnings, so the problem is
+  visible in any future run.)
+- Coverage tells the same story: the True Path rungs make a prediction for only
+  **22–50%** of the cohort, against 52–71% for the other rungs.
+
+**4. The "full method" is the worst rung of the ladder.** `full − single` is
+significantly negative in all twelve cells. On this benchmark the best
+configuration is the simplest one: **single domains, no shrinkage, no True Path**
+— statistically indistinguishable from `+supra` and `+shrinkage`, and
+significantly better than anything with True Path in it.
+
+### Prediction coverage next to F_max (P1)
+
+CAFA precision is averaged only over proteins that have a prediction at the
+threshold, while recall is averaged over the whole cohort — so an F_max earned on
+half the cohort is not comparable to one earned on all of it. Fraction of the
+cohort with any prediction (`coverage_any` in the metrics file):
+
+| Aspect | single / supra / shrink | True Path rungs | naive |
+|---|---|---|---|
+| BP | 0.54–0.55 | 0.34 | 1.00 |
+| MF | 0.63–0.71 | 0.39–0.51 | 1.00 |
+| CC | 0.42–0.52 | 0.12–0.22 | 1.00 |
+
+**dcGO's F_max is computed with roughly half of the benchmark cohort receiving
+no prediction at all**, which its recall term already pays for but which every
+reported F_max should be read against. This has not been reported before.
+
+### Selection-stage counts, and the IC-floor cohort change (P1)
+
+`validation/ablation_selection_counts.tsv` records every filter:
+
+| Stage | BP | MF | CC |
+|---|---:|---:|---:|
+| t0 proteins with ≥1 non-IEA GO annotation | 18,735 | — | — |
+| t1 proteins with ≥1 experimental annotation | 16,362 | — | — |
+| Proteins with ≥1 InterPro domain | 18,908 | — | — |
+| No-knowledge candidates | 336 | 430 | 590 |
+| …and with ≥1 domain (the scored cohort) | **324** | **418** | **572** |
+| Cohort at IC ≥2 | 324 (100%) | **170 (41%)** | 405 (71%) |
+| Cohort at IC ≥4 | 318 (98%) | 162 (39%) | 252 (44%) |
+| Cohort at IC ≥6 | 289 (89%) | 145 (35%) | 154 (27%) |
+
+The review's concern is confirmed and quantified: **an IC floor is not only a
+term filter, it is a cohort filter.** MF loses 59% of its proteins between IC≥0
+and IC≥2, CC loses 73% by IC≥6. Comparisons *across* IC floors are therefore not
+paired and must not be read as "the same proteins, harder terms". Every paired
+test in this section is within a single (aspect, IC) cell, where the cohort is
+fixed and identical for all methods.
+
+### Open ablation item
+
+- [ ] Quantify **how many supra-domains produce associations not obtainable from
+      their constituents** at the association level (the surprise score's
+      candidate pool is 22,376 combinations, of which 10,136 make ≥1 standing
+      prediction — see `SURPRISE_SCORE.md`), and check whether low-count
+      supra-domains dominate the top predictions under `--enable-shrinkage`.
+      Given finding 2 above, the second half is now a *bug hunt*, not a
+      validation.
+
+### Where these results contradict what the repository previously said
+
+Flagged explicitly rather than left for a reader to discover.
+
+1. **"The supra-domain + shrinkage machinery is the main methodological
+   novelty. It must be shown to help."** (this section's own opening, and
+   `CLAUDE.md`.) On the §2 protein-centric benchmark **neither helps**, and the
+   True Path stage hurts. The defensible claim is now: *the domain→GO
+   associations carry signal; the supra-domain, shrinkage and True Path stages
+   on top of them are not shown to add protein-centric predictive value on this
+   split, and the True Path stage as implemented subtracts it.*
+
+2. **`RESULTS.md`: "the p-score … lifts F_max/AUPRC across the board".** True of
+   F_max; **not true of AUPRC**. Paired against the naive baseline at IC≥0, dcGO
+   is *significantly worse* on AUPRC in all three aspects (BP −0.178
+   [−0.207, −0.150]; MF −0.144 [−0.182, −0.104]; CC −0.280 [−0.307, −0.252]),
+   because naive predicts every term for every protein and so sweeps the
+   high-recall end of the curve that dcGO's ~50% coverage cannot reach. dcGO
+   wins AUPRC at BP ≥4/≥6 and MF ≥2/≥4/≥6; at CC it does **not** beat naive on
+   AUPRC at any floor (significantly worse at ≥0 and ≥2, indistinguishable at ≥4
+   and ≥6). **`RESULTS.md`'s "beats it in every aspect once uninformative terms
+   are excluded" holds for F_max only and should say so.**
+
+3. **`RESULTS.md`'s "dcGO ÷ random" column** is a ratio against one shuffle. Two
+   of its cells are materially off: MF IC≥2 (reported 4.2×, correct 7.5× against
+   the null mean) and MF IC≥4 (reported 4.7×, correct 9.0×). See the §2
+   permutation-null section above; that table supersedes the ratios.
+
+4. **`validation/BENCHMARK_ARTIFACTS.md` inferred that `bench_primary` read
+   `domain_go_associations_relative.tsv`.** It did not — the §2 metrics reproduce
+   *exactly* from the plain `domain_go_associations_significant.tsv`. That file
+   has been corrected.
+
+5. **The archived t0 association table is no longer reproducible from current
+   `main`.** Re-running the documented t0 command today yields **163,277**
+   significant associations, not the archived **164,549**. The cause is
+   identified: `restrict_to_universe` (added with the multi-ontology seam, #22)
+   now narrows the Fisher protein universe from all 18,735 non-IEA-annotated
+   proteins to the 18,382 that also have domains, which shifts every `d` cell
+   and hence every p-value slightly. The current behaviour is the *correct* one —
+   a protein with no domain assignment is missing data, not evidence of absence —
+   but it means `results_t0_2021/` and `validation/temporal_benchmark_metrics.tsv`
+   are artefacts of an earlier pipeline version. The ablation above is internally
+   consistent (all five rungs from current `main`); its `supra` rung is the
+   current-code equivalent of the §2 headline and lands at F_max 0.250 BP /
+   0.336 MF / 0.376 CC against the archived 0.248 / 0.360 / 0.380. This is
+   exactly the P1 run-manifest gap.
 
 ---
 
@@ -735,17 +1109,23 @@ per association in `validation/temporal_surprise_associations.tsv`.
 
 - [x] **The supra-domain associations predict future curation: 12.5×
       enrichment** over the terms' own acquisition rates (2,181 hits on 170,416
-      predictions vs ~175 expected), bootstrap CI [10.9, 14.4]. This is the
-      out-of-sample evidence the domain-combination claim was missing.
+      predictions vs ~175 expected), 95% percentile CI [10.87, 14.39]. These
+      strata are fixed sets, so this is an ordinary bootstrap and the interval is
+      sound. This is the out-of-sample evidence the domain-combination claim was
+      missing.
 - [x] **The surprise ranking is *not* demonstrably better than ranking by the
-      dcGO q-value.** At matched prediction budgets the point estimate favours
-      surprise 3/3 (15.5 vs 5.3, 21.2 vs 13.2, 11.6 vs 10.8) but a **paired**
-      bootstrap — re-ranking both ways inside each resample, because the two
-      rankings share a candidate pool and their independent intervals are
-      therefore correlated — puts zero inside every interval. Report it as "no
-      demonstrated ranking advantage"; the score's contribution is
-      interpretability (redundant-signature and curated-novelty filtering) and a
-      bias toward rarer, higher-IC terms, not ranking power.
+      dcGO q-value — and at these budgets the comparison is not resolvable at
+      all.** The score assigns exactly 0.000 to 9,923 of the 10,136 evaluated
+      associations (`q_emergence` saturates at 1), so a slice sized by prediction
+      budget is mostly an arbitrary tie-break: 63% of it at 10,000 predictions,
+      85% at 40,000. Re-breaking the tie at random moves the observed +7.96 at
+      the 10,000 budget to +0.12 [−5.53, +7.57] — the observed value is the 98th
+      percentile of its own tie-break spread. At 2,000 predictions only 17 dcGO
+      associations fit, and the percentile and basic intervals disagree about the
+      *sign*. Report it as "no demonstrated ranking advantage"; the score's
+      contribution is interpretability (redundant-signature and curated-novelty
+      filtering) and a bias toward rarer, higher-IC terms, not ranking power.
+      Re-running the head-to-head needs a graded emergence score first.
 - [ ] **Open: the emergence/testability tension.** The most emergent
       associations leave the fewest standing predictions (emergence requires
       that carriers are already nearly all annotated), so the sharp end of the
@@ -773,9 +1153,16 @@ per association in `validation/temporal_surprise_associations.tsv`.
 
 ## 6. Reproducibility (must-haves for submission)
 
-- [ ] **Pin dataset versions**: record the GOA / InterPro / GO release dates and
-      URLs used for every reported number (extend `scripts/download_data.py` to
-      log resolved versions).
+- [x] **Record exact run provenance**: every run writes
+      `run_manifest_<ontology>.json` with input/output SHA-256 hashes, embedded
+      release headers, source URLs, Git state, the `uv.lock` hash, the command
+      line, every effective parameter and threshold, and summary counts. See
+      [REPRODUCIBILITY.md](REPRODUCIBILITY.md).
+- [ ] **Pin dated dataset versions**: replace the mutable `current_release`
+      inputs with archived GOA / InterPro / GO releases for every reported
+      number.
+- [ ] **Extend provenance to the downstream tools**: the surprise-score driver
+      and the `validation/` benchmarks still record nothing.
 - [ ] **One-command reproduction** of each table/figure from raw downloads.
 - [ ] **Archive** the exact input snapshots (Zenodo/figshare) since
       `current_release` URLs move.

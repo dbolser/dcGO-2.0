@@ -5,6 +5,7 @@ This module contains all configuration settings and parameters for the dcGO pipe
 including data sources, processing parameters, and file paths using Python 3.12 features.
 """
 
+import hashlib
 import logging
 import os
 from dataclasses import dataclass, field
@@ -25,7 +26,15 @@ class ConfigurationError(Exception):
 
 @dataclass(frozen=True)
 class DataSource:
-    """Configuration for a data source with validation."""
+    """Configuration for a data source with validation.
+
+    ``checksum`` is an optional ``"<algorithm>:<hex digest>"`` string (a bare
+    digest is read as SHA-256). Set it for any source pinned to an immutable
+    release URL — ``scripts/download_data.py`` verifies it after downloading, so
+    a silently changed or truncated file fails loudly instead of quietly
+    altering a run's results. Sources on mutable "current release" URLs leave it
+    ``None``, since the file legitimately changes.
+    """
 
     name: str
     url: str
@@ -50,6 +59,10 @@ class DataSource:
                 f"URL cannot be empty for data source '{self.name}'"
             )
 
+        # Fail on a malformed checksum here, not after a multi-GB download.
+        if self.checksum is not None:
+            self.checksum_parts()
+
         # Basic URL validation
         parsed = urlparse(self.url)
         if not parsed.scheme or not parsed.netloc:
@@ -61,6 +74,29 @@ class DataSource:
             raise ConfigurationError(
                 f"Unsupported URL scheme for data source '{self.name}': {parsed.scheme}"
             )
+
+    def checksum_parts(self) -> Optional[tuple[str, str]]:
+        """``(algorithm, hex digest)`` for :attr:`checksum`, or ``None`` if unset.
+
+        Raises:
+            ConfigurationError: the checksum names an algorithm ``hashlib``
+                does not provide, or its digest is not hexadecimal.
+        """
+        if self.checksum is None:
+            return None
+        algorithm, _, digest = self.checksum.rpartition(":")
+        algorithm = (algorithm or "sha256").lower()
+        if algorithm not in hashlib.algorithms_available:
+            raise ConfigurationError(
+                f"Unknown checksum algorithm '{algorithm}' for data source "
+                f"'{self.name}'"
+            )
+        if not digest or any(c not in "0123456789abcdefABCDEF" for c in digest):
+            raise ConfigurationError(
+                f"Checksum for data source '{self.name}' is not a hex digest: "
+                f"{self.checksum!r}"
+            )
+        return algorithm, digest.lower()
 
 
 @dataclass(frozen=True)
@@ -280,6 +316,23 @@ class Config:
                 url="https://ftp.ebi.ac.uk/pub/databases/chebi/ontology/chebi_lite.obo",
                 description="ChEBI ontology (True Path for --ontology ligand|cofactor)",
                 required=False,
+            ),
+            # Human Disease Ontology. Supplies both the DOID is_a DAG (True Path
+            # for --ontology doid|orphanet_doid) and the OMIM/Orphanet
+            # cross-references that re-key UniProt's disease layer onto it.
+            # Consumed by src/disease_ontology.py.
+            #
+            # Pinned to an immutable OBO Foundry *release* PURL rather than the
+            # mutable https://purl.obolibrary.org/obo/doid.obo, so a run is
+            # reproducible; the checksum is verified on download. Bump both
+            # together when refreshing (the release date is the OBO header's
+            # data-version).
+            "disease_ontology": DataSource(
+                name="disease_ontology",
+                url="https://purl.obolibrary.org/obo/doid/releases/2026-07-31/doid.obo",
+                description="Human Disease Ontology (DOID DAG + OMIM/Orphanet xrefs) for --ontology doid",
+                required=False,
+                checksum="sha256:5b9803aa17eeabf4c70f144c64216294d01e66335da3e560576d4eb2dc9ff490",
             ),
             "goa_annotations": DataSource(
                 name="goa_annotations",

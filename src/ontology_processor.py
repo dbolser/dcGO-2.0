@@ -18,6 +18,38 @@ from scipy.stats import fisher_exact
 import gzip
 
 
+class _BackgroundIndex:
+    """Inverted term->proteins / domain->proteins index for the parental-background test.
+
+    Purely a performance structure: it changes no count and no p-value. The
+    parental-background test needs, for each (domain, child, parent), the four
+    cells of a contingency table restricted to the proteins carrying the parent
+    term. Computed straight from the maps that is four passes over the whole
+    proteome *per parent test* — with ~165k significant associations and ~2
+    parents each, that is ~10^10 Python-level membership checks and the True Path
+    stage never finishes on a real human run (measured: hours). Inverting the two
+    maps once turns every cell into a set intersection.
+    """
+
+    __slots__ = ("term_proteins", "domain_proteins")
+
+    def __init__(
+        self,
+        protein_domain_map: Dict[str, List[str]],
+        protein_go_map: Dict[str, Set[str]],
+    ) -> None:
+        term_proteins: Dict[str, set] = {}
+        for protein, terms in protein_go_map.items():
+            for term in terms:
+                term_proteins.setdefault(term, set()).add(protein)
+        domain_proteins: Dict[str, set] = {}
+        for protein, domains in protein_domain_map.items():
+            for domain in domains:
+                domain_proteins.setdefault(domain, set()).add(protein)
+        self.term_proteins = term_proteins
+        self.domain_proteins = domain_proteins
+
+
 @dataclass
 class Annotation:
     """
@@ -139,6 +171,9 @@ class OntologyProcessor:
         # Cache frequently used structures
         self._ancestors_cache = {}
         self._descendants_cache = {}
+        # Tally of parent tests that could not be evaluated, reported in one line
+        # by apply_optimal_level_filter instead of one warning per occurrence.
+        self._filter_rejections: Dict[str, int] = {}
 
         logger.info(
             f"GO graph ready: {len(self.go_graph.nodes)} terms, {len(self.go_graph.edges)} relationships"
@@ -269,9 +304,13 @@ class OntologyProcessor:
 
         filtered_associations = []
         total_associations = len(significant_associations)
+        # Invert the maps once; see _BackgroundIndex for why this is not optional
+        # at real scale. The counts it produces are identical to the direct scan.
+        index = _BackgroundIndex(protein_domain_map, protein_go_map)
+        self._filter_rejections: Dict[str, int] = {}
 
         for i, assoc in enumerate(significant_associations):
-            if i % 1000 == 0:
+            if i % 10000 == 0:
                 logger.info(f"Processing association {i + 1}/{total_associations}")
 
             try:
@@ -282,6 +321,7 @@ class OntologyProcessor:
                     protein_go_map,
                     min_background_size,
                     alpha_threshold,
+                    index=index,
                 ):
                     filtered_associations.append(assoc)
             except Exception as e:
@@ -293,6 +333,16 @@ class OntologyProcessor:
         logger.info(
             f"Optimal level filter: {len(filtered_associations)}/{total_associations} associations retained"
         )
+        if self._filter_rejections:
+            detail = ", ".join(
+                f"{n:,} x {kind}" for kind, n in sorted(self._filter_rejections.items())
+            )
+            logger.info(
+                f"  {sum(self._filter_rejections.values()):,} parent tests could not be "
+                f"evaluated and their associations were rejected untested ({detail}). "
+                "The background comes from the unpropagated annotation map, so a "
+                "parent term nobody is directly annotated to has an empty background."
+            )
         return filtered_associations
 
     def _passes_optimal_level_test(
@@ -303,6 +353,7 @@ class OntologyProcessor:
         protein_go_map: Dict[str, Set[str]],
         min_background_size: int,
         alpha_threshold: float,
+        index: "_BackgroundIndex | None" = None,
     ) -> bool:
         """
         Test if a domain-GO association is at optimal specificity level.
@@ -345,6 +396,7 @@ class OntologyProcessor:
                     protein_domain_map,
                     protein_go_map,
                     min_background_size,
+                    index=index,
                 )
 
                 # If not significantly stronger than any parent, reject
@@ -355,8 +407,20 @@ class OntologyProcessor:
                     return False
 
             except Exception as e:
-                logger.warning(f"Error testing against parent {parent_term}: {e}")
-                # Conservative: if we can't test, reject the association
+                # Conservative: if we can't test, reject the association.
+                #
+                # In practice this branch dominates: the background is built from
+                # the *unpropagated* annotation map, so any parent term with no
+                # direct annotation has an empty background and every child of it
+                # is rejected untested. That is a substantive property of this
+                # filter, not an edge case — it is why the True Path rung retains
+                # only ~14% of associations (VALIDATION_PLAN §4). Logged per
+                # occurrence it produced 110k warning lines and a 19 MB log, so it
+                # is counted here and reported once by the caller instead.
+                self._filter_rejections[type(e).__name__] = (
+                    self._filter_rejections.get(type(e).__name__, 0) + 1
+                )
+                logger.debug(f"Error testing against parent {parent_term}: {e}")
                 return False
 
         return True
@@ -369,6 +433,7 @@ class OntologyProcessor:
         protein_domain_map: Dict[str, List[str]],
         protein_go_map: Dict[str, Set[str]],
         min_background_size: int,
+        index: "_BackgroundIndex | None" = None,
     ) -> float:
         """
         Test domain-child association strength within parent term background.
@@ -391,47 +456,35 @@ class OntologyProcessor:
         Raises:
             ValueError: If background is too small or data is invalid
         """
+        # Inverted index of the same two maps. Building it here (rather than
+        # requiring the caller to) keeps direct callers working; the batch entry
+        # point apply_optimal_level_filter passes a shared one so the inversion
+        # happens once per run instead of once per test.
+        if index is None:
+            index = _BackgroundIndex(protein_domain_map, protein_go_map)
+
         # Get all proteins annotated with parent term (background set)
-        parent_proteins = {
-            protein for protein, terms in protein_go_map.items() if parent_term in terms
-        }
+        parent_proteins = index.term_proteins.get(parent_term, frozenset())
 
         if len(parent_proteins) < min_background_size:
             raise ValueError(
                 f"Insufficient background size: {len(parent_proteins)} < {min_background_size}"
             )
 
-        # Build 2x2 contingency table within parent background
+        # Build 2x2 contingency table within parent background, as set algebra on
+        # the index. Identical counts to scanning every protein, ~1000x cheaper.
+        domain_proteins = index.domain_proteins.get(domain, frozenset())
+        child_in_background = (
+            index.term_proteins.get(child_term, frozenset()) & parent_proteins
+        )
+        domain_in_background = domain_proteins & parent_proteins
+
         # a: proteins with domain AND child term (within parent background)
-        a = len(
-            [
-                p
-                for p in parent_proteins
-                if domain in protein_domain_map.get(p, [])
-                and child_term in protein_go_map.get(p, set())
-            ]
-        )
-
+        a = len(child_in_background & domain_proteins)
         # b: proteins with child term but NOT domain (within parent background)
-        b = len(
-            [
-                p
-                for p in parent_proteins
-                if child_term in protein_go_map.get(p, set())
-                and domain not in protein_domain_map.get(p, [])
-            ]
-        )
-
+        b = len(child_in_background) - a
         # c: proteins with domain but NOT child term (within parent background)
-        c = len(
-            [
-                p
-                for p in parent_proteins
-                if domain in protein_domain_map.get(p, [])
-                and child_term not in protein_go_map.get(p, set())
-            ]
-        )
-
+        c = len(domain_in_background) - a
         # d: proteins with neither domain nor child term (within parent background)
         d = len(parent_proteins) - (a + b + c)
 

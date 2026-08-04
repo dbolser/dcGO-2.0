@@ -238,12 +238,40 @@ def shuffle_domain_go(
     domain_go_scores: Mapping[str, Mapping[str, float]],
     seed: int = 0,
 ) -> dict[str, dict[str, float]]:
-    """Random-domain baseline: permute which GO-set each domain owns.
+    """Random-domain null: permute which GO-set each domain owns.
 
     Each domain is reassigned another domain's entire (term -> score) association
-    set by a seeded permutation of the domain labels. This is a light-weight
-    empirical null for the *transfer* step (it does not re-run Fisher): if the
-    real associations carry signal, this shuffle should score far worse.
+    set by a seeded permutation of the domain labels. Run once this is an
+    anecdote; :func:`permutation_null_seeds` turns it into a distribution.
+
+    **What is exchangeable, exactly.** The null hypothesis is *"a domain's
+    identity carries no information about which functions its carrier proteins
+    have"*. Permuting the labels of the domain -> GO map, and nothing else, is the
+    randomisation that hypothesis licenses. Note what it preserves and what it
+    destroys, because both matter for how hard the null is to beat:
+
+    * **Preserved.** Every protein keeps its real architecture. The multiset of
+      GO-sets is unchanged, so the marginal frequency of each GO term across the
+      association table is exactly preserved — a permuted table still predicts
+      ``protein binding`` about as often as the real one. The null is therefore
+      *base-rate preserving*, which is why it scores in the same range as the
+      naive baseline at IC >= 0 rather than at zero. The number of domains that
+      make any prediction, and the size distribution of their term sets, are also
+      preserved.
+    * **Destroyed.** The pairing between a domain and its terms, and with it the
+      correlation between a domain's *prevalence* and the *size/specificity* of
+      its term set: a rare domain can inherit a promiscuous domain's 400-term
+      set.
+
+    **What this null does NOT test, stated plainly.** It permutes the *surviving,
+    FDR-significant* association table, so it inherits the real pipeline's
+    decisions about which domains are predictive at all and how many terms each
+    gets. It is a null for the **transfer step**, not for the whole method: it
+    cannot say whether the Fisher + BH stage itself is calibrated. The stronger
+    null — permute the protein -> GO labels and re-run inference end to end — is
+    still open (see VALIDATION_PLAN §2 "Baselines"), and would be a much harder
+    null to beat because a permuted training set would yield far fewer
+    significant associations rather than the same number of scrambled ones.
     """
     import numpy as np
 
@@ -254,6 +282,18 @@ def shuffle_domain_go(
         domains[i]: dict(domain_go_scores[domains[perm[i]]])
         for i in range(len(domains))
     }
+
+
+def permutation_null_seeds(base_seed: int, n_permutations: int) -> list[int]:
+    """The seeds of a permutation null, so it is reproducible and auditable.
+
+    Seed ``i`` is ``base_seed + i``, which means permutation 0 is exactly the
+    single shuffle the harness used to report — the old result is now the first
+    draw of a distribution rather than the whole story.
+    """
+    if n_permutations < 1:
+        raise ValueError(f"n_permutations must be >= 1, got {n_permutations}")
+    return [base_seed + i for i in range(n_permutations)]
 
 
 # --------------------------------------------------------------------------- #
@@ -512,6 +552,22 @@ def load_domain_go_scores(
     return dict(out)
 
 
+def _load_resampling():  # pragma: no cover - import plumbing
+    """Import the sibling ``validation/resampling.py`` (validation/ is not a package)."""
+    import importlib.util
+    import sys
+    from pathlib import Path
+
+    if "resampling" in sys.modules:
+        return sys.modules["resampling"]
+    path = Path(__file__).resolve().parent / "resampling.py"
+    spec = importlib.util.spec_from_file_location("resampling", path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["resampling"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def build_term_aspect(processor) -> dict[str, str]:
     """Map each GO term to BP/MF/CC using the ontology namespace."""
     term_aspect: dict[str, str] = {}
@@ -590,7 +646,18 @@ def main() -> int:
         action="store_false",
     )
     parser.add_argument("--output-dir", type=Path, default=Path("validation"))
-    parser.add_argument("--seed", type=int, default=0, help="Shuffle-baseline seed")
+    parser.add_argument(
+        "--seed", type=int, default=0, help="Base seed for the permutation null"
+    )
+    parser.add_argument(
+        "--n-permutations",
+        type=int,
+        default=100,
+        help="Seeded domain-label permutations forming the random-domain null "
+        "(default: 100). Permutation 0 uses --seed, so the 'random_domain' row in "
+        "the metrics table is the first draw of the reported distribution. The "
+        "smallest attainable empirical p is 1/(n+1).",
+    )
     parser.add_argument(
         "--transfer",
         choices=["max", "pscore"],
@@ -742,6 +809,59 @@ def main() -> int:
     out_file = args.output_dir / "temporal_benchmark_metrics.tsv"
     result_df.to_csv(out_file, sep="\t", index=False)
     logger.info(f"✓ Saved metrics: {out_file}")
+
+    # ---------------------------------------------------------------------- #
+    # Permutation null. One shuffle is an anecdote; this repeats it under N
+    # seeds and reports the distribution, a percentile interval and an
+    # empirical p-value for the observed dcGO statistic against it.
+    # ---------------------------------------------------------------------- #
+    if args.n_permutations > 1:
+        rs = _load_resampling()
+        seeds = permutation_null_seeds(args.seed, args.n_permutations)
+        logger.info(
+            f"Permutation null: {len(seeds)} seeded domain-label permutations..."
+        )
+        null_samples: dict[tuple[str, float, str], list[float]] = defaultdict(list)
+        for n_done, s in enumerate(seeds, start=1):
+            perm_pred = transfer(
+                eval_domains, shuffle_domain_go(domain_go_scores, seed=s), get_ancestors
+            )
+            for aspect in ("BP", "MF", "CC"):
+                if not benchmark[aspect]:
+                    continue
+                pred_a = restrict_to_aspect(perm_pred, aspect, term_aspect)
+                for min_ic in ic_floors:
+                    true_a = filter_by_ic(benchmark[aspect], ic, min_ic)
+                    if not true_a:
+                        continue
+                    pred_f = filter_by_ic(pred_a, ic, min_ic)
+                    panel = rs.build_panel(
+                        pred_f, true_a, ic, _candidate_thresholds(pred_f)
+                    )
+                    vals = rs.panel_metrics(panel)
+                    null_samples[(aspect, min_ic, "f_max")].append(vals["f_max"])
+                    null_samples[(aspect, min_ic, "auprc")].append(vals["auprc"])
+            if n_done % 10 == 0:
+                logger.info(f"  permutation {n_done}/{len(seeds)}")
+
+        observed = {(r["aspect"], r["min_ic"], r["method"]): r for r in rows}
+        null_rows = []
+        for (aspect, min_ic, metric), samples in sorted(null_samples.items()):
+            obs = observed[(aspect, min_ic, "dcGO")][metric]
+            null_rows.append(
+                {
+                    "aspect": aspect,
+                    "min_ic": min_ic,
+                    "metric": metric,
+                    "n_eval_proteins": observed[(aspect, min_ic, "dcGO")][
+                        "n_eval_proteins"
+                    ],
+                    **rs.summarise_null(obs, samples),
+                }
+            )
+        null_file = args.output_dir / "temporal_benchmark_permutation_null.tsv"
+        pd.DataFrame(null_rows).to_csv(null_file, sep="\t", index=False)
+        logger.info(f"✓ Saved permutation null: {null_file}")
 
     # Headline: does dcGO clear the naive F_max floor, and how does that change
     # as low-information terms are filtered out?

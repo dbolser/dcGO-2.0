@@ -1,0 +1,311 @@
+2026-08-04 17:38:48.786 | INFO     | __main__:main:335 - Loading GO ontology...
+2026-08-04 17:38:48.787 | INFO     | src.ontology_processor:__init__:120 - Loading GO ontology from data/raw/go_ontology/go-basic.obo
+2026-08-04 17:38:53.211 | INFO     | src.ontology_processor:_prepare_graph:142 - Preparing GO graph for processing
+2026-08-04 17:38:54.620 | INFO     | src.ontology_processor:_prepare_graph:178 - GO graph ready: 38245 terms, 71895 relationships
+2026-08-04 17:38:54.634 | INFO     | src.ontology_processor:_compute_graph_metrics:191 - GO term distribution by namespace:
+2026-08-04 17:38:54.634 | INFO     | src.ontology_processor:_compute_graph_metrics:193 -   biological_process: 24129 terms
+2026-08-04 17:38:54.634 | INFO     | src.ontology_processor:_compute_graph_metrics:193 -   molecular_function: 10041 terms
+2026-08-04 17:38:54.634 | INFO     | src.ontology_processor:_compute_graph_metrics:193 -   cellular_component: 4075 terms
+2026-08-04 17:38:54.711 | INFO     | src.ontology_processor:_compute_graph_metrics:211 - Graph depth statistics: max=11, avg=4.8
+2026-08-04 17:38:54.728 | INFO     | __main__:main:340 - Parsing t0 (training) GOA — all non-IEA evidence...
+2026-08-04 17:38:54.729 | INFO     | src.goa_parser:__init__:113 - GOAParser initialized:
+2026-08-04 17:38:54.729 | INFO     | src.goa_parser:__init__:115 -   Evidence codes: ['EXP', 'IBA', 'IBD', 'IC', 'IDA', 'IEP', 'IGC', 'IGI', 'IKR', 'IMP', 'IPI', 'IRD', 'ISA', 'ISM', 'ISO', 'ISS', 'NAS', 'ND', 'RCA', 'TAS']
+2026-08-04 17:38:54.729 | INFO     | src.goa_parser:__init__:118 -   Aspects: ['C', 'F', 'P']
+2026-08-04 17:38:54.729 | INFO     | src.goa_parser:__init__:119 -   Exclude qualifiers: True
+2026-08-04 17:38:54.729 | INFO     | src.goa_parser:parse_gaf_file:131 - Parsing GAF file: data/raw/goa_archive/goa_human.gaf.205.gz
+2026-08-04 17:38:57.424 | INFO     | src.goa_parser:parse_gaf_file:206 - GAF parsing complete:
+2026-08-04 17:38:57.424 | INFO     | src.goa_parser:parse_gaf_file:207 -   Total lines: 618,369
+2026-08-04 17:38:57.424 | INFO     | src.goa_parser:parse_gaf_file:208 -   Accepted annotations: 533,251
+2026-08-04 17:38:57.424 | INFO     | src.goa_parser:parse_gaf_file:211 -   Unique proteins: 18,735
+2026-08-04 17:38:57.424 | INFO     | src.goa_parser:parse_gaf_file:212 -   Filtered by evidence: 83,804
+2026-08-04 17:38:57.424 | INFO     | src.goa_parser:parse_gaf_file:213 -   Filtered by aspect: 0
+2026-08-04 17:38:57.424 | INFO     | src.goa_parser:parse_gaf_file:214 -   Excluded qualifiers: 1,301
+2026-08-04 17:38:57.424 | INFO     | src.goa_parser:parse_gaf_file:223 -   Evidence code distribution:
+2026-08-04 17:38:57.425 | INFO     | src.goa_parser:parse_gaf_file:227 -     IPI: 210,155
+2026-08-04 17:38:57.425 | INFO     | src.goa_parser:parse_gaf_file:227 -     TAS: 108,983
+2026-08-04 17:38:57.425 | INFO     | src.goa_parser:parse_gaf_file:227 -     IDA: 83,442
+2026-08-04 17:38:57.425 | INFO     | src.goa_parser:parse_gaf_file:227 -     IBA: 63,362
+2026-08-04 17:38:57.425 | INFO     | src.goa_parser:parse_gaf_file:227 -     ISS: 27,522
+2026-08-04 17:38:57.425 | INFO     | src.goa_parser:parse_gaf_file:227 -     IMP: 24,107
+2026-08-04 17:38:57.425 | INFO     | src.goa_parser:parse_gaf_file:227 -     NAS: 7,240
+2026-08-04 17:38:57.425 | INFO     | src.goa_parser:parse_gaf_file:227 -     IGI: 1,989
+2026-08-04 17:38:57.425 | INFO     | src.goa_parser:parse_gaf_file:227 -     ND: 1,736
+2026-08-04 17:38:57.425 | INFO     | src.goa_parser:parse_gaf_file:227 -     ISA: 1,450
+2026-08-04 17:38:57.497 | INFO     | __main__:main:343 - Parsing t1 (test) GOA — experimental evidence only...
+2026-08-04 17:38:57.497 | INFO     | src.goa_parser:__init__:113 - GOAParser initialized:
+2026-08-04 17:38:57.497 | INFO     | src.goa_parser:__init__:115 -   Evidence codes: ['EXP', 'IDA', 'IEP', 'IGI', 'IMP', 'IPI']
+2026-08-04 17:38:57.497 | INFO     | src.goa_parser:__init__:118 -   Aspects: ['C', 'F', 'P']
+2026-08-04 17:38:57.497 | INFO     | src.goa_parser:__init__:119 -   Exclude qualifiers: True
+2026-08-04 17:38:57.497 | INFO     | src.goa_parser:parse_gaf_file:131 - Parsing GAF file: data/raw/goa_annotations/goa_human.gaf.gz
+2026-08-04 17:38:59.999 | INFO     | src.goa_parser:parse_gaf_file:206 - GAF parsing complete:
+2026-08-04 17:38:59.999 | INFO     | src.goa_parser:parse_gaf_file:207 -   Total lines: 826,062
+2026-08-04 17:38:59.999 | INFO     | src.goa_parser:parse_gaf_file:208 -   Accepted annotations: 414,996
+2026-08-04 17:38:59.999 | INFO     | src.goa_parser:parse_gaf_file:211 -   Unique proteins: 16,362
+2026-08-04 17:38:59.999 | INFO     | src.goa_parser:parse_gaf_file:212 -   Filtered by evidence: 409,768
+2026-08-04 17:38:59.999 | INFO     | src.goa_parser:parse_gaf_file:213 -   Filtered by aspect: 0
+2026-08-04 17:38:59.999 | INFO     | src.goa_parser:parse_gaf_file:214 -   Excluded qualifiers: 1,288
+2026-08-04 17:38:59.999 | INFO     | src.goa_parser:parse_gaf_file:223 -   Evidence code distribution:
+2026-08-04 17:38:59.999 | INFO     | src.goa_parser:parse_gaf_file:227 -     IPI: 265,090
+2026-08-04 17:38:59.999 | INFO     | src.goa_parser:parse_gaf_file:227 -     IDA: 105,696
+2026-08-04 17:39:00.000 | INFO     | src.goa_parser:parse_gaf_file:227 -     IMP: 26,030
+2026-08-04 17:39:00.000 | INFO     | src.goa_parser:parse_gaf_file:227 -     EXP: 15,315
+2026-08-04 17:39:00.000 | INFO     | src.goa_parser:parse_gaf_file:227 -     IGI: 1,944
+2026-08-04 17:39:00.000 | INFO     | src.goa_parser:parse_gaf_file:227 -     IEP: 921
+2026-08-04 17:39:00.063 | INFO     | __main__:main:348 - Parsing domain architectures...
+2026-08-04 17:39:00.063 | INFO     | src.domain_annotation_parser:__init__:89 - DomainAnnotationParser initialized:
+2026-08-04 17:39:00.063 | INFO     | src.domain_annotation_parser:__init__:90 -   Max supra-domain length: 3
+2026-08-04 17:39:00.063 | INFO     | src.domain_annotation_parser:__init__:91 -   Min domain length: 10
+2026-08-04 17:39:00.063 | INFO     | src.domain_annotation_parser:parse_protein2ipr_file:112 - Parsing domain annotations from data/interim/protein2ipr_human.dat.gz
+2026-08-04 17:39:01.090 | INFO     | src.domain_annotation_parser:parse_protein2ipr_file:202 - Parsing complete:
+2026-08-04 17:39:01.090 | INFO     | src.domain_annotation_parser:parse_protein2ipr_file:203 -   Total proteins: 18,908
+2026-08-04 17:39:01.090 | INFO     | src.domain_annotation_parser:parse_protein2ipr_file:204 -   Total annotations: 234,702
+2026-08-04 17:39:01.090 | INFO     | src.domain_annotation_parser:parse_protein2ipr_file:205 -   Unique domains: 19,449
+2026-08-04 17:39:01.090 | INFO     | src.domain_annotation_parser:_generate_domain_architectures:219 - Generating domain architectures with supra-domains...
+2026-08-04 17:39:01.296 | INFO     | src.domain_annotation_parser:_generate_domain_architectures:247 - Generated 18,908 domain architectures
+2026-08-04 17:39:01.296 | INFO     | src.domain_annotation_parser:_generate_domain_architectures:248 -   Total supra-domains: 413,251
+2026-08-04 17:39:01.676 | INFO     | __main__:main:361 - Building the CAFA no-knowledge benchmark...
+2026-08-04 17:39:02.951 | INFO     | __main__:main:374 -   BP: 324 no-knowledge benchmark proteins
+2026-08-04 17:39:02.951 | INFO     | __main__:main:374 -   MF: 418 no-knowledge benchmark proteins
+2026-08-04 17:39:02.951 | INFO     | __main__:main:374 -   CC: 572 no-knowledge benchmark proteins
+2026-08-04 17:39:02.951 | INFO     | __main__:main:379 - Computing information content from t0...
+2026-08-04 17:39:03.782 | INFO     | __main__:main:393 - ✓ Selection-stage counts: validation/ablation_selection_counts.tsv
+2026-08-04 17:39:03.801 | INFO     | __main__:main:421 - [supra_tpr] applying True Path Rule to results/ablation/supra/domain_go_associations_significant.tsv...
+2026-08-04 17:39:04.534 | INFO     | src.ontology_processor:apply_optimal_level_filter:295 - Applying optimal level filter (True Path Rule implementation)
+2026-08-04 17:39:10.019 | INFO     | src.ontology_processor:apply_optimal_level_filter:333 - Optimal level filter: 22990/163277 associations retained
+2026-08-04 17:39:10.019 | INFO     | src.ontology_processor:apply_optimal_level_filter:340 -   54,951 parent tests could not be evaluated and their associations were rejected untested (54,951 x ValueError). The background comes from the unpropagated annotation map, so a parent term nobody is directly annotated to has an empty background.
+2026-08-04 17:39:10.049 | INFO     | __main__:main:436 - [supra_tpr] optimal-level filter retained 22,990 / 163,277 associations
+2026-08-04 17:39:10.049 | INFO     | src.ontology_processor:propagate_annotations:527 - Propagating annotations up ontology hierarchy
+2026-08-04 17:39:10.049 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 1/22990
+2026-08-04 17:39:10.055 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 1001/22990
+2026-08-04 17:39:10.060 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 2001/22990
+2026-08-04 17:39:10.065 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 3001/22990
+2026-08-04 17:39:10.070 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 4001/22990
+2026-08-04 17:39:10.077 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 5001/22990
+2026-08-04 17:39:10.081 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 6001/22990
+2026-08-04 17:39:10.087 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 7001/22990
+2026-08-04 17:39:10.093 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 8001/22990
+2026-08-04 17:39:10.098 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 9001/22990
+2026-08-04 17:39:10.104 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 10001/22990
+2026-08-04 17:39:10.109 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 11001/22990
+2026-08-04 17:39:10.114 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 12001/22990
+2026-08-04 17:39:10.120 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 13001/22990
+2026-08-04 17:39:10.126 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 14001/22990
+2026-08-04 17:39:10.131 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 15001/22990
+2026-08-04 17:39:10.135 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 16001/22990
+2026-08-04 17:39:10.141 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 17001/22990
+2026-08-04 17:39:10.148 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 18001/22990
+2026-08-04 17:39:10.154 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 19001/22990
+2026-08-04 17:39:10.159 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 20001/22990
+2026-08-04 17:39:10.165 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 21001/22990
+2026-08-04 17:39:10.170 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 22001/22990
+2026-08-04 17:39:10.177 | INFO     | src.ontology_processor:propagate_annotations:593 - Generated 101873 total annotations (22856 direct, 79017 propagated)
+2026-08-04 17:39:10.284 | INFO     | __main__:main:453 - [supra_tpr] wrote 101,873 annotations -> results/ablation/supra/domain_go_annotations_propagated.tsv
+2026-08-04 17:39:10.284 | INFO     | __main__:main:421 - [full] applying True Path Rule to results/ablation/supra_shrink/domain_go_associations_significant.tsv...
+2026-08-04 17:39:12.075 | INFO     | src.ontology_processor:apply_optimal_level_filter:295 - Applying optimal level filter (True Path Rule implementation)
+2026-08-04 17:39:22.185 | INFO     | src.ontology_processor:apply_optimal_level_filter:333 - Optimal level filter: 42129/463924 associations retained
+2026-08-04 17:39:22.186 | INFO     | src.ontology_processor:apply_optimal_level_filter:340 -   138,466 parent tests could not be evaluated and their associations were rejected untested (138,466 x ValueError). The background comes from the unpropagated annotation map, so a parent term nobody is directly annotated to has an empty background.
+2026-08-04 17:39:22.214 | INFO     | __main__:main:436 - [full] optimal-level filter retained 42,129 / 463,924 associations
+2026-08-04 17:39:22.215 | INFO     | src.ontology_processor:propagate_annotations:527 - Propagating annotations up ontology hierarchy
+2026-08-04 17:39:22.215 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 1/42129
+2026-08-04 17:39:22.222 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 1001/42129
+2026-08-04 17:39:22.229 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 2001/42129
+2026-08-04 17:39:22.237 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 3001/42129
+2026-08-04 17:39:22.243 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 4001/42129
+2026-08-04 17:39:22.252 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 5001/42129
+2026-08-04 17:39:22.259 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 6001/42129
+2026-08-04 17:39:22.266 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 7001/42129
+2026-08-04 17:39:22.273 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 8001/42129
+2026-08-04 17:39:22.280 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 9001/42129
+2026-08-04 17:39:22.287 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 10001/42129
+2026-08-04 17:39:22.294 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 11001/42129
+2026-08-04 17:39:22.301 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 12001/42129
+2026-08-04 17:39:22.774 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 13001/42129
+2026-08-04 17:39:22.783 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 14001/42129
+2026-08-04 17:39:22.791 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 15001/42129
+2026-08-04 17:39:22.799 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 16001/42129
+2026-08-04 17:39:22.806 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 17001/42129
+2026-08-04 17:39:22.815 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 18001/42129
+2026-08-04 17:39:22.822 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 19001/42129
+2026-08-04 17:39:22.832 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 20001/42129
+2026-08-04 17:39:22.839 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 21001/42129
+2026-08-04 17:39:22.847 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 22001/42129
+2026-08-04 17:39:22.862 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 23001/42129
+2026-08-04 17:39:22.869 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 24001/42129
+2026-08-04 17:39:22.878 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 25001/42129
+2026-08-04 17:39:22.885 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 26001/42129
+2026-08-04 17:39:22.891 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 27001/42129
+2026-08-04 17:39:22.898 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 28001/42129
+2026-08-04 17:39:22.905 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 29001/42129
+2026-08-04 17:39:22.914 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 30001/42129
+2026-08-04 17:39:22.924 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 31001/42129
+2026-08-04 17:39:22.933 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 32001/42129
+2026-08-04 17:39:22.942 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 33001/42129
+2026-08-04 17:39:22.953 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 34001/42129
+2026-08-04 17:39:22.960 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 35001/42129
+2026-08-04 17:39:22.966 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 36001/42129
+2026-08-04 17:39:22.976 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 37001/42129
+2026-08-04 17:39:22.985 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 38001/42129
+2026-08-04 17:39:22.994 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 39001/42129
+2026-08-04 17:39:23.002 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 40001/42129
+2026-08-04 17:39:23.012 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 41001/42129
+2026-08-04 17:39:23.024 | INFO     | src.ontology_processor:propagate_annotations:538 - Propagating annotation 42001/42129
+2026-08-04 17:39:23.029 | INFO     | src.ontology_processor:propagate_annotations:593 - Generated 131456 total annotations (35671 direct, 95785 propagated)
+2026-08-04 17:39:23.183 | INFO     | __main__:main:453 - [full] wrote 131,456 annotations -> results/ablation/supra_shrink/domain_go_annotations_propagated.tsv
+2026-08-04 17:39:44.215 | INFO     | __main__:main:565 -   [BP IC>=0] single           F_max=0.2450 AUPRC=0.1355 cov=0.53 (n=324)
+2026-08-04 17:39:44.283 | INFO     | __main__:main:565 -   [BP IC>=0] single__p        F_max=0.2458 AUPRC=0.1379 cov=0.53 (n=324)
+2026-08-04 17:39:44.354 | INFO     | __main__:main:565 -   [BP IC>=0] supra            F_max=0.2498 AUPRC=0.1350 cov=0.53 (n=324)
+2026-08-04 17:39:44.427 | INFO     | __main__:main:565 -   [BP IC>=0] supra__p         F_max=0.2499 AUPRC=0.1378 cov=0.53 (n=324)
+2026-08-04 17:39:44.506 | INFO     | __main__:main:565 -   [BP IC>=0] supra_shrink     F_max=0.2512 AUPRC=0.1408 cov=0.53 (n=324)
+2026-08-04 17:39:44.584 | INFO     | __main__:main:565 -   [BP IC>=0] supra_shrink__p  F_max=0.2525 AUPRC=0.1438 cov=0.53 (n=324)
+2026-08-04 17:39:44.596 | INFO     | __main__:main:565 -   [BP IC>=0] supra_tpr        F_max=0.1414 AUPRC=0.0503 cov=0.34 (n=324)
+2026-08-04 17:39:44.607 | INFO     | __main__:main:565 -   [BP IC>=0] full             F_max=0.1434 AUPRC=0.0515 cov=0.34 (n=324)
+2026-08-04 17:39:50.998 | INFO     | __main__:main:565 -   [BP IC>=0] naive            F_max=0.1154 AUPRC=0.3135 cov=1.00 (n=324)
+2026-08-04 17:39:50.998 | INFO     | __main__:main:572 -   [BP IC>=0] paired bootstrap, 1000 replicates...
+2026-08-04 17:39:53.698 | INFO     | __main__:main:565 -   [BP IC>=2] single           F_max=0.1653 AUPRC=0.0629 cov=0.53 (n=324)
+2026-08-04 17:39:53.761 | INFO     | __main__:main:565 -   [BP IC>=2] single__p        F_max=0.1662 AUPRC=0.0638 cov=0.53 (n=324)
+2026-08-04 17:39:53.827 | INFO     | __main__:main:565 -   [BP IC>=2] supra            F_max=0.1704 AUPRC=0.0671 cov=0.53 (n=324)
+2026-08-04 17:39:53.894 | INFO     | __main__:main:565 -   [BP IC>=2] supra__p         F_max=0.1701 AUPRC=0.0693 cov=0.52 (n=324)
+2026-08-04 17:39:53.969 | INFO     | __main__:main:565 -   [BP IC>=2] supra_shrink     F_max=0.1716 AUPRC=0.0708 cov=0.53 (n=324)
+2026-08-04 17:39:54.044 | INFO     | __main__:main:565 -   [BP IC>=2] supra_shrink__p  F_max=0.1715 AUPRC=0.0756 cov=0.53 (n=324)
+2026-08-04 17:39:54.055 | INFO     | __main__:main:565 -   [BP IC>=2] supra_tpr        F_max=0.0801 AUPRC=0.0128 cov=0.33 (n=324)
+2026-08-04 17:39:54.064 | INFO     | __main__:main:565 -   [BP IC>=2] full             F_max=0.0818 AUPRC=0.0134 cov=0.31 (n=324)
+2026-08-04 17:40:00.302 | INFO     | __main__:main:565 -   [BP IC>=2] naive            F_max=0.0706 AUPRC=0.0489 cov=1.00 (n=324)
+2026-08-04 17:40:00.302 | INFO     | __main__:main:572 -   [BP IC>=2] paired bootstrap, 1000 replicates...
+2026-08-04 17:40:03.048 | INFO     | __main__:main:565 -   [BP IC>=4] single           F_max=0.1136 AUPRC=0.0301 cov=0.53 (n=318)
+2026-08-04 17:40:03.102 | INFO     | __main__:main:565 -   [BP IC>=4] single__p        F_max=0.1129 AUPRC=0.0303 cov=0.53 (n=318)
+2026-08-04 17:40:03.161 | INFO     | __main__:main:565 -   [BP IC>=4] supra            F_max=0.1193 AUPRC=0.0330 cov=0.53 (n=318)
+2026-08-04 17:40:03.219 | INFO     | __main__:main:565 -   [BP IC>=4] supra__p         F_max=0.1135 AUPRC=0.0337 cov=0.52 (n=318)
+2026-08-04 17:40:03.284 | INFO     | __main__:main:565 -   [BP IC>=4] supra_shrink     F_max=0.1200 AUPRC=0.0346 cov=0.53 (n=318)
+2026-08-04 17:40:03.351 | INFO     | __main__:main:565 -   [BP IC>=4] supra_shrink__p  F_max=0.1154 AUPRC=0.0322 cov=0.53 (n=318)
+2026-08-04 17:40:03.361 | INFO     | __main__:main:565 -   [BP IC>=4] supra_tpr        F_max=0.0548 AUPRC=0.0061 cov=0.31 (n=318)
+2026-08-04 17:40:03.369 | INFO     | __main__:main:565 -   [BP IC>=4] full             F_max=0.0548 AUPRC=0.0063 cov=0.29 (n=318)
+2026-08-04 17:40:09.759 | INFO     | __main__:main:565 -   [BP IC>=4] naive            F_max=0.0309 AUPRC=0.0116 cov=1.00 (n=318)
+2026-08-04 17:40:09.759 | INFO     | __main__:main:572 -   [BP IC>=4] paired bootstrap, 1000 replicates...
+2026-08-04 17:40:12.393 | INFO     | __main__:main:565 -   [BP IC>=6] single           F_max=0.0744 AUPRC=0.0152 cov=0.51 (n=289)
+2026-08-04 17:40:12.432 | INFO     | __main__:main:565 -   [BP IC>=6] single__p        F_max=0.0758 AUPRC=0.0177 cov=0.49 (n=289)
+2026-08-04 17:40:12.473 | INFO     | __main__:main:565 -   [BP IC>=6] supra            F_max=0.0750 AUPRC=0.0178 cov=0.52 (n=289)
+2026-08-04 17:40:12.514 | INFO     | __main__:main:565 -   [BP IC>=6] supra__p         F_max=0.0774 AUPRC=0.0180 cov=0.52 (n=289)
+2026-08-04 17:40:12.562 | INFO     | __main__:main:565 -   [BP IC>=6] supra_shrink     F_max=0.0802 AUPRC=0.0201 cov=0.53 (n=289)
+2026-08-04 17:40:12.610 | INFO     | __main__:main:565 -   [BP IC>=6] supra_shrink__p  F_max=0.0783 AUPRC=0.0181 cov=0.53 (n=289)
+2026-08-04 17:40:12.617 | INFO     | __main__:main:565 -   [BP IC>=6] supra_tpr        F_max=0.0337 AUPRC=0.0024 cov=0.34 (n=289)
+2026-08-04 17:40:12.623 | INFO     | __main__:main:565 -   [BP IC>=6] full             F_max=0.0336 AUPRC=0.0023 cov=0.34 (n=289)
+2026-08-04 17:40:18.753 | INFO     | __main__:main:565 -   [BP IC>=6] naive            F_max=0.0098 AUPRC=0.0027 cov=1.00 (n=289)
+2026-08-04 17:40:18.753 | INFO     | __main__:main:572 -   [BP IC>=6] paired bootstrap, 1000 replicates...
+2026-08-04 17:40:21.234 | INFO     | __main__:main:565 -   [MF IC>=0] single           F_max=0.3498 AUPRC=0.1816 cov=0.59 (n=418)
+2026-08-04 17:40:21.262 | INFO     | __main__:main:565 -   [MF IC>=0] single__p        F_max=0.3668 AUPRC=0.1944 cov=0.59 (n=418)
+2026-08-04 17:40:21.293 | INFO     | __main__:main:565 -   [MF IC>=0] supra            F_max=0.3360 AUPRC=0.1816 cov=0.59 (n=418)
+2026-08-04 17:40:21.325 | INFO     | __main__:main:565 -   [MF IC>=0] supra__p         F_max=0.3589 AUPRC=0.1948 cov=0.58 (n=418)
+2026-08-04 17:40:21.359 | INFO     | __main__:main:565 -   [MF IC>=0] supra_shrink     F_max=0.3484 AUPRC=0.1870 cov=0.59 (n=418)
+2026-08-04 17:40:21.393 | INFO     | __main__:main:565 -   [MF IC>=0] supra_shrink__p  F_max=0.3667 AUPRC=0.1979 cov=0.58 (n=418)
+2026-08-04 17:40:21.405 | INFO     | __main__:main:565 -   [MF IC>=0] supra_tpr        F_max=0.3034 AUPRC=0.1151 cov=0.48 (n=418)
+2026-08-04 17:40:21.417 | INFO     | __main__:main:565 -   [MF IC>=0] full             F_max=0.3108 AUPRC=0.1224 cov=0.49 (n=418)
+2026-08-04 17:40:23.555 | INFO     | __main__:main:565 -   [MF IC>=0] naive            F_max=0.4639 AUPRC=0.3251 cov=1.00 (n=418)
+2026-08-04 17:40:23.555 | INFO     | __main__:main:572 -   [MF IC>=0] paired bootstrap, 1000 replicates...
+2026-08-04 17:40:26.549 | INFO     | __main__:main:565 -   [MF IC>=2] single           F_max=0.3644 AUPRC=0.2130 cov=0.49 (n=170)
+2026-08-04 17:40:26.569 | INFO     | __main__:main:565 -   [MF IC>=2] single__p        F_max=0.3660 AUPRC=0.2208 cov=0.53 (n=170)
+2026-08-04 17:40:26.590 | INFO     | __main__:main:565 -   [MF IC>=2] supra            F_max=0.3594 AUPRC=0.2206 cov=0.51 (n=170)
+2026-08-04 17:40:26.611 | INFO     | __main__:main:565 -   [MF IC>=2] supra__p         F_max=0.3667 AUPRC=0.2272 cov=0.53 (n=170)
+2026-08-04 17:40:26.634 | INFO     | __main__:main:565 -   [MF IC>=2] supra_shrink     F_max=0.3594 AUPRC=0.2200 cov=0.51 (n=170)
+2026-08-04 17:40:26.657 | INFO     | __main__:main:565 -   [MF IC>=2] supra_shrink__p  F_max=0.3621 AUPRC=0.2293 cov=0.54 (n=170)
+2026-08-04 17:40:26.663 | INFO     | __main__:main:565 -   [MF IC>=2] supra_tpr        F_max=0.1901 AUPRC=0.0527 cov=0.46 (n=170)
+2026-08-04 17:40:26.669 | INFO     | __main__:main:565 -   [MF IC>=2] full             F_max=0.1905 AUPRC=0.0544 cov=0.46 (n=170)
+2026-08-04 17:40:28.397 | INFO     | __main__:main:565 -   [MF IC>=2] naive            F_max=0.0530 AUPRC=0.0246 cov=1.00 (n=170)
+2026-08-04 17:40:28.398 | INFO     | __main__:main:572 -   [MF IC>=2] paired bootstrap, 1000 replicates...
+2026-08-04 17:40:30.048 | INFO     | __main__:main:565 -   [MF IC>=4] single           F_max=0.3357 AUPRC=0.2059 cov=0.47 (n=162)
+2026-08-04 17:40:30.068 | INFO     | __main__:main:565 -   [MF IC>=4] single__p        F_max=0.3312 AUPRC=0.2084 cov=0.52 (n=162)
+2026-08-04 17:40:30.088 | INFO     | __main__:main:565 -   [MF IC>=4] supra            F_max=0.3254 AUPRC=0.2012 cov=0.49 (n=162)
+2026-08-04 17:40:30.109 | INFO     | __main__:main:565 -   [MF IC>=4] supra__p         F_max=0.3362 AUPRC=0.2099 cov=0.52 (n=162)
+2026-08-04 17:40:30.131 | INFO     | __main__:main:565 -   [MF IC>=4] supra_shrink     F_max=0.3267 AUPRC=0.2047 cov=0.50 (n=162)
+2026-08-04 17:40:30.153 | INFO     | __main__:main:565 -   [MF IC>=4] supra_shrink__p  F_max=0.3321 AUPRC=0.2132 cov=0.52 (n=162)
+2026-08-04 17:40:30.159 | INFO     | __main__:main:565 -   [MF IC>=4] supra_tpr        F_max=0.1338 AUPRC=0.0247 cov=0.43 (n=162)
+2026-08-04 17:40:30.164 | INFO     | __main__:main:565 -   [MF IC>=4] full             F_max=0.1346 AUPRC=0.0258 cov=0.44 (n=162)
+2026-08-04 17:40:31.874 | INFO     | __main__:main:565 -   [MF IC>=4] naive            F_max=0.0452 AUPRC=0.0114 cov=1.00 (n=162)
+2026-08-04 17:40:31.874 | INFO     | __main__:main:572 -   [MF IC>=4] paired bootstrap, 1000 replicates...
+2026-08-04 17:40:33.464 | INFO     | __main__:main:565 -   [MF IC>=6] single           F_max=0.2172 AUPRC=0.1141 cov=0.65 (n=145)
+2026-08-04 17:40:33.481 | INFO     | __main__:main:565 -   [MF IC>=6] single__p        F_max=0.2187 AUPRC=0.1158 cov=0.61 (n=145)
+2026-08-04 17:40:33.498 | INFO     | __main__:main:565 -   [MF IC>=6] supra            F_max=0.2228 AUPRC=0.1147 cov=0.63 (n=145)
+2026-08-04 17:40:33.514 | INFO     | __main__:main:565 -   [MF IC>=6] supra__p         F_max=0.2168 AUPRC=0.1194 cov=0.61 (n=145)
+2026-08-04 17:40:33.543 | INFO     | __main__:main:565 -   [MF IC>=6] supra_shrink     F_max=0.2162 AUPRC=0.1133 cov=0.63 (n=145)
+2026-08-04 17:40:33.563 | INFO     | __main__:main:565 -   [MF IC>=6] supra_shrink__p  F_max=0.2192 AUPRC=0.1220 cov=0.59 (n=145)
+2026-08-04 17:40:33.568 | INFO     | __main__:main:565 -   [MF IC>=6] supra_tpr        F_max=0.0441 AUPRC=0.0045 cov=0.37 (n=145)
+2026-08-04 17:40:33.573 | INFO     | __main__:main:565 -   [MF IC>=6] full             F_max=0.0441 AUPRC=0.0052 cov=0.37 (n=145)
+2026-08-04 17:40:35.231 | INFO     | __main__:main:565 -   [MF IC>=6] naive            F_max=0.0182 AUPRC=0.0056 cov=1.00 (n=145)
+2026-08-04 17:40:35.231 | INFO     | __main__:main:572 -   [MF IC>=6] paired bootstrap, 1000 replicates...
+2026-08-04 17:40:36.742 | INFO     | __main__:main:565 -   [CC IC>=0] single           F_max=0.3813 AUPRC=0.2327 cov=0.49 (n=572)
+2026-08-04 17:40:36.769 | INFO     | __main__:main:565 -   [CC IC>=0] single__p        F_max=0.3845 AUPRC=0.2399 cov=0.49 (n=572)
+2026-08-04 17:40:36.796 | INFO     | __main__:main:565 -   [CC IC>=0] supra            F_max=0.3761 AUPRC=0.2275 cov=0.49 (n=572)
+2026-08-04 17:40:36.823 | INFO     | __main__:main:565 -   [CC IC>=0] supra__p         F_max=0.3793 AUPRC=0.2378 cov=0.49 (n=572)
+2026-08-04 17:40:36.851 | INFO     | __main__:main:565 -   [CC IC>=0] supra_shrink     F_max=0.3835 AUPRC=0.2351 cov=0.49 (n=572)
+2026-08-04 17:40:36.879 | INFO     | __main__:main:565 -   [CC IC>=0] supra_shrink__p  F_max=0.3847 AUPRC=0.2443 cov=0.48 (n=572)
+2026-08-04 17:40:36.887 | INFO     | __main__:main:565 -   [CC IC>=0] supra_tpr        F_max=0.1401 AUPRC=0.0549 cov=0.22 (n=572)
+2026-08-04 17:40:36.894 | INFO     | __main__:main:565 -   [CC IC>=0] full             F_max=0.1402 AUPRC=0.0542 cov=0.22 (n=572)
+2026-08-04 17:40:37.824 | INFO     | __main__:main:565 -   [CC IC>=0] naive            F_max=0.3426 AUPRC=0.5130 cov=1.00 (n=572)
+2026-08-04 17:40:37.824 | INFO     | __main__:main:572 -   [CC IC>=0] paired bootstrap, 1000 replicates...
+2026-08-04 17:40:41.919 | INFO     | __main__:main:565 -   [CC IC>=2] single           F_max=0.2441 AUPRC=0.0746 cov=0.49 (n=405)
+2026-08-04 17:40:41.938 | INFO     | __main__:main:565 -   [CC IC>=2] single__p        F_max=0.2442 AUPRC=0.0722 cov=0.49 (n=405)
+2026-08-04 17:40:41.956 | INFO     | __main__:main:565 -   [CC IC>=2] supra            F_max=0.2386 AUPRC=0.0731 cov=0.49 (n=405)
+2026-08-04 17:40:41.975 | INFO     | __main__:main:565 -   [CC IC>=2] supra__p         F_max=0.2386 AUPRC=0.0729 cov=0.49 (n=405)
+2026-08-04 17:40:41.995 | INFO     | __main__:main:565 -   [CC IC>=2] supra_shrink     F_max=0.2407 AUPRC=0.0777 cov=0.50 (n=405)
+2026-08-04 17:40:42.015 | INFO     | __main__:main:565 -   [CC IC>=2] supra_shrink__p  F_max=0.2407 AUPRC=0.0762 cov=0.50 (n=405)
+2026-08-04 17:40:42.020 | INFO     | __main__:main:565 -   [CC IC>=2] supra_tpr        F_max=0.0339 AUPRC=0.0031 cov=0.14 (n=405)
+2026-08-04 17:40:42.025 | INFO     | __main__:main:565 -   [CC IC>=2] full             F_max=0.0336 AUPRC=0.0030 cov=0.14 (n=405)
+2026-08-04 17:40:42.839 | INFO     | __main__:main:565 -   [CC IC>=2] naive            F_max=0.1528 AUPRC=0.1169 cov=1.00 (n=405)
+2026-08-04 17:40:42.840 | INFO     | __main__:main:572 -   [CC IC>=2] paired bootstrap, 1000 replicates...
+2026-08-04 17:40:45.824 | INFO     | __main__:main:565 -   [CC IC>=4] single           F_max=0.1445 AUPRC=0.0337 cov=0.45 (n=252)
+2026-08-04 17:40:45.838 | INFO     | __main__:main:565 -   [CC IC>=4] single__p        F_max=0.1432 AUPRC=0.0309 cov=0.46 (n=252)
+2026-08-04 17:40:45.854 | INFO     | __main__:main:565 -   [CC IC>=4] supra            F_max=0.1308 AUPRC=0.0313 cov=0.47 (n=252)
+2026-08-04 17:40:45.869 | INFO     | __main__:main:565 -   [CC IC>=4] supra__p         F_max=0.1314 AUPRC=0.0292 cov=0.33 (n=252)
+2026-08-04 17:40:45.885 | INFO     | __main__:main:565 -   [CC IC>=4] supra_shrink     F_max=0.1367 AUPRC=0.0373 cov=0.44 (n=252)
+2026-08-04 17:40:45.901 | INFO     | __main__:main:565 -   [CC IC>=4] supra_shrink__p  F_max=0.1368 AUPRC=0.0339 cov=0.35 (n=252)
+2026-08-04 17:40:45.904 | INFO     | __main__:main:565 -   [CC IC>=4] supra_tpr        F_max=0.0300 AUPRC=0.0028 cov=0.12 (n=252)
+2026-08-04 17:40:45.907 | INFO     | __main__:main:565 -   [CC IC>=4] full             F_max=0.0298 AUPRC=0.0027 cov=0.12 (n=252)
+2026-08-04 17:40:46.626 | INFO     | __main__:main:565 -   [CC IC>=4] naive            F_max=0.0991 AUPRC=0.0375 cov=1.00 (n=252)
+2026-08-04 17:40:46.626 | INFO     | __main__:main:572 -   [CC IC>=4] paired bootstrap, 1000 replicates...
+2026-08-04 17:40:48.694 | INFO     | __main__:main:565 -   [CC IC>=6] single           F_max=0.1233 AUPRC=0.0267 cov=0.34 (n=154)
+2026-08-04 17:40:48.705 | INFO     | __main__:main:565 -   [CC IC>=6] single__p        F_max=0.1236 AUPRC=0.0266 cov=0.33 (n=154)
+2026-08-04 17:40:48.715 | INFO     | __main__:main:565 -   [CC IC>=6] supra            F_max=0.1161 AUPRC=0.0247 cov=0.29 (n=154)
+2026-08-04 17:40:48.725 | INFO     | __main__:main:565 -   [CC IC>=6] supra__p         F_max=0.1192 AUPRC=0.0248 cov=0.31 (n=154)
+2026-08-04 17:40:48.737 | INFO     | __main__:main:565 -   [CC IC>=6] supra_shrink     F_max=0.1231 AUPRC=0.0281 cov=0.32 (n=154)
+2026-08-04 17:40:48.748 | INFO     | __main__:main:565 -   [CC IC>=6] supra_shrink__p  F_max=0.1281 AUPRC=0.0270 cov=0.31 (n=154)
+2026-08-04 17:40:48.750 | INFO     | __main__:main:565 -   [CC IC>=6] supra_tpr        F_max=0.0500 AUPRC=0.0056 cov=0.11 (n=154)
+2026-08-04 17:40:48.752 | INFO     | __main__:main:565 -   [CC IC>=6] full             F_max=0.0500 AUPRC=0.0058 cov=0.11 (n=154)
+2026-08-04 17:40:49.391 | INFO     | __main__:main:565 -   [CC IC>=6] naive            F_max=0.0435 AUPRC=0.0119 cov=1.00 (n=154)
+2026-08-04 17:40:49.391 | INFO     | __main__:main:572 -   [CC IC>=6] paired bootstrap, 1000 replicates...
+2026-08-04 17:40:50.875 | INFO     | __main__:main:616 - ✓ Ablation metrics: validation/ablation_metrics.tsv
+2026-08-04 17:40:50.880 | INFO     | __main__:main:620 - ✓ Paired bootstrap: validation/ablation_paired_bootstrap.tsv
+2026-08-04 17:40:50.880 | INFO     | __main__:main:628 - Permutation null: 200 seeded domain-label permutations of the 'supra' association table...
+2026-08-04 17:41:01.227 | INFO     | __main__:main:654 -   permutation 10/200
+2026-08-04 17:41:12.061 | INFO     | __main__:main:654 -   permutation 20/200
+2026-08-04 17:41:22.913 | INFO     | __main__:main:654 -   permutation 30/200
+2026-08-04 17:41:33.737 | INFO     | __main__:main:654 -   permutation 40/200
+2026-08-04 17:41:44.590 | INFO     | __main__:main:654 -   permutation 50/200
+2026-08-04 17:41:55.202 | INFO     | __main__:main:654 -   permutation 60/200
+2026-08-04 17:42:06.522 | INFO     | __main__:main:654 -   permutation 70/200
+2026-08-04 17:42:17.406 | INFO     | __main__:main:654 -   permutation 80/200
+2026-08-04 17:42:28.499 | INFO     | __main__:main:654 -   permutation 90/200
+2026-08-04 17:42:39.450 | INFO     | __main__:main:654 -   permutation 100/200
+2026-08-04 17:42:50.583 | INFO     | __main__:main:654 -   permutation 110/200
+2026-08-04 17:43:02.073 | INFO     | __main__:main:654 -   permutation 120/200
+2026-08-04 17:43:13.182 | INFO     | __main__:main:654 -   permutation 130/200
+2026-08-04 17:43:24.621 | INFO     | __main__:main:654 -   permutation 140/200
+2026-08-04 17:43:35.141 | INFO     | __main__:main:654 -   permutation 150/200
+2026-08-04 17:43:45.691 | INFO     | __main__:main:654 -   permutation 160/200
+2026-08-04 17:43:56.344 | INFO     | __main__:main:654 -   permutation 170/200
+2026-08-04 17:44:07.411 | INFO     | __main__:main:654 -   permutation 180/200
+2026-08-04 17:44:18.260 | INFO     | __main__:main:654 -   permutation 190/200
+2026-08-04 17:44:29.462 | INFO     | __main__:main:654 -   permutation 200/200
+2026-08-04 17:44:29.468 | INFO     | __main__:main:676 - ✓ Permutation null: validation/ablation_permutation_null.tsv
+2026-08-04 17:44:29.468 | INFO     | __main__:main:678 - ======================================================================
+2026-08-04 17:44:29.468 | INFO     | __main__:main:679 - ABLATION COMPLETE
+2026-08-04 17:44:29.468 | INFO     | __main__:main:697 -   BP IC>=0: single=0.245 supra=0.250 supra_shrink=0.251 supra_tpr=0.141 full=0.143
+2026-08-04 17:44:29.468 | INFO     | __main__:main:697 -   BP IC>=2: single=0.165 supra=0.170 supra_shrink=0.172 supra_tpr=0.080 full=0.082
+2026-08-04 17:44:29.468 | INFO     | __main__:main:697 -   BP IC>=4: single=0.114 supra=0.119 supra_shrink=0.120 supra_tpr=0.055 full=0.055
+2026-08-04 17:44:29.468 | INFO     | __main__:main:697 -   BP IC>=6: single=0.074 supra=0.075 supra_shrink=0.080 supra_tpr=0.034 full=0.034
+2026-08-04 17:44:29.469 | INFO     | __main__:main:697 -   MF IC>=0: single=0.350 supra=0.336 supra_shrink=0.348 supra_tpr=0.303 full=0.311
+2026-08-04 17:44:29.469 | INFO     | __main__:main:697 -   MF IC>=2: single=0.364 supra=0.359 supra_shrink=0.359 supra_tpr=0.190 full=0.191
+2026-08-04 17:44:29.469 | INFO     | __main__:main:697 -   MF IC>=4: single=0.336 supra=0.325 supra_shrink=0.327 supra_tpr=0.134 full=0.135
+2026-08-04 17:44:29.469 | INFO     | __main__:main:697 -   MF IC>=6: single=0.217 supra=0.223 supra_shrink=0.216 supra_tpr=0.044 full=0.044
+2026-08-04 17:44:29.469 | INFO     | __main__:main:697 -   CC IC>=0: single=0.381 supra=0.376 supra_shrink=0.383 supra_tpr=0.140 full=0.140
+2026-08-04 17:44:29.469 | INFO     | __main__:main:697 -   CC IC>=2: single=0.244 supra=0.239 supra_shrink=0.241 supra_tpr=0.034 full=0.034
+2026-08-04 17:44:29.469 | INFO     | __main__:main:697 -   CC IC>=4: single=0.144 supra=0.131 supra_shrink=0.137 supra_tpr=0.030 full=0.030
+2026-08-04 17:44:29.469 | INFO     | __main__:main:697 -   CC IC>=6: single=0.123 supra=0.116 supra_shrink=0.123 supra_tpr=0.050 full=0.050

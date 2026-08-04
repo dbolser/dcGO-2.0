@@ -8,14 +8,18 @@ and compares baseline vs supra-domain enriched analysis.
 
 import sys
 from pathlib import Path
+
 from loguru import logger
+
+from src.domain_annotation_parser import DomainAnnotationParser
+from src.goa_parser import parse_goa_human
+from src.sparse_fisher import DomainType, build_sparse_matrices
 
 logger.remove()
 logger.add(sys.stderr, level="INFO", format="<level>{message}</level>")
 
-from src.domain_annotation_parser import DomainAnnotationParser  # noqa: E402
-from src.goa_parser import parse_goa_human  # noqa: E402
-from src.sparse_fisher import build_sparse_matrices, DomainType  # noqa: E402
+logger.remove()
+logger.add(sys.stderr, level="INFO", format="<level>{message}</level>")
 
 # File paths
 goa_file = Path("data/raw/goa_annotations/goa_human.gaf.gz")

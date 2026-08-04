@@ -38,10 +38,12 @@ Notes
 -----
 * Existing complete files are skipped. Use --force to re-download.
 * ``interpro_mappings`` (protein2ipr.dat.gz) is ~20 GB — this can take a while.
-* Sources that pin a ``size_bytes``/``checksum`` in settings.py (the frozen
-  published-dcGO and SCOP 1.75 archives) are verified after every run, so a
-  truncated or substituted file fails loudly instead of quietly changing a
-  validation result.
+* Sources pinned to an immutable release URL carry a ``checksum`` (and
+  sometimes a ``size_bytes``) in settings.py — ``disease_ontology``, and the
+  frozen published-dcGO and SCOP 1.75 archives. These are verified every time,
+  including when an existing file is skipped, so a corrupted, truncated or
+  swapped input fails the download step instead of quietly changing a run's
+  results.
 * A few sources set ``subdir`` and therefore share one directory — the three
   dcGO tables land in ``data/raw/dcgo_reference/``, SCOP in ``data/raw/scop/``.
 """
@@ -103,34 +105,56 @@ def _human_size(num_bytes: float) -> str:
     return f"{num_bytes:.1f} TB"
 
 
-def verify(dest: Path, *, size_bytes: int | None, checksum: str | None) -> None:
-    """Check a downloaded file against the size/SHA-256 pinned in settings.py.
+class ChecksumError(RuntimeError):
+    """A downloaded file did not match the checksum pinned in settings.py."""
 
-    Only frozen archives (the published dcGO tables, SCOP 1.75) carry these, so
-    a mismatch means the file is truncated or has been substituted — either way
-    the §3 comparison would be computed against something other than what was
-    validated. Raises rather than warning, so it cannot be missed.
+
+def file_digest(path: Path, algorithm: str) -> str:
+    """Hex digest of ``path``, streamed so large files never load into memory."""
+    digest = hashlib.new(algorithm)
+    with open(path, "rb") as fh:
+        for block in iter(lambda: fh.read(CHUNK_SIZE), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def verify_checksum(path: Path, expected: tuple[str, str]) -> None:
+    """Check ``path`` against an ``(algorithm, hex digest)`` pair.
+
+    Only pinned (immutable-URL) sources carry a checksum, and this is what makes
+    the pinning worth anything: a run's inputs are then reproducible by content,
+    not merely by URL.
+
+    Raises:
+        ChecksumError: on a mismatch.
     """
-    if size_bytes is not None:
-        actual = dest.stat().st_size
-        if actual != size_bytes:
-            raise OSError(
-                f"{dest.name}: expected {size_bytes:,} bytes, got {actual:,}. "
-                "Truncated download, or the source changed."
-            )
-    if checksum is not None:
-        digest = hashlib.sha256()
-        with open(dest, "rb") as fh:
-            for block in iter(lambda: fh.read(CHUNK_SIZE), b""):
-                digest.update(block)
-        if digest.hexdigest() != checksum:
-            raise OSError(
-                f"{dest.name}: SHA-256 mismatch\n"
-                f"    expected {checksum}\n"
-                f"    got      {digest.hexdigest()}"
-            )
-    if size_bytes is not None or checksum is not None:
-        print("  ✔ verified against the checksum/size pinned in settings.py")
+    algorithm, want = expected
+    got = file_digest(path, algorithm)
+    if got != want:
+        raise ChecksumError(
+            f"{algorithm} mismatch for {path}: expected {want}, got {got}"
+        )
+    print(f"  ✔ {algorithm} verified: {want}")
+
+
+def verify_size(path: Path, size_bytes: int) -> None:
+    """Check ``path`` against the byte count pinned in settings.py.
+
+    Cheaper than a digest and it catches the common failure directly: a
+    truncated download. Carried by the frozen archives (the published dcGO
+    tables, SCOP 1.75), where a short read would silently change a §3
+    comparison rather than fail it.
+
+    Raises:
+        ChecksumError: on a mismatch, so callers handle one exception type.
+    """
+    actual = path.stat().st_size
+    if actual != size_bytes:
+        raise ChecksumError(
+            f"{path.name}: expected {size_bytes:,} bytes, got {actual:,}. "
+            "Truncated download, or the source changed."
+        )
+    print(f"  ✔ size verified: {size_bytes:,} bytes")
 
 
 def download_one(url: str, dest: Path, *, force: bool, timeout: int) -> bool:
@@ -320,10 +344,14 @@ def main() -> int:
         print(f"[{name}] {description}")
         try:
             download_one(url, dest, force=args.force, timeout=args.timeout)
-            # Verified on every run, not only on a fresh download, so a file
-            # corrupted after the fact is still caught.
-            verify(dest, size_bytes=ds.size_bytes, checksum=ds.checksum)
-        except (requests.RequestException, OSError) as exc:
+            # Verify whether or not we just fetched it: these are only set
+            # for immutable-release URLs, and an already-present file is exactly
+            # the case where silent corruption would go unnoticed.
+            if (size_bytes := getattr(ds, "size_bytes", None)) is not None:
+                verify_size(dest, size_bytes)
+            if (expected := ds.checksum_parts()) is not None:
+                verify_checksum(dest, expected)
+        except (requests.RequestException, OSError, ChecksumError) as exc:
             print(f"  ✘ FAILED: {exc}")
             failures.append(name)
         print()

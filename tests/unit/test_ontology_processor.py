@@ -640,3 +640,102 @@ class TestIntegrationFullTruePathRule:
             # Validate consistency
             stats = ontology_processor.validate_annotations(propagated)
             assert stats["valid_annotations"] > 0
+
+
+class TestBackgroundIndexEquivalence:
+    """The inverted index must be a pure speed-up, not a change of statistics.
+
+    ``_test_against_parent_background`` used to scan the whole proteome four
+    times per parent test, which does not finish on a real human run. It now
+    intersects an inverted index instead. These tests pin the four contingency
+    cells to a brute-force recomputation over the raw maps, so any drift in the
+    set algebra fails here rather than silently changing every True Path result.
+    """
+
+    @staticmethod
+    def _brute_force_cells(domain, child, parent, protein_domain_map, protein_go_map):
+        """The original definition of a/b/c/d, written out longhand."""
+        background = {p for p, terms in protein_go_map.items() if parent in terms}
+        a = sum(
+            1
+            for p in background
+            if domain in protein_domain_map.get(p, [])
+            and child in protein_go_map.get(p, set())
+        )
+        b = sum(
+            1
+            for p in background
+            if child in protein_go_map.get(p, set())
+            and domain not in protein_domain_map.get(p, [])
+        )
+        c = sum(
+            1
+            for p in background
+            if domain in protein_domain_map.get(p, [])
+            and child not in protein_go_map.get(p, set())
+        )
+        return a, b, c, len(background) - (a + b + c)
+
+    def test_index_reproduces_brute_force_cells(
+        self, ontology_processor, sample_protein_maps
+    ):
+        from src.ontology_processor import _BackgroundIndex
+
+        protein_domain_map, protein_go_map = sample_protein_maps
+        index = _BackgroundIndex(protein_domain_map, protein_go_map)
+
+        for domain in ("IPR001", "IPR002", "IPR_absent"):
+            for child, parent in (
+                ("GO:0006812", "GO:0006811"),
+                ("GO:0006811", "GO:0006810"),
+                ("GO:0006810", "GO:0009987"),
+            ):
+                expected = self._brute_force_cells(
+                    domain, child, parent, protein_domain_map, protein_go_map
+                )
+                background = index.term_proteins.get(parent, set())
+                dom = index.domain_proteins.get(domain, set())
+                child_bg = index.term_proteins.get(child, set()) & background
+                a = len(child_bg & dom)
+                b = len(child_bg) - a
+                c = len(dom & background) - a
+                assert (a, b, c, len(background) - (a + b + c)) == expected, (
+                    domain,
+                    child,
+                    parent,
+                )
+
+    def test_shared_and_lazy_index_give_the_same_p_value(
+        self, ontology_processor, sample_protein_maps
+    ):
+        from src.ontology_processor import _BackgroundIndex
+
+        protein_domain_map, protein_go_map = sample_protein_maps
+        shared = _BackgroundIndex(protein_domain_map, protein_go_map)
+        lazy = ontology_processor._test_against_parent_background(
+            "IPR001", "GO:0006812", "GO:0006811", protein_domain_map, protein_go_map, 3
+        )
+        passed = ontology_processor._test_against_parent_background(
+            "IPR001",
+            "GO:0006812",
+            "GO:0006811",
+            protein_domain_map,
+            protein_go_map,
+            3,
+            index=shared,
+        )
+        assert lazy == passed
+
+    def test_small_background_still_raises(
+        self, ontology_processor, sample_protein_maps
+    ):
+        protein_domain_map, protein_go_map = sample_protein_maps
+        with pytest.raises(ValueError, match="Insufficient background size"):
+            ontology_processor._test_against_parent_background(
+                "IPR001",
+                "GO:0006812",
+                "GO:0009987",  # only P010 carries it
+                protein_domain_map,
+                protein_go_map,
+                min_background_size=5,
+            )
