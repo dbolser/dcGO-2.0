@@ -124,3 +124,8 @@ data/interim/
 # Run logs are scratch, except the benchmark logs committed as provenance
 # (see validation/BENCHMARK_ARTIFACTS.md).
 logs/
+
+# Ablation ladder pipeline output (VALIDATION_PLAN §4). Each rung is a full
+# domain x GO association table (~17 MB); the metrics derived from them are
+# committed instead (validation/ablation_*.tsv).
+results/ablation/

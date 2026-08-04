@@ -18,6 +18,9 @@ from src.sparse_fisher import DomainType, build_sparse_matrices
 logger.remove()
 logger.add(sys.stderr, level="INFO", format="<level>{message}</level>")
 
+logger.remove()
+logger.add(sys.stderr, level="INFO", format="<level>{message}</level>")
+
 # File paths
 goa_file = Path("data/raw/goa_annotations/goa_human.gaf.gz")
 interpro_file = Path("data/interim/protein2ipr_human.dat.gz")

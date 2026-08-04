@@ -1,0 +1,122 @@
+2026-08-04 16:22:38.096 | INFO     | __main__:main:306 - ======================================================================
+2026-08-04 16:22:38.096 | INFO     | __main__:main:307 - dcGO PIPELINE - HUMAN_T0_2021 PROTEIN ANALYSIS
+2026-08-04 16:22:38.096 | INFO     | __main__:main:308 - ======================================================================
+2026-08-04 16:22:38.096 | INFO     | __main__:main:309 - Configuration:
+2026-08-04 16:22:38.096 | INFO     | __main__:main:310 -   Species: human_t0_2021
+2026-08-04 16:22:38.096 | INFO     | __main__:main:311 -   Ontology: GO
+2026-08-04 16:22:38.096 | INFO     | __main__:main:312 -   Evidence filter: manual
+2026-08-04 16:22:38.096 | INFO     | __main__:main:313 -   FDR threshold: 0.01
+2026-08-04 16:22:38.096 | INFO     | __main__:main:314 -   CPU cores: 8
+2026-08-04 16:22:38.097 | INFO     | __main__:main:315 -   Supra-domains: ENABLED
+2026-08-04 16:22:38.097 | INFO     | __main__:main:319 -   Hierarchical shrinkage: ENABLED (strength=0.5)
+2026-08-04 16:22:38.097 | INFO     | __main__:main:322 -   Output directory: results/ablation/supra_shrink
+2026-08-04 16:22:38.097 | INFO     | __main__:main:390 - 
+2026-08-04 16:22:38.097 | INFO     | __main__:main:391 - STAGE 1: Loading Data
+2026-08-04 16:22:38.097 | INFO     | __main__:main:392 - ──────────────────────────────────────────────────────────────────────
+2026-08-04 16:22:38.097 | INFO     | __main__:main:394 - Parsing GO annotations...
+2026-08-04 16:22:38.097 | INFO     | src.goa_parser:__init__:113 - GOAParser initialized:
+2026-08-04 16:22:38.097 | INFO     | src.goa_parser:__init__:115 -   Evidence codes: ['EXP', 'IBA', 'IBD', 'IC', 'IDA', 'IEP', 'IGC', 'IGI', 'IKR', 'IMP', 'IPI', 'IRD', 'ISA', 'ISM', 'ISO', 'ISS', 'NAS', 'ND', 'RCA', 'TAS']
+2026-08-04 16:22:38.098 | INFO     | src.goa_parser:__init__:118 -   Aspects: ['C', 'F', 'P']
+2026-08-04 16:22:38.098 | INFO     | src.goa_parser:__init__:119 -   Exclude qualifiers: True
+2026-08-04 16:22:38.098 | INFO     | src.goa_parser:parse_gaf_file:131 - Parsing GAF file: data/raw/goa_annotations/goa_human_t0_2021.gaf.gz
+2026-08-04 16:22:40.411 | INFO     | src.goa_parser:parse_gaf_file:206 - GAF parsing complete:
+2026-08-04 16:22:40.411 | INFO     | src.goa_parser:parse_gaf_file:207 -   Total lines: 618,369
+2026-08-04 16:22:40.412 | INFO     | src.goa_parser:parse_gaf_file:208 -   Accepted annotations: 533,251
+2026-08-04 16:22:40.412 | INFO     | src.goa_parser:parse_gaf_file:211 -   Unique proteins: 18,735
+2026-08-04 16:22:40.412 | INFO     | src.goa_parser:parse_gaf_file:212 -   Filtered by evidence: 83,804
+2026-08-04 16:22:40.412 | INFO     | src.goa_parser:parse_gaf_file:213 -   Filtered by aspect: 0
+2026-08-04 16:22:40.412 | INFO     | src.goa_parser:parse_gaf_file:214 -   Excluded qualifiers: 1,301
+2026-08-04 16:22:40.412 | INFO     | src.goa_parser:parse_gaf_file:223 -   Evidence code distribution:
+2026-08-04 16:22:40.412 | INFO     | src.goa_parser:parse_gaf_file:227 -     IPI: 210,155
+2026-08-04 16:22:40.412 | INFO     | src.goa_parser:parse_gaf_file:227 -     TAS: 108,983
+2026-08-04 16:22:40.412 | INFO     | src.goa_parser:parse_gaf_file:227 -     IDA: 83,442
+2026-08-04 16:22:40.412 | INFO     | src.goa_parser:parse_gaf_file:227 -     IBA: 63,362
+2026-08-04 16:22:40.412 | INFO     | src.goa_parser:parse_gaf_file:227 -     ISS: 27,522
+2026-08-04 16:22:40.412 | INFO     | src.goa_parser:parse_gaf_file:227 -     IMP: 24,107
+2026-08-04 16:22:40.412 | INFO     | src.goa_parser:parse_gaf_file:227 -     NAS: 7,240
+2026-08-04 16:22:40.412 | INFO     | src.goa_parser:parse_gaf_file:227 -     IGI: 1,989
+2026-08-04 16:22:40.412 | INFO     | src.goa_parser:parse_gaf_file:227 -     ND: 1,736
+2026-08-04 16:22:40.412 | INFO     | src.goa_parser:parse_gaf_file:227 -     ISA: 1,450
+2026-08-04 16:22:40.477 | INFO     | __main__:main:397 - Parsing domain annotations...
+2026-08-04 16:22:40.477 | INFO     | src.domain_annotation_parser:__init__:89 - DomainAnnotationParser initialized:
+2026-08-04 16:22:40.477 | INFO     | src.domain_annotation_parser:__init__:90 -   Max supra-domain length: 3
+2026-08-04 16:22:40.477 | INFO     | src.domain_annotation_parser:__init__:91 -   Min domain length: 10
+2026-08-04 16:22:40.477 | INFO     | src.domain_annotation_parser:parse_protein2ipr_file:112 - Parsing domain annotations from data/interim/protein2ipr_human_t0_2021.dat.gz
+2026-08-04 16:22:41.163 | INFO     | src.domain_annotation_parser:parse_protein2ipr_file:202 - Parsing complete:
+2026-08-04 16:22:41.163 | INFO     | src.domain_annotation_parser:parse_protein2ipr_file:203 -   Total proteins: 18,908
+2026-08-04 16:22:41.163 | INFO     | src.domain_annotation_parser:parse_protein2ipr_file:204 -   Total annotations: 234,702
+2026-08-04 16:22:41.163 | INFO     | src.domain_annotation_parser:parse_protein2ipr_file:205 -   Unique domains: 19,449
+2026-08-04 16:22:41.163 | INFO     | src.domain_annotation_parser:_generate_domain_architectures:219 - Generating domain architectures with supra-domains...
+2026-08-04 16:22:41.479 | INFO     | src.domain_annotation_parser:_generate_domain_architectures:247 - Generated 18,908 domain architectures
+2026-08-04 16:22:41.479 | INFO     | src.domain_annotation_parser:_generate_domain_architectures:248 -   Total supra-domains: 413,251
+2026-08-04 16:22:41.489 | INFO     | __main__:main:410 -   Restricted annotations to the domain-annotated universe: 18,735 → 18,382 proteins (353 dropped, no domain data)
+2026-08-04 16:22:41.595 | INFO     | __main__:main:439 -   Single domains: 230,275 annotations
+2026-08-04 16:22:41.596 | INFO     | __main__:main:441 -   Supra-domains: 405,928 annotations
+2026-08-04 16:22:41.596 | INFO     | __main__:main:442 -   Total domain features: 636,203
+2026-08-04 16:22:41.661 | INFO     | __main__:main:454 - ✓ Dataset prepared: 18,382 proteins, 102,206 domains, 16,055 GO terms
+2026-08-04 16:22:41.661 | INFO     | __main__:main:457 -   Total tests: 1,640,917,330
+2026-08-04 16:22:41.661 | INFO     | __main__:main:471 - 
+2026-08-04 16:22:41.661 | INFO     | __main__:main:472 - STAGE 2: Building Sparse Matrices
+2026-08-04 16:22:41.661 | INFO     | __main__:main:473 - ──────────────────────────────────────────────────────────────────────
+2026-08-04 16:22:41.709 | INFO     | src.sparse_fisher:build_sparse_matrices:178 - Building sparse matrices: 18,382 proteins × 102,206 domains
+2026-08-04 16:22:41.709 | INFO     | src.sparse_fisher:build_sparse_matrices:181 -                          18,382 proteins × 16,055 GO terms
+2026-08-04 16:22:42.050 | INFO     | src.sparse_fisher:build_sparse_matrices:229 - Protein-domain matrix: 332,665 non-zero entries
+2026-08-04 16:22:42.050 | INFO     | src.sparse_fisher:build_sparse_matrices:232 - Protein-GO matrix: 215,649 non-zero entries
+2026-08-04 16:22:42.050 | INFO     | src.sparse_fisher:build_domain_metadata:99 - Building domain metadata...
+2026-08-04 16:22:42.866 | INFO     | src.sparse_fisher:build_domain_metadata:139 -   Total domains: 102,206
+2026-08-04 16:22:42.867 | INFO     | src.sparse_fisher:build_domain_metadata:140 -     Single domains: 19,230
+2026-08-04 16:22:42.867 | INFO     | src.sparse_fisher:build_domain_metadata:141 -     Supra-domain pairs: 36,363
+2026-08-04 16:22:42.867 | INFO     | src.sparse_fisher:build_domain_metadata:142 -     Supra-domain triples: 46,613
+2026-08-04 16:22:42.879 | INFO     | __main__:main:481 - ✓ Sparse matrices built in 1.22s
+2026-08-04 16:22:42.879 | INFO     | __main__:main:484 - 
+2026-08-04 16:22:42.879 | INFO     | __main__:main:485 - STAGE 3: Computing Contingency Tables
+2026-08-04 16:22:42.879 | INFO     | __main__:main:486 - ──────────────────────────────────────────────────────────────────────
+2026-08-04 16:22:42.879 | INFO     | src.sparse_fisher:compute_contingency_tables_sparse:268 - Computing contingency tables for 102,206 × 16,055 = 1,640,917,330 pairs
+2026-08-04 16:22:42.881 | INFO     | src.sparse_fisher:compute_contingency_tables_sparse:283 -   Computing overlap counts (a)...
+2026-08-04 16:22:48.195 | INFO     | src.sparse_fisher:compute_contingency_tables_sparse:290 -   Computing marginal counts...
+2026-08-04 16:22:48.200 | INFO     | src.sparse_fisher:compute_contingency_tables_sparse:301 -   Building contingency table array...
+2026-08-04 16:25:20.951 | INFO     | src.sparse_fisher:compute_contingency_tables_sparse:316 - ✓ Built 1,640,917,330 contingency tables
+2026-08-04 16:25:22.115 | INFO     | __main__:main:492 - ✓ Contingency tables computed in 159.24s (2.7 min)
+2026-08-04 16:25:22.115 | INFO     | __main__:main:497 - 
+2026-08-04 16:25:22.115 | INFO     | __main__:main:498 - STAGE 4: Running Fisher's Exact Tests
+2026-08-04 16:25:22.115 | INFO     | __main__:main:499 - ──────────────────────────────────────────────────────────────────────
+2026-08-04 16:25:22.115 | INFO     | __main__:main:500 - Processing 1,640,917,330 tests with 8 cores...
+2026-08-04 16:39:56.403 | INFO     | __main__:main:522 - ✓ Fisher tests completed in 874.29s (14.6 min)
+2026-08-04 16:39:56.403 | INFO     | __main__:main:525 -   Rate: 1,876,863 tests/second
+2026-08-04 16:39:56.403 | INFO     | __main__:main:529 - 
+2026-08-04 16:39:56.403 | INFO     | __main__:main:530 - STAGE 4.5: Hierarchical Shrinkage
+2026-08-04 16:39:56.403 | INFO     | __main__:main:531 - ──────────────────────────────────────────────────────────────────────
+2026-08-04 16:39:56.403 | INFO     | src.hierarchical_inference:__init__:46 - HierarchicalInferenceEngine initialized:
+2026-08-04 16:39:56.403 | INFO     | src.hierarchical_inference:__init__:47 -   Shrinkage strength: 0.5
+2026-08-04 16:39:56.403 | INFO     | src.hierarchical_inference:__init__:48 -   Minimum observations: 3
+2026-08-04 16:40:12.992 | INFO     | src.hierarchical_inference:shrink_pvalues:69 - Applying hierarchical shrinkage to supra-domain p-values...
+2026-08-04 16:41:05.850 | INFO     | src.hierarchical_inference:shrink_pvalues:139 -   Processed 82,976 supra-domains
+2026-08-04 16:41:05.851 | INFO     | src.hierarchical_inference:shrink_pvalues:140 -   Average shrinkage factor: 0.292
+2026-08-04 16:47:17.367 | INFO     | __main__:main:556 - ✓ Hierarchical shrinkage completed in 440.96s
+2026-08-04 16:47:17.368 | INFO     | __main__:main:557 -   Supra-domain tests affected: 1,332,179,680
+2026-08-04 16:47:17.368 | INFO     | __main__:main:558 -   P-values increased (regularized): 580,481,330 (43.6%)
+2026-08-04 16:47:17.368 | INFO     | __main__:main:561 -   Median p-value ratio: 1.000
+2026-08-04 16:47:17.368 | INFO     | __main__:main:564 - 
+2026-08-04 16:47:17.368 | INFO     | __main__:main:565 - STAGE 5: FDR Correction
+2026-08-04 16:47:17.368 | INFO     | __main__:main:566 - ──────────────────────────────────────────────────────────────────────
+2026-08-04 17:33:38.104 | INFO     | __main__:main:574 - ✓ FDR correction completed in 2780.74s
+2026-08-04 17:33:38.105 | INFO     | __main__:main:575 -   Threshold p-value: 2.83e-06
+2026-08-04 17:33:40.632 | INFO     | __main__:main:675 - 
+2026-08-04 17:33:40.632 | INFO     | __main__:main:676 - STAGE 6: Exporting Results
+2026-08-04 17:33:40.632 | INFO     | __main__:main:677 - ──────────────────────────────────────────────────────────────────────
+2026-08-04 17:33:40.632 | INFO     | __main__:main:680 - Calculating hypergeometric scores for significant associations...
+2026-08-04 17:34:46.616 | INFO     | __main__:main:719 - ✓ Exported significant associations to: results/ablation/supra_shrink/domain_go_associations_significant.tsv
+2026-08-04 17:34:46.616 | INFO     | __main__:main:720 -   463,924 associations (FDR < 0.01)
+2026-08-04 17:43:22.306 | INFO     | __main__:main:753 - ✓ Exported top 100 associations to: results/ablation/supra_shrink/domain_go_associations_top100.tsv
+2026-08-04 17:43:22.306 | INFO     | __main__:main:777 - 
+2026-08-04 17:43:22.306 | INFO     | __main__:main:778 - ======================================================================
+2026-08-04 17:43:22.306 | INFO     | __main__:main:779 - PIPELINE COMPLETE!
+2026-08-04 17:43:22.306 | INFO     | __main__:main:780 - ======================================================================
+2026-08-04 17:43:22.307 | INFO     | __main__:main:781 - Results Summary:
+2026-08-04 17:43:22.307 | INFO     | __main__:main:782 -   Total domain-GO tests: 1,640,917,330
+2026-08-04 17:43:22.307 | INFO     | __main__:main:783 -   Significant associations (FDR < 0.01): 463,924 (0.03%)
+2026-08-04 17:43:22.307 | INFO     | __main__:main:794 -   Total runtime: 3815.5s (63.6 minutes)
+2026-08-04 17:43:22.307 | INFO     | __main__:main:795 - 
+2026-08-04 17:43:22.307 | INFO     | __main__:main:796 - Output files:
+2026-08-04 17:43:22.307 | INFO     | __main__:main:797 -   results/ablation/supra_shrink/domain_go_associations_significant.tsv
+2026-08-04 17:43:22.307 | INFO     | __main__:main:798 -   results/ablation/supra_shrink/domain_go_associations_top100.tsv
