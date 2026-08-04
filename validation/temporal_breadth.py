@@ -200,7 +200,13 @@ def main() -> int:  # pragma: no cover - I/O wiring
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
 
-    for path in (args.t0_uniprot, args.t1_uniprot, args.interpro):
+    required = [args.t0_uniprot, args.t1_uniprot, args.interpro]
+    if "go" in args.ontologies:
+        # GO reads GAFs rather than the UniProt flat file, so without this the
+        # missing input only surfaced as a parse failure after the expensive
+        # architecture pass.
+        required += [args.t0_gaf, args.t1_gaf, args.go_ontology]
+    for path in required:
         if not path.exists():
             logger.error(f"Missing required input: {path}")
             return 1

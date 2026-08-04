@@ -434,17 +434,33 @@ def _report(args, scored, logger) -> int:  # pragma: no cover - I/O wiring
             )
     logger.info(f"✓ Wrote {len(results)} strata to {args.output}")
 
-    with open(args.per_association_output, "w") as f:
-        f.write(
-            "domain\tterm\tsurprise\tdcgo_score\tn_predicted\tn_hit\tbase_rate\tenrichment\n"
+    # The documented replay command points --replay at the default
+    # --per-association-output, so writing unconditionally would re-serialise
+    # the file just read, re-rounding base_rate to 5 dp and surprise to 3 dp on
+    # every replay until the stored values drifted away from the run's.
+    replaying_own_input = (
+        args.replay is not None
+        and args.replay.resolve() == args.per_association_output.resolve()
+    )
+    if replaying_own_input:
+        logger.info(
+            f"Replay source is the per-association output "
+            f"({args.per_association_output}); leaving it untouched."
         )
-        for o in sorted(scored, key=lambda o: -o.rank_scores["surprise"]):
+    else:
+        with open(args.per_association_output, "w") as f:
             f.write(
-                f"{o.feature}\t{o.term}\t{o.rank_scores['surprise']:.3f}\t"
-                f"{o.rank_scores['dcgo']:.2f}\t{o.n_predicted}\t{o.n_hit}\t"
-                f"{o.base_rate:.5f}\t{o.enrichment:.2f}\n"
+                "domain\tterm\tsurprise\tdcgo_score\tn_predicted\tn_hit\tbase_rate\tenrichment\n"
             )
-    logger.info(f"✓ Wrote per-association outcomes to {args.per_association_output}")
+            for o in sorted(scored, key=lambda o: -o.rank_scores["surprise"]):
+                f.write(
+                    f"{o.feature}\t{o.term}\t{o.rank_scores['surprise']:.3f}\t"
+                    f"{o.rank_scores['dcgo']:.2f}\t{o.n_predicted}\t{o.n_hit}\t"
+                    f"{o.base_rate:.5f}\t{o.enrichment:.2f}\n"
+                )
+        logger.info(
+            f"✓ Wrote per-association outcomes to {args.per_association_output}"
+        )
 
     comparisons = [
         compare_rankings(scored, "surprise", "dcgo", budget, args.bootstrap, args.seed)

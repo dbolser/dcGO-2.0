@@ -9,6 +9,7 @@ from src.annotation_source import (
     AnnotationSource,
     GAFAnnotationSource,
     OntologySpec,
+    restrict_to_universe,
 )
 
 
@@ -79,3 +80,43 @@ class TestCustomAnnotationSource:
 
         with pytest.raises(TypeError):
             Incomplete()
+
+
+class TestRestrictToUniverse:
+    """The Fisher universe is the intersection, not the union, of the two maps."""
+
+    def test_drops_proteins_without_domains(self) -> None:
+        annotations = {"P1": {"T1"}, "P2": {"T2"}, "P3": {"T3"}}
+        restricted = restrict_to_universe(annotations, {"P1", "P3"})
+        assert restricted == {"P1": {"T1"}, "P3": {"T3"}}
+
+    def test_ignores_universe_members_with_no_annotations(self) -> None:
+        restricted = restrict_to_universe({"P1": {"T1"}}, {"P1", "P2"})
+        assert restricted == {"P1": {"T1"}}
+
+    def test_excludes_other_species_from_the_fisher_universe(self) -> None:
+        """The regression this exists for.
+
+        ``uniprot_sprot.dat`` covers every organism while ``protein2ipr`` is
+        extracted per species, so an unrestricted UniProt-native source put
+        non-human proteins into every contingency table as domain-negative
+        observations. Here HUMAN1/HUMAN2 have domains; MOUSE1/YEAST1 do not.
+        """
+        annotations = {
+            "HUMAN1": {"R-HSA-1"},
+            "HUMAN2": {"R-HSA-1"},
+            "MOUSE1": {"R-HSA-1"},
+            "YEAST1": {"R-HSA-2"},
+        }
+        domain_proteins = {"HUMAN1", "HUMAN2"}
+
+        restricted = restrict_to_universe(annotations, domain_proteins)
+
+        assert set(restricted) == domain_proteins
+        # The term's background is now 2/2 human proteins rather than 3/4 across
+        # three organisms, which is what the Fisher table needs.
+        carriers = [p for p, terms in restricted.items() if "R-HSA-1" in terms]
+        assert len(carriers) == 2
+
+    def test_empty_universe_yields_empty_map(self) -> None:
+        assert restrict_to_universe({"P1": {"T1"}}, set()) == {}

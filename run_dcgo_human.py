@@ -63,6 +63,7 @@ import numpy as np
 from loguru import logger
 from scipy.stats import hypergeom
 
+from src.annotation_source import restrict_to_universe
 from src.domain_annotation_parser import DomainAnnotationParser
 from src.hierarchical_inference import HierarchicalInferenceEngine
 from src.hierarchy import propagate_via_ancestors
@@ -399,6 +400,18 @@ def main():
 
     # Get intersection
     proteins_with_both = set(protein_go_map.keys()) & set(domain_architectures.keys())
+
+    # Restrict the annotation map to that intersection — it defines the protein
+    # universe every Fisher table is computed against. See the docstring of
+    # restrict_to_universe for why this matters for the UniProt-native sources.
+    annotated_proteins = len(protein_go_map)
+    protein_go_map = restrict_to_universe(protein_go_map, proteins_with_both)
+    if annotated_proteins > len(protein_go_map):
+        logger.info(
+            f"  Restricted annotations to the domain-annotated universe: "
+            f"{annotated_proteins:,} → {len(protein_go_map):,} proteins "
+            f"({annotated_proteins - len(protein_go_map):,} dropped, no domain data)"
+        )
 
     # Build protein-domain map (using lists for compatibility with ontology processor)
     # CRITICAL: Include both single domains AND supra-domains as per dcGO methodology

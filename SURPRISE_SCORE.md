@@ -90,7 +90,7 @@ uv run python scripts/rank_surprising_associations.py --ontology ec
 ```
 
 Output: `results/domain_<ontology>_surprising.tsv`, ranked, with columns
-`surprise, domain, domain_names, term, term_name, n_feature, n_both,
+`rank, surprise, domain, domain_names, term, term_name, n_feature, n_both,
 observed_rate, expected_rate, expectation_source, lift, p_emergence,
 q_emergence, region_overlap, distinctness, novelty, novelty_status,
 uninformative_constituents, dcgo_adj_p_value`.
@@ -208,8 +208,9 @@ re-ranks both ways inside each resample:
 | 40,000 predictions | 11.6× | 10.8× | +0.82 [−2.15, +5.25] | 82% |
 
 **No separation at any budget.** The point estimate favours surprise 3/3, but
-every paired interval spans zero, and at the budget with the largest apparent
-gap only 54% of resamples favour it. Comparing the two rankings' *independent*
+every paired interval spans zero. The largest apparent gap is at the 2,000
+budget (+10.19), where 75% of resamples favour surprise; at 10,000 the share
+falls to 54%, barely better than a coin flip. Comparing the two rankings' *independent*
 intervals would have looked much more favourable — they are computed on the same
 candidate pool and so are correlated, which is why the paired test is the right
 one and why its verdict supersedes the unpaired view.

@@ -11,7 +11,7 @@ which are not.
 Survey basis: `uniprot_sprot.dat.gz` (2026-07 release), 575,503 entries, of which
 **20,431 are human** (`OX NCBI_TaxID=9606`). Counts below are human-only.
 
-## The three annotation layers in the flat file
+## The four annotation layers in the flat file
 
 | Layer | Line | Example |
 | --- | --- | --- |

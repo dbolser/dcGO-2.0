@@ -139,11 +139,14 @@ def measure_region_overlap(
     High values flag the redundant-signature artefact: several InterPro
     signatures annotating one region, which looks like a domain combination in
     the architecture string but is not one biologically.
+
+    ``proteins`` is sorted before the sample is truncated. Callers pass a set,
+    whose iteration order depends on the interpreter's hash seed, so sampling it
+    directly made the median — and therefore whether a candidate cleared
+    ``--max-overlap`` — vary between runs on identical inputs.
     """
     overlaps: List[float] = []
-    for n_seen, protein in enumerate(proteins):
-        if n_seen >= OVERLAP_SAMPLE:
-            break
+    for protein in sorted(proteins)[:OVERLAP_SAMPLE]:
         arch = architectures[protein]
         annotations = arch.domain_annotations
         domain_ids = [a.interpro_id for a in annotations]
@@ -151,6 +154,11 @@ def measure_region_overlap(
         regions = locate_feature_regions(domain_ids, intervals, parts)
         if regions:
             overlaps.append(max_pairwise_overlap(regions))
+    if not overlaps:
+        # No sampled carrier let us locate the feature's regions, so there is no
+        # evidence of a redundant signature. Report "distinct" rather than
+        # letting median() raise on an empty sample.
+        return 0.0
     return median(overlaps)
 
 
@@ -223,6 +231,23 @@ def main() -> int:
     )
     parser.add_argument("--ontology", default="go", help="Ontology the run used")
     parser.add_argument("--species", default="human")
+    # The generic DR escape hatch needs the same selection the run used, or
+    # rebuilding its annotations below raises KeyError('xref_db').
+    parser.add_argument(
+        "--xref-db",
+        default=None,
+        help="UniProt DR database name, required when --ontology xref",
+    )
+    parser.add_argument(
+        "--xref-type",
+        default=None,
+        help="Optional DR third-field filter for --ontology xref",
+    )
+    parser.add_argument(
+        "--xref-term-from-type",
+        action="store_true",
+        help="For --ontology xref, use the DR line's third field as the term",
+    )
     parser.add_argument(
         "--associations",
         type=Path,
@@ -321,7 +346,17 @@ def main() -> int:
     logger.remove()
     logger.add(sys.stderr, level="INFO")
 
-    ontology_label = args.ontology
+    # Mirror the runner's labelling so the default paths point at the files it
+    # wrote: for --ontology xref that is the chosen DR database, not "xref".
+    if args.ontology == "xref":
+        if not args.xref_db:
+            logger.error(
+                "--ontology xref requires --xref-db (a UniProt DR database name)"
+            )
+            return 1
+        ontology_label = args.xref_db.lower()
+    else:
+        ontology_label = args.ontology
     associations_path = args.associations or Path(
         f"results/domain_{ontology_label}_associations_significant.tsv"
     )
@@ -371,7 +406,13 @@ def main() -> int:
         logger.error(f"Domain annotations not found: {interpro_file}")
         return 1
     annotations = entry.build_source(
-        paths, {"evidence_filter": args.evidence_filter}
+        paths,
+        {
+            "evidence_filter": args.evidence_filter,
+            "xref_db": args.xref_db,
+            "xref_type": args.xref_type,
+            "xref_term_from_type": args.xref_term_from_type,
+        },
     ).parse()
     domain_parser = DomainAnnotationParser(
         max_supra_domain_length=3, min_domain_length=10
@@ -419,7 +460,6 @@ def main() -> int:
         n_both = len(carriers & annotated)
         if n_both < args.min_support:
             dropped_support += 1
-            continue
 
         background = len(annotated) / n_universe if n_universe else 0.0
 
@@ -468,8 +508,19 @@ def main() -> int:
         )
         scored.append(score_candidate(evidence, overlap, novelty, status))
 
-    logger.info(f"  Scored: {len(scored):,} (dropped for support: {dropped_support:,})")
+    logger.info(f"  Scored: {len(scored):,}")
+
+    # Correct across *every* candidate, then drop the under-supported ones.
+    # Support is the observed success count that produced the p-value, so
+    # filtering on it first would be an outcome-dependent shrinking of the
+    # hypothesis family and would leave q_emergence anti-conservative.
     scored = apply_fdr(scored, alpha=args.alpha)
+    if dropped_support:
+        scored = [r for r in scored if r.n_both >= args.min_support]
+        logger.info(
+            f"  Support filter (n_both ≥ {args.min_support}, applied after BH): "
+            f"{len(scored):,} kept, {dropped_support:,} dropped"
+        )
 
     kept = [r for r in scored if r.region_overlap <= args.max_overlap]
     logger.info(

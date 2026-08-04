@@ -22,6 +22,7 @@ Usage
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -30,6 +31,10 @@ from typing import Dict, Set, Tuple
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.uniprot_annotation_source import _open_text  # noqa: E402
+
+#: ``OX   NCBI_TaxID=9606 {ECO:0000313|EMBL:ABC12345.1};`` — the evidence tag is
+#: stripped before the taxon id is compared.
+_OX_EVIDENCE = re.compile(r"\{[^}]*\}")
 
 #: A ``DR`` third field is only a *type* if the database uses a handful of
 #: values (``MIM``'s gene/phenotype, ``Pharos``'s four development levels). Most
@@ -64,7 +69,13 @@ def survey(path: Path, taxid: str) -> Tuple[Dict, Dict, Dict, int, int]:
                 if accession is None:
                     accession = line[5:].split(";")[0].strip() or None
             elif tag == "OX":
-                in_taxon = in_taxon or marker in line
+                # Compare whole semicolon-delimited fields, minus any
+                # {ECO:…} evidence tag: a substring test would let
+                # NCBI_TaxID=96060 match a query for taxon 9606.
+                in_taxon = in_taxon or any(
+                    _OX_EVIDENCE.sub("", field).strip().rstrip(".") == marker
+                    for field in line[5:].split(";")
+                )
             elif tag == "DR":
                 fields = line[5:].split(";")
                 if len(fields) >= 2:
