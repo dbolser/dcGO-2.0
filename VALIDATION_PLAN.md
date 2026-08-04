@@ -566,9 +566,16 @@ per association in `validation/temporal_surprise_associations.tsv`.
 
 ## 6. Reproducibility (must-haves for submission)
 
-- [ ] **Pin dataset versions**: record the GOA / InterPro / GO release dates and
-      URLs used for every reported number (extend `scripts/download_data.py` to
-      log resolved versions).
+- [x] **Record exact run provenance**: every run writes
+      `run_manifest_<ontology>.json` with input/output SHA-256 hashes, embedded
+      release headers, source URLs, Git state, the `uv.lock` hash, the command
+      line, every effective parameter and threshold, and summary counts. See
+      [REPRODUCIBILITY.md](REPRODUCIBILITY.md).
+- [ ] **Pin dated dataset versions**: replace the mutable `current_release`
+      inputs with archived GOA / InterPro / GO releases for every reported
+      number.
+- [ ] **Extend provenance to the downstream tools**: the surprise-score driver
+      and the `validation/` benchmarks still record nothing.
 - [ ] **One-command reproduction** of each table/figure from raw downloads.
 - [ ] **Archive** the exact input snapshots (Zenodo/figshare) since
       `current_release` URLs move.
