@@ -44,8 +44,6 @@ Key `src/` modules:
 - `vectorized_fisher.py` - Vectorized Fisher's exact tests (Cython `fisher`) + Benjamini–Hochberg FDR.
 - `hierarchical_inference.py` - Supra-domain generation and optional empirical-Bayes shrinkage.
 - `ontology_processor.py` - True Path Rule / GO DAG propagation (opt-in).
-- `database_manager.py` - SQLite storage/export helpers.
-- `data_acquisition.py` - Older async (aiohttp) downloader library; **not** on the supported path (use `scripts/download_data.py`).
 
 ## Development Commands
 
@@ -106,7 +104,7 @@ download_data.py → extract_human_interpro.py → run_dcgo_human.py
     goa_parser + domain_annotation_parser
         → sparse_fisher → vectorized_fisher (+ hierarchical_inference)
         → ontology_processor (optional)
-        → results TSV / database_manager
+        → results TSV
 ```
 
 ## Configuration System
@@ -168,9 +166,7 @@ src/
 ├── sparse_fisher.py         # Sparse contingency tables
 ├── vectorized_fisher.py     # Fisher's exact tests + BH-FDR
 ├── hierarchical_inference.py    # Supra-domains + shrinkage
-├── ontology_processor.py    # True Path Rule
-├── database_manager.py      # SQLite operations
-└── data_acquisition.py      # Legacy async downloader (unused by supported path)
+└── ontology_processor.py    # True Path Rule
 config/settings.py           # Dataset URLs + configuration
 ```
 
