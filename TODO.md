@@ -25,6 +25,31 @@ This file is just loose notes.
   (`protein binding` = 85% of experimental MF). Dated GOA via
   `download_data.py --goa-archive`; IC sweep via `--min-ic`.
 
+## Done — 2026-07-28 session (PR #26)
+- ~~**Surprise score**~~ — `src/surprise_score.py`,
+  `scripts/rank_surprising_associations.py`, `SURPRISE_SCORE.md`. Ranks emergent
+  supra-domain associations by `-log10(q_emergence) × distinctness × novelty`:
+  a binomial test against a parts-only expectation (noisy-OR over constituents,
+  floored by the best sub-combination and by the term's background rate), times a
+  redundant-InterPro-signature penalty from matched-region overlap, times an
+  InterPro2GO novelty discount. Top of the GO ranking is textbook architectures
+  (SH2+kinase, PH+EF-hand, BTB/POZ+C2H2, kinase+SAM).
+- ~~**13 new ontologies behind a registry**~~ — `src/ontology_registry.py` is now
+  the single `--ontology` dispatch table (19 keys). New: orphanet, tcdb, merops,
+  cazy, unipathway, complex, drugbank, pharos, condensate, plus the layers
+  curated in the entry body rather than `DR` lines — subcellular (CC → `SL-`),
+  ligand (FT `/ligand_id` ChEBI), cofactor, rhea. Survey of all ~150 DR databases
+  in `docs/uniprot_ontology_survey.md` + `docs/dr_survey.tsv`.
+- ~~**Held-out validation of the surprise score**~~ — `validation/temporal_surprise.py`.
+  The *associations* predict future curation (12.5×); the *ranking* is not
+  demonstrably better than the dcGO q-value (paired bootstrap spans zero at every
+  prediction budget). Verdict written up in `SURPRISE_SCORE.md`.
+- ~~**Predictive power across the breadth**~~ — `validation/temporal_breadth.py`.
+  One archived Swiss-Prot release (2021_02) gives t0 for every UniProt-native
+  layer. GO 11.3×, reactome 8.0×, cofactor 3.2×, subcellular 2.9×, keyword 1.7×;
+  complex degenerate, disease undefined, ligand untestable. See
+  `VALIDATION_PLAN.md` §2 breadth subsection.
+
 ## Next (see VALIDATION_PLAN.md "Next steps")
 - ~~Method-vs-paper audit~~ done — their validation is protein-centric CAFA
   PR-RC; restored the two missing pieces (relative inference + p-score) and added
@@ -37,6 +62,28 @@ This file is just loose notes.
 - §4 ablation (#10), §3 original-dcGO domain re-keying SSF/PF (#9), §5–§6.
 
 ## Queued
+
+- **Surprise score v2: weigh emergence against testability.** The held-out test
+  exposed a structural tension — emergence requires that a combination's carriers
+  are *already* nearly all annotated, so the most emergent associations leave the
+  fewest standing predictions and are the least verifiable (`surprise top-25`
+  yields 117 predictions against 0.14 expected hits). A useful score should trade
+  emergence off against how much it still predicts.
+- **Re-test `ligand` and `cofactor` at a 2023 t0.** UniProt only introduced the
+  structured `FT /ligand_id="ChEBI:…"` qualifier after 2021 (April 2021 used
+  free-text `/note="ATP"`), so the ligand layer is entirely post-2022 annotation
+  and untestable on the 2021→2026 split. Needs `release-2023_01` or similar —
+  a shorter, non-comparable window, so report separately.
+- **Breadth test with `--supra-only`.** The per-ontology numbers pool single
+  domains and supra-domains; isolating supra-domains would say whether the
+  *emergent* claim generalises beyond GO, which is the more interesting question.
+- **Decide the fate of `agent/reproducible-runs`.** Two unpushed commits, never
+  PR'd, worktree in `/tmp/dcgo-repro` (will not survive a reboot). Contains
+  `src/run_manifest.py` + tests and `CITATION.cff`, which close P0/P1 review
+  items. It conflicts with PR #26 on `run_dcgo_human.py`; cheapest path is to
+  cherry-pick those two files onto a fresh branch after #26 merges.
+- **`validation/bench_A`–`bench_D` are still untracked** — the review flagged
+  their provenance as unclear. Either commit or archive them.
 
 - **Give the disease layers a hierarchy via the Disease Ontology.** `--ontology
   disease` is raw OMIM phenotype ids with no DAG, so `--enable-true-path`
