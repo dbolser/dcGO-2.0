@@ -345,18 +345,17 @@ dcGO-2.0/
 │   ├── vectorized_fisher.py     # Vectorized Fisher's exact test + BH-FDR
 │   ├── sparse_fisher.py         # Sparse contingency-table construction
 │   ├── hierarchical_inference.py    # Supra-domains + shrinkage
-│   ├── ontology_processor.py    # True Path Rule / GO DAG propagation
-│   ├── data_acquisition.py      # (async downloader library — see note below)
-│   └── database_manager.py      # SQLite storage/export helpers
+│   └── ontology_processor.py    # True Path Rule / GO DAG propagation
 ├── config/settings.py           # Dataset URLs + configuration
 ├── tests/                       # unit / integration tests
 ├── validation/                  # validate_results.py (§1) + temporal_benchmark.py (§2)
 └── docs/                        # Reference papers
 ```
 
-> **Note:** `src/data_acquisition.py` is an older async (aiohttp) download
-> library and is **not** on the supported path. Use `scripts/download_data.py`
-> instead — it reads the same URLs from `config/settings.py`.
+> **Downloading data:** use `scripts/download_data.py`, which reads its URLs
+> from `config/settings.py`. An older async (aiohttp) downloader and a SQLite
+> storage layer used to sit in `src/`; both were unreachable from any supported
+> entry point and were removed.
 
 ---
 

@@ -70,12 +70,15 @@ facilitate:
 To download the latest versions:
 
 ```bash
-# Download specific dataset
-python -m src.data_acquisition download --dataset goa_annotations
+# Download every required dataset
+uv run python scripts/download_data.py
 
-# Force redownload
-python -m src.data_acquisition download --force-redownload
+# A specific dataset only (repeatable; --list shows them all)
+uv run python scripts/download_data.py --datasets goa_annotations
 
-# Download all required datasets
-uv run python -m src.main_pipeline --datasets goa_annotations --datasets go_ontology --datasets interpro_mappings
+# A dated GOA release (for the temporal benchmark)
+uv run python scripts/download_data.py --goa-archive 205
 ```
+
+See `scripts/download_data.py --help` for the full list; the URLs live in
+`config/settings.py`.
