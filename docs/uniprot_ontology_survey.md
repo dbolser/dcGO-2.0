@@ -186,7 +186,7 @@ the term's own acquisition rate:
 | `subcellular` | 2.9× [2.7, 3.0] | real |
 | `keyword` | 1.7× [1.6, 1.8] | weak — 720 near-universal terms leave little headroom |
 | `complex` | detectable, magnitude meaningless | ~1.5 proteins per complex, so the base rate ≈ 0 |
-| `disease` | undefined (0 hits / 369) | too sparse to test; see the DO plan in `TODO.md` |
+| `disease` | undefined (0 hits / 369) | too sparse to test — 6,904 raw OMIM ids over 5,029 proteins. Superseded by `doid`, which re-keys the same curation onto the Disease Ontology (`src/disease_ontology.py`); re-running the breadth test on `doid` is outstanding |
 | `ligand` | untestable at this split | `/ligand_id` postdates 2021 (see below) |
 
 The layers not listed were not trained at t0. Note that `ligand` is *entirely

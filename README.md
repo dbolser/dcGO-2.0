@@ -147,7 +147,9 @@ registered in `src/ontology_registry.py`:
 | `merops` | peptidase families | `DR MEROPS` | implicit (`S01.151 → S01 → S`) |
 | `cazy` | CAZy families | `DR CAZy` | implicit (`GT32 → GT`) |
 | `disease` | OMIM phenotypes | `DR MIM` (phenotype) | — |
+| `doid` | Disease Ontology | `DR MIM` re-keyed via `doid.obo` | `doid.obo` |
 | `orphanet` | rare diseases | `DR Orphanet` | — |
+| `orphanet_doid` | Disease Ontology | `DR Orphanet` re-keyed via `doid.obo` | `doid.obo` |
 | `unipathway` | metabolic pathways | `DR UniPathway` | — |
 | `complex` | protein complexes | `DR ComplexPortal` | — |
 | `drugbank` | drugs | `DR DrugBank` | — |
@@ -177,6 +179,48 @@ For an ontology with no hierarchy (`disease`, `rhea`, `xref`, …),
 `--enable-true-path` now **fails with an explicit error** rather than running
 without propagation, and any missing input is reported before the expensive
 stages start.
+
+#### Disease: re-keying OMIM onto the Disease Ontology
+
+OMIM is a catalogue, not an ontology. Its ids have no DAG, and it splits one
+disease across many locus-specific entries, so `--ontology disease` is both
+un-propagatable and badly underpowered. The Human Disease Ontology supplies the
+missing structure: it is an `is_a` DAG *and* it cross-references OMIM
+(`xref: MIM:<id>`) and Orphanet (`xref: ORDO:<id>`).
+
+```bash
+uv run python scripts/download_data.py --datasets disease_ontology
+uv run python run_dcgo_human.py --ontology doid --enable-true-path
+uv run python run_dcgo_human.py --ontology orphanet_doid --enable-true-path
+```
+
+The translation happens **at parse time**, in the protein→term map the Fisher
+engine consumes, so sparse OMIM phenotypes pool into a better-supported DO class
+*before* any test is run; a post-hoc re-labelling of the output could only
+rename terms that had already reached significance. `disease` and `orphanet`
+keep emitting the raw ids, so the two hypothesis universes stay comparable.
+
+The mapping is not one-to-one, and `src/disease_ontology.py` documents (and
+counts, at parse time) what happens to each case: **unmapped** ids are dropped
+but logged with their annotation counts, **one-to-many** ids expand to every DO
+term, and **obsolete** DO terms are skipped unless `replaced_by` resolves. It
+also reports mapping coverage — over distinct ids *and* over protein
+annotations — because a layer that reaches significance by shrinking its own
+term space has not learned anything.
+
+The `disease_ontology` dataset is pinned to an immutable OBO Foundry release
+PURL with a SHA-256 checksum in `config/settings.py`, which
+`scripts/download_data.py` verifies on every run.
+
+**What it actually bought** (human, current UniProt, FDR<0.01): 74% annotation
+coverage, a hierarchy where there was none — 160 True Path annotations, 16
+direct + 144 propagated — and interpretable term labels. It did *not* buy more
+significant associations: 16 for `doid` against 17 for `disease`, on a term
+space shrunk from 6,904 to 4,917 and a protein universe from 5,029 to 3,928.
+Both layers return **0** associations under `--permute-annotations 7`, so
+neither count is an FDR artefact. The remaining sparsity is at the protein level
+(≈0.8 proteins per DO term), which pooling through a hierarchy cannot fix. See
+`TODO.md` for the full before/after table.
 
 > **Note on evidence:** these are UniProt-native *cross-references*, not GO
 > annotations, so there is no IEA/evidence code to filter. (GO is the exception —

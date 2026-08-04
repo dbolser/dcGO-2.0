@@ -34,6 +34,7 @@ The human path runs as a sequence of scripts backed by modules in `src/`:
 Key `src/` modules:
 - `annotation_source.py` - `AnnotationSource` abstraction (protein → ontology term). `GAFAnnotationSource` is the GO reference implementation; the seam for adding non-GO ontologies.
 - `ontology_registry.py` - the `--ontology` dispatch table: one `OntologyEntry` per ontology, holding its `AnnotationSource` factory, its ancestors factory (or `None` when it has no hierarchy), and the input files each needs so a run fails early on a missing input. Adding an ontology is one entry here.
+- `disease_ontology.py` - Disease Ontology adapter (`--ontology doid` / `orphanet_doid`). UniProt's disease layer is OMIM/Orphanet ids with no DAG; DO cross-references both (`xref: MIM:`, `xref: ORDO:`), so this re-keys the annotations onto DOID terms **at parse time** — sparse per-locus phenotypes pool into a DO class before the Fisher tests, then propagate up DO's `is_a` DAG. The module docstring states the policy for unmapped / one-to-many / obsolete ids, and every case is counted and logged (`XrefMapping`, `RemapCoverage`).
 - `ec_annotation_source.py` - Enzyme Commission adapter (`run_dcgo_human.py --ontology ec`): parses Expasy `enzyme.dat` (already UniProt-keyed, so no id mapping) and provides `propagate_ec_annotations`/`ec_ancestors` for EC True Path propagation (hierarchy is implicit in the numbering — no OBO). First non-GO ontology on the seam.
 - `uniprot_annotation_source.py` - UniProt-native adapters. Three layers of the Swiss-Prot flat file: `DR` cross-references (`reactome`, `disease`, `orphanet`, `tcdb`, `merops`, `cazy`, `unipathway`, `complex`, `drugbank`, `pharos`, `condensate`, plus `xref --xref-db NAME` for anything else), `KW` keywords, and — new — the layers curated into the entry *body*: `CC SUBCELLULAR LOCATION` (mapped to `SL-` terms via `subcell.txt`), `FT /ligand_id` ChEBI ligands, `CC COFACTOR` ChEBI cofactors and `CC CATALYTIC ACTIVITY` Rhea reactions. UniProt is the protein universe, so all of these are already accession-keyed — no id mapping. Also parses the Reactome/keyword/subcellular hierarchies for True Path propagation.
 - `hierarchy.py` - Shared, ontology-agnostic True Path engine: `closure_ancestors` (child→parents map → transitive-ancestors fn) and `propagate_via_ancestors`, plus the hierarchy *loaders* — `dotted_ancestors` (TCDB), `alpha_prefix_ancestors` (MEROPS/CAZy) and `parse_obo_child_parents` (a light OBO reader used for ChEBI). Everything except GO propagates through this engine (GO keeps its obonet `OntologyProcessor` path, which also does parental-background filtering).
@@ -82,9 +83,14 @@ uv run python run_dcgo_human.py --num-cores 8 # statistical inference
 uv run python run_dcgo_human.py --num-cores 8 \
     --enable-true-path --go-ontology data/raw/go_ontology/go-basic.obo
 
-# Other ontologies (see src/ontology_registry.py or --help for all 19)
+# Other ontologies (see src/ontology_registry.py or --help for all 21)
 uv run python run_dcgo_human.py --ontology subcellular --enable-true-path
 uv run python run_dcgo_human.py --ontology ligand      # FT /ligand_id (ChEBI)
+uv run python run_dcgo_human.py --ontology doid --enable-true-path  # OMIM re-keyed to DO
+
+# Calibration control: shuffle protein↔term-set assignment; a well-behaved layer
+# returns ~0 significant associations. Writes domain_<ontology>_permuted<seed>_*.
+uv run python run_dcgo_human.py --ontology doid --permute-annotations 7
 
 # Rank the emergent domain-combination predictions
 uv run python scripts/rank_surprising_associations.py --ontology go
@@ -159,6 +165,7 @@ scripts/survey_uniprot_ontologies.py     # Which UniProt vocabularies are usable
 src/
 ├── annotation_source.py     # AnnotationSource seam (protein → ontology term)
 ├── ontology_registry.py     # --ontology dispatch table (sources + hierarchies)
+├── disease_ontology.py      # OMIM/Orphanet → DOID re-keying (--ontology doid)
 ├── ec_annotation_source.py  # Enzyme Commission adapter (Expasy enzyme.dat)
 ├── uniprot_annotation_source.py # UniProt-native adapters (DR / KW / CC / FT layers)
 ├── hierarchy.py             # Shared True Path engine (ancestors + propagation + loaders)

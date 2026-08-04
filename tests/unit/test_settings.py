@@ -1,8 +1,8 @@
-"""Unit tests for configuration helpers (per-species GOA URLs)."""
+"""Unit tests for configuration helpers (per-species GOA URLs, dataset checksums)."""
 
 import pytest
 
-from config.settings import ConfigurationError, config
+from config.settings import ConfigurationError, DataSource, config
 
 
 class TestGoaUrlFor:
@@ -28,3 +28,36 @@ class TestGoaUrlFor:
     def test_empty_species_rejected(self):
         with pytest.raises(ConfigurationError):
             config.goa_url_for("  ")
+
+
+def _source(**kwargs) -> DataSource:
+    return DataSource(name="t", url="https://example.org/f", description="d", **kwargs)
+
+
+class TestChecksums:
+    def test_none_when_unset(self):
+        assert _source().checksum_parts() is None
+
+    def test_algorithm_and_digest_split(self):
+        assert _source(checksum="sha256:ABCD").checksum_parts() == ("sha256", "abcd")
+
+    def test_bare_digest_defaults_to_sha256(self):
+        assert _source(checksum="abcd").checksum_parts() == ("sha256", "abcd")
+
+    def test_unknown_algorithm_rejected_at_construction(self):
+        with pytest.raises(ConfigurationError, match="algorithm"):
+            _source(checksum="crc32:abcd")
+
+    def test_non_hex_digest_rejected_at_construction(self):
+        # Better to fail here than after a multi-GB download.
+        with pytest.raises(ConfigurationError, match="hex"):
+            _source(checksum="sha256:not-a-digest")
+
+    def test_disease_ontology_is_pinned_and_checksummed(self):
+        # The reviewer's requirement: the DO release a run depends on must be
+        # reproducible by content, not just by URL.
+        source = config.data_sources["disease_ontology"]
+        assert "/releases/" in source.url
+        assert source.url.startswith("https://")
+        algorithm, digest = source.checksum_parts()
+        assert (algorithm, len(digest)) == ("sha256", 64)
