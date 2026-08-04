@@ -1,0 +1,44 @@
+cff-version: 1.2.0
+message: "If you use dcGO Pipeline, please cite this software and the method references in the README."
+title: "dcGO Pipeline"
+type: software
+authors:
+  - family-names: "Bolser"
+    given-names: "Dan"
+    email: "dan.bolser@outsee.co.uk"
+repository-code: "https://github.com/dbolser/dcGO-2.0"
+url: "https://github.com/dbolser/dcGO-2.0"
+license: MIT
+version: 0.1.0
+abstract: >-
+  A reimplementation of the domain-centric Gene Ontology (dcGO) method that
+  statistically associates InterPro protein domains and supra-domains with
+  ontology terms, using Fisher's exact tests with Benjamini-Hochberg FDR
+  control and optional True Path Rule propagation. Besides the Gene Ontology it
+  can associate domains with any of the other registered vocabularies (Enzyme
+  Commission, Reactome, UniProt keywords, subcellular locations, ChEBI ligands
+  and cofactors, and further UniProt-native cross-references).
+keywords:
+  - bioinformatics
+  - protein function prediction
+  - protein domains
+  - Gene Ontology
+  - InterPro
+  - UniProt
+  - Enzyme Commission
+references:
+  - type: article
+    title: "dcGO: database of domain-centric ontologies on functions, phenotypes, diseases and more"
+    authors:
+      - family-names: "Fang"
+        given-names: "Hai"
+      - family-names: "Gough"
+        given-names: "Julian"
+    journal: "Nucleic Acids Research"
+    volume: 41
+    issue: "D1"
+    start: "D536"
+    end: "D544"
+    year: 2013
+    doi: "10.1093/nar/gks1080"
+    notes: "The method this pipeline reimplements."

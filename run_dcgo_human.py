@@ -6,6 +6,11 @@ This script runs the complete dcGO statistical inference pipeline for any specie
 It performs domain-GO association analysis using sparse matrix operations and parallel
 Fisher's exact tests.
 
+Every run writes a provenance manifest, run_manifest_<ontology>.json, into the
+output directory: input/output SHA-256 hashes and release headers, the Git
+revision, the uv.lock hash, the command line and every effective threshold. See
+REPRODUCIBILITY.md.
+
 Usage:
     uv run python run_dcgo_human.py [OPTIONS]
 
@@ -73,11 +78,13 @@ from src.hierarchical_inference import HierarchicalInferenceEngine
 from src.hierarchy import propagate_via_ancestors
 from src.ontology_processor import OntologyProcessor
 from src.ontology_registry import (
+    OntologyEntry,
     describe_ontologies,
     get_ontology,
     missing_inputs,
     ontology_keys,
 )
+from src.run_manifest import RunManifest, describe_file, manifest_filename
 from src.sparse_fisher import (
     build_sparse_matrices,
     compute_contingency_tables_sparse,
@@ -86,6 +93,60 @@ from src.vectorized_fisher import benjamini_hochberg_correction, fisher_exact_pa
 
 logger.remove()
 logger.add(sys.stderr, level="INFO")
+
+# Analysis constants that are not exposed as CLI flags. They are named here (and
+# recorded in the run manifest) rather than buried as literals at their call
+# sites, so "every threshold" in the provenance record cannot drift from the
+# thresholds the code actually applied.
+MAX_SUPRA_DOMAIN_LENGTH = 3  # longest contiguous domain combination tested
+MIN_DOMAIN_LENGTH = 10  # residues; shorter InterPro matches are discarded
+FISHER_ALTERNATIVE = "greater"  # one-sided: enrichment only
+SHRINKAGE_MIN_OBSERVATIONS = 3  # supra-domain occurrences before shrinking
+PARENTAL_MIN_BACKGROUND_SIZE = 3  # GO parental-background (optimal-level) test
+PARENTAL_ALPHA_THRESHOLD = 0.05  # raw-p cutoff for that parent/child test
+
+#: ``ontology_paths`` key → the ``config/settings.py`` data source it is
+#: downloaded from. Used only to *label* manifest inputs with where they came
+#: from; the SHA-256 recorded alongside is what actually identifies the bytes.
+INPUT_SOURCE_NAMES = {
+    "go_obo": "go_ontology",
+    "enzyme_dat": "enzyme",
+    "uniprot_dat": "uniprot_sprot_dat",
+    "reactome_relations": "reactome_relations",
+    "keywlist": "uniprot_keywlist",
+    "subcell": "uniprot_subcell",
+    "chebi_obo": "chebi",
+    # Not an ontology input: the upstream source protein2ipr_<species>.dat.gz
+    # was derived from, recorded as `derived_from`.
+    "interpro_mappings": "interpro_mappings",
+}
+
+
+def input_source_urls(species: str) -> dict:
+    """Upstream download URL for each pipeline input, keyed as in ``INPUT_SOURCE_NAMES``.
+
+    Best-effort by design: ``config/`` is a source-checkout convenience and is
+    not shipped in the wheel, and importing it builds the project directory
+    layout as a side effect. A run that cannot resolve URLs records input hashes
+    without them rather than failing — the hash is the identity, the URL is a
+    convenience label.
+    """
+    try:
+        from config.settings import Config
+
+        config = Config(use_env_overrides=False)
+    except Exception as exc:  # any config problem: these labels are optional
+        logger.debug(f"Source URLs unavailable for the manifest: {exc}")
+        return {}
+
+    urls = {
+        key: config.data_sources[name].url
+        for key, name in INPUT_SOURCE_NAMES.items()
+        if name in config.data_sources
+    }
+    # data_sources pins the *human* GAF; every other species has its own URL.
+    urls["gaf"] = config.goa_url_for(species)
+    return urls
 
 
 @dataclass
@@ -141,6 +202,94 @@ def calculate_hypergeometric_score(a: int, b: int, c: int, d: int) -> float:
 
     except (ValueError, OverflowError, ZeroDivisionError):
         return 50.0  # Neutral score for edge cases
+
+
+def start_run_manifest(
+    args: argparse.Namespace,
+    *,
+    ontology_entry: OntologyEntry,
+    ontology_label: str,
+    ontology_paths: dict,
+    interpro_file: Path,
+) -> RunManifest:
+    """Open the provenance manifest for this run, hashing every input first.
+
+    Which inputs those are comes from what the *selected* registry entry
+    declares — ``needs``, plus ``hierarchy_needs`` when True Path propagation is
+    on (``src/ontology_registry.py``). Driving it off the registry rather than an
+    ``if/elif`` over ``--ontology`` means every registered ontology is covered,
+    and a newly registered one is covered without touching this file.
+
+    The manifest is written before the expensive stages, with
+    ``"status": "running"``; :meth:`RunManifest.complete` finalizes it. A run
+    that fails therefore leaves a visibly unfinished record rather than a stale
+    "completed" one from a previous invocation.
+    """
+    source_urls = input_source_urls(args.species)
+    input_records = [
+        describe_file(
+            interpro_file,
+            role="domain_annotations",
+            derived_from=source_urls.get("interpro_mappings"),
+        )
+    ]
+    hierarchy_inputs = (
+        list(ontology_entry.hierarchy_needs) if args.enable_true_path else []
+    )
+    # dict.fromkeys de-duplicates while preserving order: an ontology may list
+    # the same file as both an annotation and a hierarchy input (subcellular).
+    for name in dict.fromkeys(list(ontology_entry.needs) + hierarchy_inputs):
+        input_records.append(
+            describe_file(
+                ontology_paths[name], role=name, source_url=source_urls.get(name)
+            )
+        )
+
+    return RunManifest(
+        args.output_dir / manifest_filename(ontology_label),
+        repository=Path.cwd(),
+        parameters=vars(args),
+        inputs=input_records,
+        analysis={
+            "ontology": {
+                "key": ontology_entry.key,
+                "label": ontology_label,
+                "ontology_id": ontology_entry.spec.ontology_id,
+                "name": ontology_entry.spec.name,
+                "term_prefix": ontology_entry.spec.term_prefix,
+                "annotation_inputs": list(ontology_entry.needs),
+                "supports_true_path": ontology_entry.supports_true_path,
+                "true_path_enabled": bool(args.enable_true_path),
+                "hierarchy_inputs": hierarchy_inputs,
+                "propagation": (
+                    "go_dag_with_parental_background_filter"
+                    if ontology_entry.external_propagation
+                    else "ancestor_closure"
+                    if ontology_entry.build_ancestors is not None
+                    else None
+                ),
+            },
+            "thresholds": {
+                "evidence_filter": args.evidence_filter,
+                "fdr_threshold": args.fdr_threshold,
+                "fdr_method": "benjamini_hochberg",
+                "fisher_alternative": FISHER_ALTERNATIVE,
+                # No minimum-support filter is applied: an association is kept
+                # on FDR significance alone. Recorded as null so the manifest
+                # states that explicitly rather than by omission.
+                "min_proteins_per_association": None,
+                "min_domain_length": MIN_DOMAIN_LENGTH,
+                "max_supra_domain_length": MAX_SUPRA_DOMAIN_LENGTH,
+                "enable_supra_domains": bool(args.enable_supra_domains),
+                "enable_shrinkage": bool(args.enable_shrinkage),
+                "shrinkage_strength": args.shrinkage_strength,
+                "shrinkage_min_observations": SHRINKAGE_MIN_OBSERVATIONS,
+                "parental_background_min_size": PARENTAL_MIN_BACKGROUND_SIZE,
+                "parental_background_alpha": PARENTAL_ALPHA_THRESHOLD,
+            },
+        },
+        command=[sys.executable, *sys.argv],
+    )
 
 
 def main():
@@ -398,6 +547,16 @@ def main():
         logger.error(f"Please extract {args.species} data from protein2ipr.dat.gz")
         return 1
 
+    logger.info("Hashing inputs and writing the run provenance manifest...")
+    manifest = start_run_manifest(
+        args,
+        ontology_entry=ontology_entry,
+        ontology_label=ontology_label,
+        ontology_paths=ontology_paths,
+        interpro_file=interpro_file,
+    )
+    logger.info(f"✓ Run manifest started: {manifest.path}")
+
     # Build the annotation source for the chosen ontology. Everything downstream
     # only sees a {protein_id: {term}} map, so the engine is ontology-agnostic —
     # see src/annotation_source.py for the seam.
@@ -420,7 +579,10 @@ def main():
     protein_go_map = annotation_source.parse()
 
     logger.info("Parsing domain annotations...")
-    parser_obj = DomainAnnotationParser(max_supra_domain_length=3, min_domain_length=10)
+    parser_obj = DomainAnnotationParser(
+        max_supra_domain_length=MAX_SUPRA_DOMAIN_LENGTH,
+        min_domain_length=MIN_DOMAIN_LENGTH,
+    )
     domain_architectures = parser_obj.parse_protein2ipr_file(interpro_file)
 
     # Get intersection
@@ -556,7 +718,7 @@ def main():
 
     odds_ratios, pvalues = fisher_exact_parallel(
         tables,
-        alternative="greater",
+        alternative=FISHER_ALTERNATIVE,
         n_jobs=args.num_cores,
         batch_size=args.batch_size,
         progress_callback=progress_callback,
@@ -578,7 +740,7 @@ def main():
         # Initialize shrinkage engine
         shrinkage_engine = HierarchicalInferenceEngine(
             shrinkage_strength=args.shrinkage_strength,
-            min_observations=3,  # From config
+            min_observations=SHRINKAGE_MIN_OBSERVATIONS,
         )
 
         # Apply shrinkage to p-values
@@ -687,8 +849,8 @@ def main():
                 significant_associations,
                 protein_domain_map,
                 protein_go_map,
-                min_background_size=3,
-                alpha_threshold=0.05,
+                min_background_size=PARENTAL_MIN_BACKGROUND_SIZE,
+                alpha_threshold=PARENTAL_ALPHA_THRESHOLD,
             )
 
             logger.info(
@@ -842,11 +1004,34 @@ def main():
         )
     logger.info(f"  Total runtime: {total_time:.1f}s ({total_time / 60:.1f} minutes)")
     logger.info("")
+    # Finalize the provenance record: output identities plus the counts a reader
+    # would otherwise have to trust the log for. Only a run that reaches here is
+    # marked "completed" — one that fails or is killed leaves "running".
+    output_files = [(output_file, "significant_associations"), (top_file, "top100")]
+    if propagated_annotations:
+        output_files.append((annotations_file, "propagated_annotations"))
+    logger.info("Hashing outputs and finalizing the run manifest...")
+    manifest.complete(
+        outputs=[describe_file(path, role=role) for path, role in output_files],
+        summary={
+            "ontology": ontology_label,
+            "proteins": len(proteins_with_both),
+            "domains": len(domain_list),
+            "terms": len(go_list),
+            "tests": int(len(pvalues)),
+            "significant_associations": n_significant,
+            "bh_threshold_pvalue": float(threshold),
+            "propagated_annotations": len(propagated_annotations),
+            "runtime_seconds": round(total_time, 2),
+        },
+    )
+
     logger.info("Output files:")
     logger.info(f"  {output_file}")
     logger.info(f"  {top_file}")
     if propagated_annotations:
         logger.info(f"  {annotations_file}")
+    logger.info(f"  {manifest.path}")
 
     return 0
 

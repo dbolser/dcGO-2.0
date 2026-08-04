@@ -360,18 +360,33 @@ Two independent checks live in `validation/` (see
 ## Development
 
 ```bash
-# Tests (155 tests, ~5 s)
+# Tests (396 tests, ~8 s)
 uv run pytest
 
-# Lint + format (CI uses ruff)
-uv run ruff check src/ tests/
+# Lint + format (the same set CI checks)
+uv run ruff check src/ tests/ config/ scripts/ validation/ \
+    run_dcgo_human.py extract_human_interpro.py
 uv run ruff format --check
 
 # Coverage
 uv run pytest --cov=src --cov-report=html
 ```
 
-CI (`.github/workflows/ci.yml`) runs ruff + pytest on every push and PR.
+CI (`.github/workflows/ci.yml`) runs ruff + pytest on every push and PR, then
+builds the wheel and sdist and smoke-tests the installed `dcgo` CLI.
+
+### Reproducible runs
+
+Every analysis run writes `run_manifest_<ontology>.json` in its output
+directory. The manifest records the SHA-256 (and embedded release header, where
+the format has one) of every input the chosen ontology consumed, the Git
+revision and dirty state, the `uv.lock` hash, the full command line, every
+effective parameter and threshold, runtime metadata, timestamps, summary counts
+and output hashes. A completed run has `"status": "completed"`; an interrupted
+one leaves `"status": "running"` for diagnosis.
+
+See [REPRODUCIBILITY.md](REPRODUCIBILITY.md) for the publication/release
+checklist. Citation metadata is in [CITATION.cff](CITATION.cff).
 
 ---
 
@@ -389,18 +404,17 @@ dcGO-2.0/
 │   ├── vectorized_fisher.py     # Vectorized Fisher's exact test + BH-FDR
 │   ├── sparse_fisher.py         # Sparse contingency-table construction
 │   ├── hierarchical_inference.py    # Supra-domains + shrinkage
-│   ├── ontology_processor.py    # True Path Rule / GO DAG propagation
-│   ├── data_acquisition.py      # (async downloader library — see note below)
-│   └── database_manager.py      # SQLite storage/export helpers
+│   └── ontology_processor.py    # True Path Rule / GO DAG propagation
 ├── config/settings.py           # Dataset URLs + configuration
 ├── tests/                       # unit / integration tests
 ├── validation/                  # validate_results.py (§1) + temporal_benchmark.py (§2)
 └── docs/                        # Reference papers
 ```
 
-> **Note:** `src/data_acquisition.py` is an older async (aiohttp) download
-> library and is **not** on the supported path. Use `scripts/download_data.py`
-> instead — it reads the same URLs from `config/settings.py`.
+> **Downloading data:** use `scripts/download_data.py`, which reads its URLs
+> from `config/settings.py`. An older async (aiohttp) downloader and a SQLite
+> storage layer used to sit in `src/`; both were unreachable from any supported
+> entry point and were removed.
 
 ---
 
