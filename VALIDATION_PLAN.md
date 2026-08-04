@@ -12,7 +12,7 @@ engineering cleanup: the code runs; this is about showing the results are
 | §0 Pipeline correctness | ✅ done — 4 correctness bugs found & fixed with tests |
 | §1 Reframe InterPro2GO comparison | ✅ done (#14, #15) — ~65% coverage at FDR<0.01 |
 | **§2 Temporal held-out benchmark (CAFA-style)** | ✅ **done (#8)** — 2021→2026 CAFA split; see results below |
-| §3 Compare to original dcGO | 🟡 method audit done (see §2→"Method audit"); domain re-keying open (#9) |
+| §3 Compare to original dcGO | ✅ **done** — SSF re-keying + published-dcGO join; precision 0.54–0.63, recall uninterpretable (see §3.1) |
 | §4 Supra-domain ablation | ⬜ open (#10) — **now unblocked** (reuses the §2 harness) |
 | §5 Pre-paper method decisions | ⬜ open (#11) |
 | §6 Reproducibility | ⬜ open (#12) |
@@ -48,9 +48,9 @@ terms. Remaining, in rough priority:
    protein-prediction path. Makes "dcGO-2.0 == dcGO Predictor" defensible.
 3. **§4 ablation** — now that the yardstick is trusted, run the temporal benchmark
    per pipeline config (single-domain / +supra / +shrinkage / +TPR).
-4. **§3 original-dcGO comparison** — re-key the domain parser on the `SSF`
-   (SUPERFAMILY/SCOP) or `PF` (Pfam) signature from `protein2ipr` col 4 to compare
-   on the original's domain universe. See [[original-dcgo-methodology]].
+4. ~~**§3 original-dcGO comparison**~~ — **done** (2026-08-04), see §3.1.
+   `--domain-key ssf` re-keys on the SUPERFAMILY/SCOP signature; the remaining
+   §3 work is the `pfam` key and the non-GO reference tables.
 5. **§5 method decisions** — TPR default on/off; species scope (human-only vs
    multi-species); minimum-evidence / effect-size floor; Haldane-corrected odds
    ratio. **§6 reproducibility** — pin GOA/InterPro/GO versions, one-command
@@ -474,18 +474,225 @@ in 2023* (JMB 435:168093). It supersedes the 2013 database paper and changes wha
   dcGO release**, so for those the InterPro2GO-style and temporal tests are the
   only available validation.
 
-- [ ] Download the original dcGO / SUPFAM domain–GO associations.
-- [ ] **Preferred:** re-key our domain parser on the `SSF` (or `PF`) signature
-      instead of the integrated `IPR` entry — a near-apples-to-apples
-      reproduction of the original's domain definitions (roughly a one-column
-      change in `domain_annotation_parser`). Alternatively map `IPR ↔ SSF/PF` via
-      `protein2ipr` and document coverage.
-- [ ] Report agreement on the shared domain space and characterize where
-      dcGO-2.0 differs (newer GOA, SCOP-vs-InterPro granularity, FDR threshold,
-      supra-domains).
+- [x] Download the original dcGO / SUPFAM domain–GO associations.
+      (`scripts/download_data.py --group dcgo-reference`; SHA-256 pinned in
+      `config/settings.py`.)
+- [x] Re-key our domain parser on the `SSF` signature
+      (`run_dcgo_human.py --domain-key ssf`).
+- [x] Report agreement on the shared domain space and characterize the deltas.
 
 **Acceptance:** a table quantifying overlap with the original dcGO on mappable
 domains, with a written explanation of the deltas.
+
+---
+
+### 3.1 Result (2026-08-04) — done, with the confounds stated first
+
+Driver: `validation/compare_original_dcgo.py`. Metrics:
+`validation/dcgo_comparison_{metrics,variants,by_aspect,by_domain,supra}_{manual,iea}.tsv`.
+
+#### Read the confounds before the numbers
+
+They are large, they are quantified, and they push in one direction — **against
+recall**. Anyone reading "recall 0.07" as a statement about method quality has
+been misled by the experiment, not by the method.
+
+| # | Confound | Quantified |
+|---|---|---|
+| 1 | **Vintage.** Their tables are stamped 3 Apr 2016; our GOA is 2026. | **1,795** of the 18,666 GO terms they scored are now obsolete in GO. **4,518** of our 14,517 terms appear nowhere in their table, so 792 of our 6,829 significant pairs (11.6%) are not comparable in either direction. |
+| 2 | **Species scope.** They used 2,414 genomes + all UniProt (>80M sequences); we use human only. | **69.4%** of the pairs they call significant and we do not (30,485 / 43,946) have **zero co-occurring human proteins** — no threshold, method or statistic could recover them. This is the single largest driver of the recall figure. |
+| 3 | **Evidence policy.** Their IEA/evidence-code policy is **not stated** in any paper available to us. We do not know it; we did not assume it. | Bracketed by running both ways. `--evidence-filter manual` → precision 0.537, recall 0.069; `--evidence-filter all` (IEA included) → precision 0.552, recall 0.082. The unknown is worth ~1.5 precision points, so it does not change any conclusion. |
+| 4 | **Reachable domain space.** InterPro integrates SUPERFAMILY at superfamily level only; there is no `fa`. | Only **1,561 of their 4,355** domains (**35.8%**) are reachable at all. The 2,794 SCOP-family entries are structurally out of scope. |
+| 5 | **Their table is not a full test matrix.** `GO_mapping` covers 1.9% of the shared sunid × GO space. | Absence from their table is reported as its own category (`extra_not_in_their_table`), never folded into "they disagree". |
+
+Two further confounds surfaced while building the comparison. Neither is in the
+plan, and a naive implementation would have got both wrong.
+
+**(a) Their published set is not `all_score < 1e-3`.** At the `sf` level they
+score 404,288 pairs, of which 134,665 sit below their 1e-3 threshold — but they
+*ship* 108,612 direct + 85,683 inherited. Every direct row bar one is below 1e-3
+(direct ⊂ significant); **26,054 significant pairs (19.3%) are not shipped at
+all**, removed by the further filtering their method applies on top of the FDR
+(the relative/parental-background test and most-specific-level selection); and
+**none** of the inherited rows is itself below 1e-3 — they are pure true-path
+propagation onto ancestors. The comparison therefore uses **what they
+published**, split direct vs. inherited, as the primary comparator, and reports
+the naive re-threshold as one variant among three.
+
+**(b) 80,826 of their 404,288 `sf` rows (20%) carry `all_score` exactly 1.0**,
+which is the column's SQL `DEFAULT`. Those are indistinguishable from "never
+actually tested". The clearest illustration is that P-loop NTPase
+(`SSF52540`) → ATP binding (`GO:0005524`) — about as canonical as
+domain–function associations get, and one we call at p = 2e-31 — carries
+`all_score = 1.0` on their side and is not shipped, while its parent
+`GO:0016887` (ATPase activity) *is* shipped as inherited. This caps how much any
+rank correlation against their FDR column can mean, and it is reported rather
+than worked around.
+
+#### The two keyings, run end to end
+
+`uv run python run_dcgo_human.py [--domain-key ssf] --num-cores 8`, human, GO,
+`--evidence-filter manual`, FDR < 0.01:
+
+| | `--domain-key interpro` (default) | `--domain-key ssf` |
+|---|---:|---:|
+| Proteins in the universe | 18,908 | **12,316** (−34.9%) |
+| Distinct single domains | 19,449 | **911** (−95%) |
+| Domain features (single + supra) | 103,167 | 3,553 |
+| GO terms | 16,389 | 14,517 |
+| Fisher tests | 1,690,803,963 | 51,578,901 |
+| Significant (FDR < 0.01) | 165,618 | 13,771 |
+| BH raw-p cutoff | 9.79e-07 | 2.66e-06 |
+| Wall clock (Fisher / BH / total) | 15.2 / 50.5 / **68.8** min | 0.5 / 1.3 / **1.8** min |
+
+(Side observation, not part of §3: at 1.69 B tests the run is dominated by
+`benjamini_hochberg_correction`, which walks a Python loop over every p-value —
+50 of the 69 minutes. It is 3× the cost of the 1.7 M tests/s Fisher stage and is
+the obvious next optimisation. It affects the default keying only.)
+
+The trade is exactly the one the original made: **breadth collapses ~20×, depth
+per domain rises** (median 4 proteins per superfamily vs 1 per InterPro entry).
+SSF keying is the right lens for this comparison and the wrong default for the
+pipeline. SSF↔InterPro is a 1:1 bijection over human data (911 ↔ 911, no
+many-to-one either way), so every SSF-keyed row carries its InterPro entry in a
+trailing `interpro_id` column for cross-referencing.
+
+#### Agreement, single domains
+
+Shared space: **904 / 911 (99.2%)** of our superfamilies are in their table
+(the 7 absentees are small superfamilies they never associated with any GO term
+— CENP-B dimerisation, HBS1-like, GTP cyclohydrolase I feedback regulatory
+protein, …; listed in full in `dcgo_comparison_metrics_manual.tsv`);
+9,999 shared GO terms.
+
+Primary comparison — ours at FDR < 0.01 vs **their published direct** set:
+
+| | value |
+|---|---:|
+| Our significant pairs (in shared space) | 6,037 |
+| Their significant pairs (in shared space) | 47,189 |
+| Shared | 3,243 |
+| **Precision (ours also called by them)** | **0.537** |
+| Recall (theirs also called by us) | 0.069 |
+| Jaccard | 0.065 |
+
+All six threshold × definition variants, none selected after the fact:
+
+| our threshold | their definition | ours | theirs | shared | precision | recall |
+|---|---|---:|---:|---:|---:|---:|
+| FDR<0.01 | published, direct | 6,037 | 47,189 | 3,243 | 0.537 | 0.069 |
+| FDR<0.001 | published, direct | 4,478 | 47,189 | 2,530 | 0.565 | 0.054 |
+| FDR<0.01 | published, direct+inherited | 6,037 | 77,652 | 3,591 | 0.595 | 0.046 |
+| FDR<0.001 | published, direct+inherited | 4,478 | 77,652 | 2,799 | 0.625 | 0.036 |
+| FDR<0.01 | `all_score` < 1e-3 | 6,037 | 58,529 | 3,561 | 0.590 | 0.061 |
+| FDR<0.001 | `all_score` < 1e-3 | 4,478 | 58,529 | 2,724 | 0.608 | 0.047 |
+
+Precision sits in a narrow **0.54–0.63** band across every variant, and tightening
+our threshold to theirs moves it by ~3 points. Per aspect (primary variant):
+CC 0.623 > MF 0.544 > BP 0.496. Per domain, over the 190 superfamilies where we
+make ≥10 calls, median precision is 0.549 (IQR 0.455–0.634); only 2 have zero
+agreement and 7 exceed 0.8 — disagreement is spread, not concentrated in a few
+pathological families.
+
+#### Where the disagreement actually is
+
+This is the part a set intersection cannot tell you, and it is why the
+per-pair FDR in `Domain2GO.sql.gz` was worth parsing.
+
+**Pairs they call and we do not (43,946)** — our Fisher p recomputed for each,
+on the same universe the run used (recomputation verified against the pipeline's
+own p-values to 4.9e-7 relative):
+
+| bucket | n | share |
+|---|---:|---:|
+| Zero co-occurring human proteins — unreachable | 30,485 | 69.4% |
+| Supported, p < 0.05 but above our BH cutoff (2.66e-6) | 9,096 | 20.7% |
+| Supported, p ≥ 0.05 — we genuinely see nothing | 4,365 | 9.9% |
+
+So **90% of our "misses" are explained by the species-scope confound plus
+sub-threshold signal in the right direction** (median p for supported misses:
+0.015). Only ~10% are pairs where human data is available and shows nothing.
+
+**Pairs we call and they do not (2,794):**
+
+| bucket | n |
+|---|---:|
+| Never scored by them (absent from `GO_mapping`) | 735 |
+| They published it, but as a true-path-**inherited** annotation | 348 |
+| They scored it below 1e-3 but did not ship it | 318 |
+| They scored it in 1e-3 … 0.05 ("nearly called it too") | 586 |
+| They scored it > 0.5 | 569 |
+
+#### Calibration (threshold-independent)
+
+Spearman of our −log10(p) against their −log10(FDR), our p recomputed for every
+pair they scored in the shared space:
+
+| population | n | ρ |
+|---|---:|---:|
+| All pairs they scored | 171,006 | 0.127 |
+| … with ≥1 co-occurring human protein (drops the a=0 mass confound 2 makes invisible to us) | 48,034 | **0.467** |
+| … and excluding their `all_score = 1.0` column default (confound b) | 41,065 | 0.398 |
+
+So on pairs where both sides genuinely have a number, our ranking and theirs
+correlate at ρ ≈ 0.4–0.47: clearly related, far from interchangeable. Against
+their `all_hscore_max`: ρ = 0.019 all / 0.224 supported — but that column is a
+max over the GO subtree on published rows only, not the same quantity as a
+p-value, so little should be read into it.
+
+#### Supra-domains — the novel part
+
+Nothing else in this plan gives our supra-domain machinery an external
+reference. `SP2GO.txt` does.
+
+| | value |
+|---|---:|
+| Supra-domain architectures we observe in human | 2,642 |
+| … with ≥1 significant association | 1,107 |
+| Their supra-domain architectures | 7,163 |
+| Shared, exact N→C order | 1,335 (precision 0.505) |
+| Shared, order-insensitive | 1,267 (precision 0.539) |
+| Architectures compared (both sides, shared GO terms) | 709 |
+| Our associations on those / theirs (direct) | 4,320 / 41,574 |
+| Shared associations | 2,226 |
+| **Supra precision (ours in theirs, direct)** | **0.515** |
+| Supra recall | 0.054 |
+| Supra precision vs their direct + inherited | 0.553 |
+
+Order convention on their side is undocumented, so both the exact-order and
+order-insensitive variants are reported; the difference is small (0.505 vs
+0.539), which suggests our N→C convention broadly matches theirs. **Our
+supra-domain associations agree with the published ones at essentially the same
+rate as our single-domain ones (0.515 vs 0.537)** — the supra-domain machinery
+is not producing a different quality of output from the single-domain path.
+
+#### Verdict: §3 is closed for GO, on the `sf` half of their domain space
+
+What is now established: the domain universes join cleanly (99.2% of our
+superfamilies), our associations agree with the published ones at ~54–63%
+precision on every reasonable definition of "their significant set", the
+disagreement is diagnosed rather than merely counted (90% of misses are
+species-scope or sub-threshold), and the supra-domain machinery is externally
+corroborated for the first time.
+
+What is **not** established, and should not be claimed:
+
+* **Nothing about recall.** The comparison cannot measure it — a human-only
+  universe cannot reach 69% of their calls at any threshold.
+* **Nothing about the SCOP-family (`fa`) half** of their release, or about the
+  Pfam-keyed release. Reachable only by adding a `pfam` domain key (the parser
+  seam now supports it: add one entry to `SIGNATURE_PREFIXES`).
+* **Nothing about the 2023 dcGO release.** It publishes no bulk download; only
+  the 2013 tables are comparable at scale.
+* **Nothing about the non-GO ontologies.** `Domain2EC.txt`, `Domain2KW.txt`,
+  `Domain2UP.txt` exist and are the only comparator for our EC / keyword /
+  UniPathway layers; they were not used here.
+* The surprise score's **novelty discount is InterPro2GO-based** and reports
+  `no-reference` for every SSF-keyed candidate. `scripts/rank_surprising_associations.py
+  --domain-key ssf` runs, but its novelty factor is inert.
+
+- [ ] **Open:** extend to `--domain-key pfam` and to `Domain2EC` / `Domain2KW` /
+      `Domain2UP` for the non-GO layers.
 
 ---
 

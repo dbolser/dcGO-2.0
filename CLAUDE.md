@@ -39,7 +39,7 @@ Key `src/` modules:
 - `hierarchy.py` - Shared, ontology-agnostic True Path engine: `closure_ancestors` (child→parents map → transitive-ancestors fn) and `propagate_via_ancestors`, plus the hierarchy *loaders* — `dotted_ancestors` (TCDB), `alpha_prefix_ancestors` (MEROPS/CAZy) and `parse_obo_child_parents` (a light OBO reader used for ChEBI). Everything except GO propagates through this engine (GO keeps its obonet `OntologyProcessor` path, which also does parental-background filtering).
 - `surprise_score.py` - Ranks *emergent* supra-domain associations: a binomial test of the combination against what its parts already predict, times a redundant-signature penalty, times a novelty discount vs InterPro2GO. Driver: `scripts/rank_surprising_associations.py`; method and results in `SURPRISE_SCORE.md`.
 - `goa_parser.py` - Parses GOA GAF files (protein → GO), with evidence-code filtering. `parse_goa` is the species-agnostic API (`parse_goa_human` is a kept alias).
-- `domain_annotation_parser.py` - Parses `protein2ipr` domain mappings and builds domain architectures.
+- `domain_annotation_parser.py` - Parses `protein2ipr` domain mappings and builds domain architectures. `--domain-key` chooses *which column is a domain*: `interpro` (the integrated entry, default) or `ssf` (the SUPERFAMILY signature, whose numeric part is the SCOP sunid — the published dcGO's domain universe, used by VALIDATION_PLAN §3). Non-matching member-database rows are dropped **at parse time**, before the sort-by-start, so supra-domain contiguity is computed over the chosen universe only.
 - `sparse_fisher.py` - Sparse contingency-table construction for domain × GO.
 - `vectorized_fisher.py` - Vectorized Fisher's exact tests (Cython `fisher`) + Benjamini–Hochberg FDR.
 - `hierarchical_inference.py` - Supra-domain generation and optional empirical-Bayes shrinkage.
@@ -86,8 +86,16 @@ uv run python run_dcgo_human.py --num-cores 8 \
 uv run python run_dcgo_human.py --ontology subcellular --enable-true-path
 uv run python run_dcgo_human.py --ontology ligand      # FT /ligand_id (ChEBI)
 
+# Key domains by SCOP superfamily instead of InterPro entry (VALIDATION_PLAN §3)
+uv run python run_dcgo_human.py --domain-key ssf --output-dir results_ssf
+
 # Rank the emergent domain-combination predictions
 uv run python scripts/rank_surprising_associations.py --ontology go
+
+# Compare against the published dcGO (needs --group dcgo-reference downloaded)
+uv run python scripts/download_data.py --group dcgo-reference
+uv run python validation/compare_original_dcgo.py \
+    --associations results_ssf/domain_ssf_go_associations_significant.tsv
 
 # HPC batch script
 sbatch scripts/run_dcgo_hpc.sh
@@ -143,17 +151,21 @@ A full multi-organism run would be substantially heavier and is not yet implemen
 - The surprise score re-ranks associations that already passed the dcGO FDR
   filter, using the same proteins — it measures internal consistency of the
   evidence, not out-of-sample performance.
-- Validation covers InterPro2GO coverage (§1, ~65%) and a temporal CAFA-style
+- Validation covers InterPro2GO coverage (§1, ~65%), a temporal CAFA-style
   benchmark (§2, `validation/temporal_benchmark.py`: dcGO beats the random-domain
-  null 1.7–3.2× but trails the naive F_max baseline). Still open: ablation (§4),
-  score calibration (§5), original-dcGO comparison (§3). See `VALIDATION_PLAN.md`.
+  null 1.7–3.2× but trails the naive F_max baseline), and the published-dcGO
+  comparison (§3, `validation/compare_original_dcgo.py`: precision 0.54–0.63 on
+  the shared SCOP superfamily space; **recall against them is not interpretable**
+  — they are all-species and 2016, we are human-only and 2026). Still open:
+  ablation (§4), score calibration (§5). See `VALIDATION_PLAN.md`.
 
 ## Package Structure
 
 ```
 run_dcgo_human.py            # Main entry point
 extract_human_interpro.py    # Human subset extraction
-scripts/download_data.py     # Dataset downloader
+scripts/download_data.py     # Dataset downloader (--group dcgo-reference for §3)
+validation/compare_original_dcgo.py  # §3: dcGO-2.0 vs the published dcGO
 scripts/rank_surprising_associations.py  # Surprise score driver
 scripts/survey_uniprot_ontologies.py     # Which UniProt vocabularies are usable
 src/

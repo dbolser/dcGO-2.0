@@ -143,7 +143,13 @@ def score_all(driver, world, candidates):
             q_value=1e-6,
         )
         overlap = driver.measure_region_overlap(
-            feature, parts, carriers & annotated, architectures
+            feature,
+            parts,
+            carriers & annotated,
+            architectures,
+            # This world's architectures are keyed by InterPro entry, which is
+            # what DomainAnnotationParser(domain_key="interpro") reports.
+            lambda annotation: annotation.interpro_id,
         )
         results.append(score_candidate(evidence, overlap))
     return {r.feature: r for r in apply_fdr(results)}

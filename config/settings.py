@@ -31,7 +31,17 @@ class DataSource:
     url: str
     description: str
     required: bool = True
+    #: SHA-256 of the exact bytes we validated against, where the source is a
+    #: frozen archive (the published dcGO tables, SCOP 1.75). Left None for
+    #: rolling "current_release" URLs, whose content legitimately changes.
     checksum: Optional[str] = None
+    #: Size in bytes of those same frozen bytes, so a truncated download or a
+    #: silently-substituted file is caught without hashing 90 MB.
+    size_bytes: Optional[int] = None
+    #: Directory under ``data/raw/`` to save into. Defaults to the source name;
+    #: set it when several sources belong together (e.g. the three published
+    #: dcGO tables all land in ``data/raw/dcgo_reference/``).
+    subdir: Optional[str] = None
 
     def __post_init__(self) -> None:
         """Validate data source configuration."""
@@ -318,6 +328,65 @@ class Config:
                 url="https://current.geneontology.org/ontology/external2go/interpro2go",
                 description="Manually curated InterPro2GO mappings (validation reference)",
                 required=False,
+            ),
+            # ---- Published dcGO (Fang & Gough 2013) reference tables --------
+            # The comparator for VALIDATION_PLAN §3. Still served by SUPERFAMILY
+            # at supfam.org; the /SUPERFAMILY/ path prefix is required (the
+            # shorter https://supfam.org/cgi-bin/dcdownload.cgi returns 500), and
+            # the human-facing download index (cgi-bin/dcdownload.cgi) takes
+            # ~36 s to render — these Domain2GO/ files themselves are fast.
+            # Domains are keyed by bare SCOP sunid, which is what our
+            # --domain-key ssf run produces (SSFnnnnn → sunid nnnnn).
+            # Consumed by validation/compare_original_dcgo.py.
+            "dcgo_domain2go_sql": DataSource(
+                name="dcgo_domain2go_sql",
+                url="https://supfam.org/SUPERFAMILY/Domain2GO/Domain2GO.sql.gz",
+                description="Published dcGO domain→GO MySQL dump (GO_mapping carries per-pair FDR + h-score)",
+                required=False,
+                checksum="9681c5a68cf35d48ca2a2de1921560aacee861694bb87ae4bbb881fe24db714b",
+                size_bytes=15810360,
+                subdir="dcgo_reference",
+            ),
+            "dcgo_sp2go": DataSource(
+                name="dcgo_sp2go",
+                url="https://supfam.org/SUPERFAMILY/Domain2GO/SP2GO.txt",
+                description="Published dcGO supra-domain→GO associations (comma-joined sunids)",
+                required=False,
+                checksum="cdb2d6f073ec53c006091fd32b2f0c7eaf1e16ea1f20df3975603abea5839862",
+                size_bytes=92007833,
+                subdir="dcgo_reference",
+            ),
+            "dcgo_domain2go_flat": DataSource(
+                name="dcgo_domain2go_flat",
+                url="https://supfam.org/SUPERFAMILY/Domain2GO/Domain2GO_supported_only_by_all.txt",
+                description="Published dcGO domain→GO flat file (high-coverage 'all proteins' set, with IC and direct/inherited flag)",
+                required=False,
+                checksum="534141679c4d85705bb94ed8d91d9829cb8f8bd51c4fe4d9b6c3643936d69a5c",
+                size_bytes=37270998,
+                subdir="dcgo_reference",
+            ),
+            # ---- SCOP 1.75 -------------------------------------------------
+            # InterPro's SUPERFAMILY member database is pinned to the SCOP 1.75
+            # HMM library — the same release the 2013 dcGO used — so 1.75 (not
+            # SCOPe 2.08) is the right release for resolving our sunids. Note the
+            # legacy naming: dir.<x>.scop.1.75.txt (dir.<x>.scop.txt_1.75 404s).
+            "scop_des": DataSource(
+                name="scop_des",
+                url="https://scop.berkeley.edu/downloads/parse/dir.des.scop.1.75.txt",
+                description="SCOP 1.75 node descriptions (sunid → type/sccs/name), for SSF identifier resolution",
+                required=False,
+                checksum="1f90e45bd527a433c938acb619ae83f61837d1435e5b71fc868fa43bc2d6c18c",
+                size_bytes=6029837,
+                subdir="scop",
+            ),
+            "scop_hie": DataSource(
+                name="scop_hie",
+                url="https://scop.berkeley.edu/downloads/parse/dir.hie.scop.1.75.txt",
+                description="SCOP 1.75 hierarchy (sunid → parent → children), class > fold > superfamily > family",
+                required=False,
+                checksum="59f763ae61b27757eb8e966270e9a2ddaa8c9ed7d6a9b3a94e0186b49036804e",
+                size_bytes=2961802,
+                subdir="scop",
             ),
             # Optional: Local computation tools
             "pfam_hmms": DataSource(

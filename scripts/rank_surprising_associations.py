@@ -41,7 +41,10 @@ from loguru import logger
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.domain_annotation_parser import DomainAnnotationParser  # noqa: E402
+from src.domain_annotation_parser import (  # noqa: E402
+    DOMAIN_KEYS,
+    DomainAnnotationParser,
+)
 from src.hierarchy import closure_ancestors, parse_obo_child_parents  # noqa: E402
 from src.ontology_registry import get_ontology, missing_inputs  # noqa: E402
 from src.surprise_score import (  # noqa: E402
@@ -133,6 +136,7 @@ def measure_region_overlap(
     parts: Sequence[str],
     proteins: Iterable[str],
     architectures: Dict[str, object],
+    key_of: Callable[[object], str],
 ) -> float:
     """Median largest pairwise overlap between the combination's matched regions.
 
@@ -144,12 +148,16 @@ def measure_region_overlap(
     whose iteration order depends on the interpreter's hash seed, so sampling it
     directly made the median — and therefore whether a candidate cleared
     ``--max-overlap`` — vary between runs on identical inputs.
+
+    ``key_of`` must be the same keying the run used (``--domain-key``), or the
+    architecture strings rebuilt here will not match the features in the
+    associations file and every region lookup will miss.
     """
     overlaps: List[float] = []
     for protein in sorted(proteins)[:OVERLAP_SAMPLE]:
         arch = architectures[protein]
         annotations = arch.domain_annotations
-        domain_ids = [a.interpro_id for a in annotations]
+        domain_ids = [key_of(a) for a in annotations]
         intervals = [(a.start, a.end) for a in annotations]
         regions = locate_feature_regions(domain_ids, intervals, parts)
         if regions:
@@ -231,6 +239,13 @@ def main() -> int:
     )
     parser.add_argument("--ontology", default="go", help="Ontology the run used")
     parser.add_argument("--species", default="human")
+    parser.add_argument(
+        "--domain-key",
+        default="interpro",
+        choices=list(DOMAIN_KEYS),
+        help="Domain keying the run used. Must match run_dcgo_human.py's "
+        "--domain-key, since the architectures are rebuilt here.",
+    )
     # The generic DR escape hatch needs the same selection the run used, or
     # rebuilding its annotations below raises KeyError('xref_db').
     parser.add_argument(
@@ -357,10 +372,15 @@ def main() -> int:
         ontology_label = args.xref_db.lower()
     else:
         ontology_label = args.ontology
+    # Mirrors run_dcgo_human.py's naming: a non-default domain key is part of the
+    # stem, so the two keyings' outputs never collide.
+    key_prefix = "" if args.domain_key == "interpro" else f"{args.domain_key}_"
     associations_path = args.associations or Path(
-        f"results/domain_{ontology_label}_associations_significant.tsv"
+        f"results/domain_{key_prefix}{ontology_label}_associations_significant.tsv"
     )
-    output_path = args.output or Path(f"results/domain_{ontology_label}_surprising.tsv")
+    output_path = args.output or Path(
+        f"results/domain_{key_prefix}{ontology_label}_surprising.tsv"
+    )
     if not associations_path.exists():
         logger.error(f"Associations file not found: {associations_path}")
         logger.error("Run run_dcgo_human.py for this ontology first.")
@@ -415,7 +435,9 @@ def main() -> int:
         },
     ).parse()
     domain_parser = DomainAnnotationParser(
-        max_supra_domain_length=3, min_domain_length=10
+        max_supra_domain_length=3,
+        min_domain_length=10,
+        domain_key=args.domain_key,
     )
     architectures = domain_parser.parse_protein2ipr_file(interpro_file)
     universe = set(annotations) & set(architectures)
@@ -497,7 +519,11 @@ def main() -> int:
             q_value=q_value,
         )
         overlap = measure_region_overlap(
-            feature, parts, carriers & annotated, architectures
+            feature,
+            parts,
+            carriers & annotated,
+            architectures,
+            domain_parser.domain_key_of,
         )
         novelty, status = novelty_factor(
             term,
