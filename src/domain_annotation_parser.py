@@ -11,6 +11,10 @@ The protein2ipr.dat file format:
 - One line per domain annotation
 - Gzipped file (~20GB compressed)
 
+A "domain" can be keyed either by the integrated InterPro entry (field 2, the
+default) or by a member-database signature (field 4) via ``domain_key``; the
+``ssf`` key reproduces the SCOP superfamily universe the published dcGO used.
+
 Author: dcGO Pipeline
 """
 
@@ -21,6 +25,39 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set
 
 from loguru import logger
+
+# Which column of ``protein2ipr`` names a "domain".
+#
+# ``interpro`` (the default, and the only behaviour before this option existed)
+# keys on the integrated InterPro entry in column 2. ``ssf`` keys on the
+# SUPERFAMILY member-database signature in column 4 — ``SSFnnnnn``, whose numeric
+# part is the SCOP sunid. That is the domain universe the published dcGO (Fang &
+# Gough 2013) used, so it is what makes VALIDATION_PLAN §3 an apples-to-apples
+# comparison rather than a cross-namespace one.
+#
+# Note the prefix test must not confuse SUPERFAMILY with the Structure-Function
+# Linkage Database, whose signatures are ``SFLDF``/``SFLDS``/``SFLDG`` — they
+# start with ``SF`` but not with ``SSF``, so an exact ``SSF`` prefix is safe.
+SIGNATURE_PREFIXES: Dict[str, str] = {"ssf": "SSF"}
+
+DOMAIN_KEYS = ("interpro", *sorted(SIGNATURE_PREFIXES))
+
+
+def superfamily_sunid(signature_id: str) -> Optional[int]:
+    """SCOP sunid behind a SUPERFAMILY signature (``SSF53649`` → ``53649``).
+
+    InterPro's SUPERFAMILY member database is built on the SCOP 1.75 HMM library
+    and its accessions are the SCOP sunid with an ``SSF`` prefix, which is what
+    lets our domains be joined directly to the published dcGO tables (keyed by
+    bare sunid). Returns ``None`` for anything that is not such an accession, so
+    callers can filter rather than guess.
+    """
+    if not signature_id.startswith("SSF"):
+        return None
+    suffix = signature_id[3:]
+    if not suffix.isdigit():
+        return None
+    return int(suffix)
 
 
 @dataclass
@@ -68,6 +105,7 @@ class DomainAnnotationParser:
         max_supra_domain_length: int = 3,
         min_domain_length: int = 10,
         species_filter: Optional[Set[str]] = None,
+        domain_key: str = "interpro",
     ):
         """
         Initialize the domain annotation parser.
@@ -77,20 +115,60 @@ class DomainAnnotationParser:
             min_domain_length: Minimum domain length to consider
             species_filter: Set of UniProt accession prefixes to filter by species
                            (e.g., human proteins typically start with specific patterns)
+            domain_key: Which ``protein2ipr`` column defines a domain —
+                        ``interpro`` (column 2, the integrated entry; the
+                        default and historical behaviour) or ``ssf`` (column 4's
+                        SUPERFAMILY/SCOP signature). See ``DOMAIN_KEYS``.
         """
+        if domain_key not in DOMAIN_KEYS:
+            raise ValueError(
+                f"Unknown domain_key {domain_key!r}; expected one of "
+                + ", ".join(DOMAIN_KEYS)
+            )
+
         self.max_supra_domain_length = max_supra_domain_length
         self.min_domain_length = min_domain_length
         self.species_filter = species_filter
+        self.domain_key = domain_key
+        self.signature_prefix = SIGNATURE_PREFIXES.get(domain_key)
 
         # Storage for parsed annotations
         self.protein_domains: Dict[str, List[DomainAnnotation]] = defaultdict(list)
         self.domain_counts: Dict[str, int] = defaultdict(int)
+        # Signature → InterPro entry, recorded while parsing so a signature-keyed
+        # run can still be cross-referenced against an InterPro-keyed one without
+        # a second pass over the 20 GB source. Empty for ``interpro`` keying.
+        self.key_to_interpro: Dict[str, Set[str]] = defaultdict(set)
 
         logger.info("DomainAnnotationParser initialized:")
+        logger.info(f"  Domain key: {domain_key}")
         logger.info(f"  Max supra-domain length: {max_supra_domain_length}")
         logger.info(f"  Min domain length: {min_domain_length}")
         if species_filter:
             logger.info(f"  Species filter: {len(species_filter)} patterns")
+
+    def domain_key_of(self, annotation: DomainAnnotation) -> str:
+        """The domain identifier this parser keys ``annotation`` by."""
+        if self.signature_prefix is None:
+            return annotation.interpro_id
+        return annotation.signature_id
+
+    def interpro_for(self, domain_id: str) -> str:
+        """InterPro entry (or comma-joined entries, for a supra-domain) for a key.
+
+        For ``interpro`` keying this is the identity. For ``ssf`` keying it is
+        the entry InterPro integrates that signature into, which over human data
+        is a 1:1 bijection — so it is a free cross-reference column rather than a
+        lossy mapping. Unmappable parts are reported as ``-``; genuinely
+        ambiguous ones are joined with ``|``.
+        """
+        if self.signature_prefix is None:
+            return domain_id
+        parts = []
+        for part in domain_id.split(","):
+            entries = self.key_to_interpro.get(part)
+            parts.append("|".join(sorted(entries)) if entries else "-")
+        return ",".join(parts)
 
     def parse_protein2ipr_file(
         self,
@@ -157,6 +235,24 @@ class DomainAnnotationParser:
                     interpro_id = fields[1]
                     interpro_name = fields[2]
                     signature_id = fields[3]
+
+                    # Signature-keyed runs drop the other member databases HERE,
+                    # at parse time — before the row is appended to
+                    # self.protein_domains and therefore before
+                    # _generate_domain_architectures sorts by start position.
+                    # Filtering later would leave the discarded rows interleaved
+                    # in the positional ordering, so _generate_supra_domains
+                    # would treat domains separated by a dropped row as
+                    # "contiguous" and emit combinations that do not exist in the
+                    # architecture. See tests/unit/test_domain_annotation_parser.py
+                    # ::TestSuperfamilyDomainKey::test_supra_domains_ignore_dropped_rows.
+                    if (
+                        self.signature_prefix is not None
+                        and not signature_id.startswith(self.signature_prefix)
+                    ):
+                        skipped_count += 1
+                        continue
+
                     start = int(fields[4])
                     end = int(fields[5])
 
@@ -196,7 +292,9 @@ class DomainAnnotationParser:
                         break
 
                 self.protein_domains[protein_id].append(annotation)
-                self.domain_counts[interpro_id] += 1
+                self.domain_counts[self.domain_key_of(annotation)] += 1
+                if self.signature_prefix is not None:
+                    self.key_to_interpro[signature_id].add(interpro_id)
                 annotation_count += 1
 
         logger.info("Parsing complete:")
@@ -225,7 +323,7 @@ class DomainAnnotationParser:
             sorted_annotations = sorted(annotations, key=lambda x: x.start)
 
             # Extract single domain IDs
-            single_domains = [ann.interpro_id for ann in sorted_annotations]
+            single_domains = [self.domain_key_of(ann) for ann in sorted_annotations]
 
             # Generate supra-domains (contiguous domain combinations)
             supra_domains = self._generate_supra_domains(single_domains)
@@ -285,7 +383,7 @@ class DomainAnnotationParser:
         protein_domain_map = {}
 
         for protein_id, annotations in self.protein_domains.items():
-            single_domains = [ann.interpro_id for ann in annotations]
+            single_domains = [self.domain_key_of(ann) for ann in annotations]
             supra_domains = self._generate_supra_domains(single_domains)
             protein_domain_map[protein_id] = single_domains + supra_domains
 

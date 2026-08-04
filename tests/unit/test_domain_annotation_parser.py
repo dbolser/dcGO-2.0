@@ -9,9 +9,11 @@ import gzip
 from pathlib import Path
 
 from src.domain_annotation_parser import (
+    DOMAIN_KEYS,
     DomainAnnotation,
     ProteinDomainArchitecture,
     DomainAnnotationParser,
+    superfamily_sunid,
 )
 
 
@@ -282,6 +284,203 @@ class TestDomainAnnotationParser:
         architectures = parser.parse_protein2ipr_file(file_path)
 
         assert len(architectures) == 2
+
+
+class TestSuperfamilySunid:
+    """SSFnnnnn ↔ SCOP sunid, the join key for the published dcGO tables."""
+
+    def test_extracts_sunid(self):
+        assert superfamily_sunid("SSF53649") == 53649
+        assert superfamily_sunid("SSF52540") == 52540
+
+    def test_leading_zeros_and_short_ids(self):
+        # dcGO's tables store bare integers, so the round trip has to be numeric
+        # rather than string-prefix based.
+        assert superfamily_sunid("SSF0053649") == 53649
+
+    def test_rejects_other_member_databases(self):
+        for signature in ("PF00001", "IPR000001", "G3DSA:1.10.10.10", "cd00001"):
+            assert superfamily_sunid(signature) is None
+
+    def test_rejects_structure_function_linkage_db(self):
+        # SFLD signatures start with "SF" too — mistaking them for SUPERFAMILY
+        # would inject non-SCOP domains into the §3 comparison.
+        for signature in ("SFLDF00001", "SFLDS00001", "SFLDG01135"):
+            assert superfamily_sunid(signature) is None
+
+    def test_rejects_non_numeric_suffix(self):
+        assert superfamily_sunid("SSFabcde") is None
+        assert superfamily_sunid("SSF") is None
+
+
+class TestSuperfamilyDomainKey:
+    """The ``--domain-key ssf`` parse path (VALIDATION_PLAN §3)."""
+
+    @pytest.fixture
+    def mixed_member_db_file(self, tmp_path):
+        """protein2ipr rows mixing SUPERFAMILY with other member databases.
+
+        The SSF rows are deliberately *not* the positionally-adjacent ones: for
+        PROT1 a Pfam-only entry sits between the two SUPERFAMILY matches, and the
+        rows are listed out of positional order (as the real file often is).
+        """
+        file_path = tmp_path / "protein2ipr.dat.gz"
+        data = [
+            # protein, InterPro entry, name, signature, start, end
+            "PROT1\tIPR000100\tSF domain A\tSSF50001\t10\t110",
+            "PROT1\tIPR000200\tPfam-only domain\tPF00200\t150\t250",
+            "PROT1\tIPR000300\tSF domain B\tSSF50003\t300\t400",
+            "PROT1\tIPR000400\tSF domain C\tSSF50004\t450\t550",
+            # A second signature for the same InterPro entry (the real file
+            # lists one row per member signature).
+            "PROT1\tIPR000100\tSF domain A\tSM00100\t10\t110",
+            "PROT2\tIPR000100\tSF domain A\tSSF50001\t20\t120",
+            "PROT2\tIPR000500\tCDD-only domain\tcd00500\t200\t300",
+            # SFLD looks like SUPERFAMILY on a sloppy prefix test.
+            "PROT2\tIPR000600\tSFLD domain\tSFLDG01135\t400\t500",
+        ]
+        with gzip.open(file_path, "wt") as f:
+            f.write("\n".join(data))
+        return file_path
+
+    def test_domain_key_is_validated(self):
+        assert DOMAIN_KEYS == ("interpro", "ssf")
+        with pytest.raises(ValueError, match="Unknown domain_key"):
+            DomainAnnotationParser(domain_key="pfam")
+
+    def test_default_key_is_interpro(self, mixed_member_db_file):
+        """The default keying must be untouched by the new option."""
+        parser = DomainAnnotationParser()
+        architectures = parser.parse_protein2ipr_file(mixed_member_db_file)
+
+        assert architectures["PROT1"].single_domains == [
+            "IPR000100",
+            "IPR000100",
+            "IPR000200",
+            "IPR000300",
+            "IPR000400",
+        ]
+        assert parser.key_to_interpro == {}
+
+    def test_ssf_key_uses_the_signature(self, mixed_member_db_file):
+        parser = DomainAnnotationParser(domain_key="ssf")
+        architectures = parser.parse_protein2ipr_file(mixed_member_db_file)
+
+        assert architectures["PROT1"].single_domains == [
+            "SSF50001",
+            "SSF50003",
+            "SSF50004",
+        ]
+        assert set(parser.domain_counts) == {"SSF50001", "SSF50003", "SSF50004"}
+
+    def test_ssf_key_drops_other_member_databases(self, mixed_member_db_file):
+        parser = DomainAnnotationParser(domain_key="ssf")
+        architectures = parser.parse_protein2ipr_file(mixed_member_db_file)
+
+        every_domain = {
+            domain for arch in architectures.values() for domain in arch.single_domains
+        }
+        assert all(domain.startswith("SSF") for domain in every_domain)
+        # SFLD starts with "SF" but is not SUPERFAMILY.
+        assert "SFLDG01135" not in every_domain
+        # PROT2's only SSF row is SSF50001; its CDD and SFLD rows are gone.
+        assert architectures["PROT2"].single_domains == ["SSF50001"]
+
+    def test_dropped_rows_are_not_in_domain_annotations(self, mixed_member_db_file):
+        """The filter must apply to the stored annotations, not just the keys.
+
+        ``domain_annotations`` is what the surprise score re-reads to locate a
+        feature's matched regions; a non-SSF row surviving there would shift
+        every positional lookup.
+        """
+        parser = DomainAnnotationParser(domain_key="ssf")
+        architectures = parser.parse_protein2ipr_file(mixed_member_db_file)
+
+        signatures = [
+            ann.signature_id for ann in architectures["PROT1"].domain_annotations
+        ]
+        assert signatures == ["SSF50001", "SSF50003", "SSF50004"]
+
+    def test_supra_domains_ignore_dropped_rows(self, mixed_member_db_file):
+        """The drop-before-sort trap.
+
+        PROT1's architecture is SSF50001 · (Pfam-only) · SSF50003 · SSF50004.
+        Keyed by SSF, SSF50001 and SSF50003 *are* adjacent, because the Pfam row
+        is not a domain in this universe. If the non-SSF rows were dropped after
+        the sort-by-start — or left in the positional list and filtered later —
+        the contiguous windows would be computed over a mixed ordering and the
+        supra-domains would be wrong (e.g. no ``SSF50001,SSF50003`` pair, or a
+        3-mer spanning the discarded Pfam row).
+        """
+        parser = DomainAnnotationParser(domain_key="ssf", max_supra_domain_length=3)
+        architectures = parser.parse_protein2ipr_file(mixed_member_db_file)
+
+        supra = architectures["PROT1"].supra_domains
+        assert set(supra) == {
+            "SSF50001,SSF50003",
+            "SSF50003,SSF50004",
+            "SSF50001,SSF50003,SSF50004",
+        }
+        # Nothing from another member database may leak into a combination.
+        assert all("PF" not in feature and "cd" not in feature for feature in supra)
+
+    def test_supra_domains_follow_position_not_file_order(self, tmp_path):
+        """Contiguity is by start coordinate, even when the file is unordered."""
+        file_path = tmp_path / "unordered.dat.gz"
+        data = [
+            "PROT1\tIPR000300\tC\tSSF50003\t300\t400",
+            "PROT1\tIPR000200\tPfam-only\tPF00200\t150\t250",
+            "PROT1\tIPR000100\tA\tSSF50001\t10\t110",
+        ]
+        with gzip.open(file_path, "wt") as f:
+            f.write("\n".join(data))
+
+        parser = DomainAnnotationParser(domain_key="ssf", max_supra_domain_length=3)
+        architectures = parser.parse_protein2ipr_file(file_path)
+
+        assert architectures["PROT1"].single_domains == ["SSF50001", "SSF50003"]
+        assert architectures["PROT1"].supra_domains == ["SSF50001,SSF50003"]
+
+    def test_proteins_without_any_ssf_hit_are_absent(self, tmp_path):
+        """Coverage cost of SSF keying: SSF-less proteins leave the universe."""
+        file_path = tmp_path / "no_ssf.dat.gz"
+        data = [
+            "PROT1\tIPR000100\tA\tSSF50001\t10\t110",
+            "PROT2\tIPR000200\tPfam-only\tPF00200\t10\t110",
+        ]
+        with gzip.open(file_path, "wt") as f:
+            f.write("\n".join(data))
+
+        parser = DomainAnnotationParser(domain_key="ssf")
+        architectures = parser.parse_protein2ipr_file(file_path)
+
+        assert set(architectures) == {"PROT1"}
+
+    def test_interpro_cross_reference(self, mixed_member_db_file):
+        """SSF→InterPro is emitted alongside, for joining the two keyings."""
+        parser = DomainAnnotationParser(domain_key="ssf")
+        parser.parse_protein2ipr_file(mixed_member_db_file)
+
+        assert parser.interpro_for("SSF50001") == "IPR000100"
+        assert parser.interpro_for("SSF50001,SSF50003") == "IPR000100,IPR000300"
+        assert parser.interpro_for("SSF99999") == "-"
+
+    def test_interpro_cross_reference_is_identity_for_interpro_key(
+        self, mixed_member_db_file
+    ):
+        parser = DomainAnnotationParser()
+        parser.parse_protein2ipr_file(mixed_member_db_file)
+
+        assert parser.interpro_for("IPR000100") == "IPR000100"
+
+    def test_get_protein_domain_map_uses_the_key(self, mixed_member_db_file):
+        parser = DomainAnnotationParser(domain_key="ssf", max_supra_domain_length=2)
+        parser.parse_protein2ipr_file(mixed_member_db_file)
+
+        mapping = parser.get_protein_domain_map()
+        assert "SSF50001" in mapping["PROT1"]
+        assert "SSF50001,SSF50003" in mapping["PROT1"]
+        assert not any(feature.startswith("IPR") for feature in mapping["PROT1"])
 
 
 class TestIntegration:

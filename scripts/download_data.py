@@ -25,6 +25,9 @@ Usage
     # A specific subset (repeat --datasets)
     uv run python scripts/download_data.py --datasets goa_annotations --datasets go_ontology
 
+    # A named bundle, e.g. the published-dcGO comparison inputs (VALIDATION_PLAN §3)
+    uv run python scripts/download_data.py --group dcgo-reference
+
     # Everything defined in settings.py, including the large optional sources
     uv run python scripts/download_data.py --all
 
@@ -35,10 +38,14 @@ Notes
 -----
 * Existing complete files are skipped. Use --force to re-download.
 * ``interpro_mappings`` (protein2ipr.dat.gz) is ~20 GB — this can take a while.
-* Sources pinned to an immutable release URL carry a ``checksum`` in
-  settings.py (e.g. ``disease_ontology``). It is verified every time, including
-  when an existing file is skipped, so a corrupted or swapped input fails the
-  download step instead of quietly changing a run's results.
+* Sources pinned to an immutable release URL carry a ``checksum`` (and
+  sometimes a ``size_bytes``) in settings.py — ``disease_ontology``, and the
+  frozen published-dcGO and SCOP 1.75 archives. These are verified every time,
+  including when an existing file is skipped, so a corrupted, truncated or
+  swapped input fails the download step instead of quietly changing a run's
+  results.
+* A few sources set ``subdir`` and therefore share one directory — the three
+  dcGO tables land in ``data/raw/dcgo_reference/``, SCOP in ``data/raw/scop/``.
 """
 
 from __future__ import annotations
@@ -58,6 +65,21 @@ from config.settings import Config  # noqa: E402
 
 # The datasets a standard human run actually needs.
 DEFAULT_DATASETS = ["goa_annotations", "go_ontology", "interpro_mappings"]
+
+# Named groups, so a reader does not have to know which five sources make up
+# "the §3 comparison inputs". Members are ordinary settings.py sources.
+DATASET_GROUPS: dict[str, list[str]] = {
+    # VALIDATION_PLAN §3: the published dcGO tables plus the SCOP 1.75 release
+    # our SSF signatures resolve against. ~135 MB total. Used by
+    # validation/compare_original_dcgo.py alongside a --domain-key ssf run.
+    "dcgo-reference": [
+        "dcgo_domain2go_sql",
+        "dcgo_sp2go",
+        "dcgo_domain2go_flat",
+        "scop_des",
+        "scop_hie",
+    ],
+}
 
 # Dated GOA snapshots for the temporal benchmark (VALIDATION_PLAN §2) live in the
 # EBI archive, one numbered release per file. The base URL is sourced from
@@ -113,6 +135,26 @@ def verify_checksum(path: Path, expected: tuple[str, str]) -> None:
             f"{algorithm} mismatch for {path}: expected {want}, got {got}"
         )
     print(f"  ✔ {algorithm} verified: {want}")
+
+
+def verify_size(path: Path, size_bytes: int) -> None:
+    """Check ``path`` against the byte count pinned in settings.py.
+
+    Cheaper than a digest and it catches the common failure directly: a
+    truncated download. Carried by the frozen archives (the published dcGO
+    tables, SCOP 1.75), where a short read would silently change a §3
+    comparison rather than fail it.
+
+    Raises:
+        ChecksumError: on a mismatch, so callers handle one exception type.
+    """
+    actual = path.stat().st_size
+    if actual != size_bytes:
+        raise ChecksumError(
+            f"{path.name}: expected {size_bytes:,} bytes, got {actual:,}. "
+            "Truncated download, or the source changed."
+        )
+    print(f"  ✔ size verified: {size_bytes:,} bytes")
 
 
 def download_one(url: str, dest: Path, *, force: bool, timeout: int) -> bool:
@@ -182,6 +224,14 @@ def main() -> int:
         + ", ".join(DEFAULT_DATASETS),
     )
     parser.add_argument(
+        "--group",
+        action="append",
+        choices=sorted(DATASET_GROUPS),
+        metavar="NAME",
+        help="Download a named bundle of datasets (repeatable). Available: "
+        + ", ".join(sorted(DATASET_GROUPS)),
+    )
+    parser.add_argument(
         "--all",
         action="store_true",
         help="Download every dataset defined in settings.py (includes large optional sources).",
@@ -227,6 +277,9 @@ def main() -> int:
             flag = "required" if ds.required else "optional"
             print(f"  {name:22s} [{flag}]  {ds.description}")
             print(f"  {'':22s}          {ds.url}")
+        print("\nGroups (--group NAME):\n")
+        for group, members in sorted(DATASET_GROUPS.items()):
+            print(f"  {group:22s} {', '.join(members)}")
         return 0
 
     raw_dir = config.DATA_DIR / "raw"
@@ -250,15 +303,22 @@ def main() -> int:
         if archive_failures:
             print(f"GOA archive download errors. Failed: {', '.join(archive_failures)}")
             return 1
-        if not (args.all or args.datasets):
+        if not (args.all or args.datasets or args.group):
             # Only archive snapshots were requested — done.
             print("All requested GOA snapshots are in place.")
             return 0
 
     if args.all:
         selected = list(sources.keys())
-    elif args.datasets:
-        selected = args.datasets
+    elif args.datasets or args.group:
+        # De-duplicate while preserving order, so --group dcgo-reference
+        # --datasets scop_hie does not fetch scop_hie twice.
+        selected = []
+        for name in list(args.datasets or []) + [
+            member for group in (args.group or []) for member in DATASET_GROUPS[group]
+        ]:
+            if name not in selected:
+                selected.append(name)
     else:
         selected = DEFAULT_DATASETS
 
@@ -270,7 +330,7 @@ def main() -> int:
     for name in selected:
         ds = sources[name]
         url = ds.url
-        dest = raw_dir / name / _filename_for(ds.url, name)
+        dest = raw_dir / (ds.subdir or name) / _filename_for(ds.url, name)
         description = ds.description
 
         # GOA is per-species; retarget the pinned (human) URL for any other
@@ -284,9 +344,11 @@ def main() -> int:
         print(f"[{name}] {description}")
         try:
             download_one(url, dest, force=args.force, timeout=args.timeout)
-            # Verify whether or not we just fetched it: a checksum is only set
+            # Verify whether or not we just fetched it: these are only set
             # for immutable-release URLs, and an already-present file is exactly
             # the case where silent corruption would go unnoticed.
+            if (size_bytes := getattr(ds, "size_bytes", None)) is not None:
+                verify_size(dest, size_bytes)
             if (expected := ds.checksum_parts()) is not None:
                 verify_checksum(dest, expected)
         except (requests.RequestException, OSError, ChecksumError) as exc:

@@ -41,7 +41,7 @@ Key `src/` modules:
 - `run_manifest.py` - Machine-readable run provenance (`run_manifest_<ontology>.json`): input/output SHA-256s and release headers, Git state, `uv.lock` hash, command line, every parameter and threshold, timestamps and summary counts. Written by `start_run_manifest`/`manifest.complete` in `run_dcgo_human.py`; checklist in `REPRODUCIBILITY.md`.
 - `surprise_score.py` - Ranks *emergent* supra-domain associations: a binomial test of the combination against what its parts already predict, times a redundant-signature penalty, times a novelty discount vs InterPro2GO. Driver: `scripts/rank_surprising_associations.py`; method and results in `SURPRISE_SCORE.md`.
 - `goa_parser.py` - Parses GOA GAF files (protein → GO), with evidence-code filtering. `parse_goa` is the species-agnostic API (`parse_goa_human` is a kept alias).
-- `domain_annotation_parser.py` - Parses `protein2ipr` domain mappings and builds domain architectures.
+- `domain_annotation_parser.py` - Parses `protein2ipr` domain mappings and builds domain architectures. `--domain-key` chooses *which column is a domain*: `interpro` (the integrated entry, default) or `ssf` (the SUPERFAMILY signature, whose numeric part is the SCOP sunid — the published dcGO's domain universe, used by VALIDATION_PLAN §3). Non-matching member-database rows are dropped **at parse time**, before the sort-by-start, so supra-domain contiguity is computed over the chosen universe only.
 - `sparse_fisher.py` - Sparse contingency-table construction for domain × GO.
 - `vectorized_fisher.py` - Vectorized Fisher's exact tests (Cython `fisher`) + Benjamini–Hochberg FDR.
 - `hierarchical_inference.py` - Supra-domain generation and the optional `--enable-shrinkage` step. **The step is a heuristic, not empirical Bayes** — it interpolates a supra-domain's log p-value toward its constituents' geometric mean with a hand-set decay `alpha = strength * exp(-n/3)`, which *lowers* 56% of them and nearly triples the FDR<0.01 count. See `VALIDATION_PLAN.md` §4.
@@ -92,8 +92,16 @@ uv run python run_dcgo_human.py --ontology doid --enable-true-path  # OMIM re-ke
 # returns ~0 significant associations. Writes domain_<ontology>_permuted<seed>_*.
 uv run python run_dcgo_human.py --ontology doid --permute-annotations 7
 
+# Key domains by SCOP superfamily instead of InterPro entry (VALIDATION_PLAN §3)
+uv run python run_dcgo_human.py --domain-key ssf --output-dir results_ssf
+
 # Rank the emergent domain-combination predictions
 uv run python scripts/rank_surprising_associations.py --ontology go
+
+# Compare against the published dcGO (needs --group dcgo-reference downloaded)
+uv run python scripts/download_data.py --group dcgo-reference
+uv run python validation/compare_original_dcgo.py \
+    --associations results_ssf/domain_ssf_go_associations_significant.tsv
 
 # Component ablation + permutation null + paired bootstrap CIs (VALIDATION_PLAN §4).
 # Needs one pipeline run per rung under --run-dir; see validation/ablation.py.
@@ -177,20 +185,24 @@ A full multi-organism run would be substantially heavier and is not yet implemen
   to quote an interval rather than reporting one — see `SURPRISE_SCORE.md`.
 - Validation covers InterPro2GO coverage (§1, ~65%), a temporal CAFA-style
   benchmark (§2, `validation/temporal_benchmark.py`), the multi-ontology breadth
-  test (§2, `validation/temporal_breadth.py`) and the §4 ablation with bootstrap
-  CIs and a permutation null (`validation/ablation.py`, `validation/resampling.py`).
-  dcGO clears a 100–200-permutation random-domain null in every cell at the
-  attainable p-floor, and beats the naive **F_max** baseline on informative terms
-  — but **loses to naive on AUPRC** at IC≥0 in all aspects. Still open: score
-  calibration (§5), original-dcGO comparison (§3), an untouched evaluation
-  interval. See `VALIDATION_PLAN.md`.
+  test (§2, `validation/temporal_breadth.py`), the published-dcGO comparison
+  (§3, `validation/compare_original_dcgo.py`: precision 0.54–0.63 on the shared
+  SCOP superfamily space; **recall against them is not interpretable** — they
+  are all-species and 2016, we are human-only and 2026), and the §4 ablation
+  with bootstrap CIs and a permutation null (`validation/ablation.py`,
+  `validation/resampling.py`). dcGO clears a 100–200-permutation random-domain
+  null in every cell at the attainable p-floor, and beats the naive **F_max**
+  baseline on informative terms — but **loses to naive on AUPRC** at IC≥0 in all
+  aspects. Still open: score calibration (§5), an untouched evaluation interval.
+  See `VALIDATION_PLAN.md`.
 
 ## Package Structure
 
 ```
 run_dcgo_human.py            # Main entry point
 extract_human_interpro.py    # Human subset extraction
-scripts/download_data.py     # Dataset downloader
+scripts/download_data.py     # Dataset downloader (--group dcgo-reference for §3)
+validation/compare_original_dcgo.py  # §3: dcGO-2.0 vs the published dcGO
 scripts/rank_surprising_associations.py  # Surprise score driver
 scripts/survey_uniprot_ontologies.py     # Which UniProt vocabularies are usable
 validation/

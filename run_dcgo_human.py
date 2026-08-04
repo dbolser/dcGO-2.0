@@ -29,6 +29,9 @@ Options:
     --uniprot-dat PATH       Path to UniProt Swiss-Prot flat file, used by every UniProt-native ontology
     --subcell PATH           Path to UniProt subcell.txt, used when --ontology subcellular
     --chebi-obo PATH         Path to ChEBI OBO, for --ontology ligand|cofactor --enable-true-path
+    --domain-key STR         Which protein2ipr column defines a domain: 'interpro'
+                             (integrated entry, default) or 'ssf' (SUPERFAMILY/SCOP
+                             signature, the published dcGO's domain universe)
     --evidence-filter STR    Evidence code filter: 'all', 'manual', 'experimental' (default: manual)
     --fdr-threshold FLOAT    FDR significance threshold (default: 0.01)
     --num-cores INT          Number of CPU cores for parallel processing (default: 8)
@@ -60,6 +63,10 @@ Examples:
 
     # Run with True Path Rule propagation
     uv run python run_dcgo_human.py --enable-true-path --go-ontology data/raw/go_ontology/go-basic.obo
+
+    # Key domains by SCOP superfamily instead of InterPro entry, to compare
+    # against the published dcGO (VALIDATION_PLAN §3)
+    uv run python run_dcgo_human.py --domain-key ssf
 """
 
 import argparse
@@ -73,7 +80,7 @@ from loguru import logger
 from scipy.stats import hypergeom
 
 from src.annotation_source import restrict_to_universe
-from src.domain_annotation_parser import DomainAnnotationParser
+from src.domain_annotation_parser import DOMAIN_KEYS, DomainAnnotationParser
 from src.hierarchical_inference import HierarchicalInferenceEngine
 from src.hierarchy import propagate_via_ancestors
 from src.ontology_processor import OntologyProcessor
@@ -325,6 +332,15 @@ def main():
         epilog="ontologies available to --ontology:\n" + describe_ontologies(),
     )
     parser.add_argument(
+        "--domain-key",
+        default="interpro",
+        choices=list(DOMAIN_KEYS),
+        help="Which protein2ipr column defines a domain: 'interpro' (the "
+        "integrated entry, default) or 'ssf' (the SUPERFAMILY/SCOP signature, "
+        "i.e. the domain universe the published dcGO used). Only the domain "
+        "axis changes; the ontology and the statistics are unaffected.",
+    )
+    parser.add_argument(
         "--evidence-filter",
         default="manual",
         choices=["all", "manual", "experimental"],
@@ -506,6 +522,7 @@ def main():
     logger.info("Configuration:")
     logger.info(f"  Species: {args.species}")
     logger.info(f"  Ontology: {ontology_label.upper()}")
+    logger.info(f"  Domain key: {args.domain_key}")
     logger.info(f"  Evidence filter: {args.evidence_filter}")
     logger.info(f"  FDR threshold: {args.fdr_threshold}")
     logger.info(f"  CPU cores: {args.num_cores}")
@@ -596,6 +613,7 @@ def main():
     parser_obj = DomainAnnotationParser(
         max_supra_domain_length=MAX_SUPRA_DOMAIN_LENGTH,
         min_domain_length=MIN_DOMAIN_LENGTH,
+        domain_key=args.domain_key,
     )
     domain_architectures = parser_obj.parse_protein2ipr_file(interpro_file)
 
@@ -904,19 +922,37 @@ def main():
     # names exactly (domain_go_associations_*.tsv, "go_term" column); EC gets its
     # own files and an "ec_term" column so no consumer of the GO output is affected.
     term_col = f"{ontology_label}_term"
-    # A permutation control must never overwrite the real results it is meant to
-    # be compared against.
+    # Two things qualify the output filename, for the same reason: a run must
+    # never silently overwrite results it is meant to be compared against. A
+    # non-default domain key distinguishes an SSF-keyed run from the
+    # InterPro-keyed one in the same results dir; a permutation seed
+    # distinguishes the calibration control from the real run.
+    key_prefix = "" if args.domain_key == "interpro" else f"{args.domain_key}_"
     output_label = ontology_label
     if args.permute_annotations is not None:
         output_label = f"{ontology_label}_permuted{args.permute_annotations}"
-    assoc_stem = f"domain_{output_label}_associations"
+    assoc_stem = f"domain_{key_prefix}{output_label}_associations"
+
+    # Signature keying is a 1:1 relabelling of InterPro entries over human data,
+    # so the entry id comes along for free as a trailing cross-reference column
+    # (letting SSF-keyed results be joined to InterPro-keyed ones without a
+    # second parse). Nothing is appended for the default keying, so the existing
+    # output stays byte-identical.
+    xref_header = "" if args.domain_key == "interpro" else "\tinterpro_id"
+
+    def xref_field(domain_id: str) -> str:
+        return (
+            ""
+            if args.domain_key == "interpro"
+            else f"\t{parser_obj.interpro_for(domain_id)}"
+        )
 
     # Export significant associations with hypergeometric scores and domain types
     output_file = args.output_dir / f"{assoc_stem}_significant.tsv"
     with open(output_file, "w") as f:
         f.write(
             f"domain\t{term_col}\tp_value\tadj_p_value\todds_ratio\thyper_score\t"
-            "domain_type\tconstituent_domains\tn_observations\n"
+            f"domain_type\tconstituent_domains\tn_observations{xref_header}\n"
         )
         for idx in significant_indices:
             domain_idx = idx // len(go_list)
@@ -938,7 +974,8 @@ def main():
             f.write(
                 f"{domain_id}\t{go_list[go_idx]}\t"
                 f"{pvalues[idx]:.6e}\t{adjusted_pvalues[idx]:.6e}\t{odds_ratios[idx]:.4f}\t{hyper_score:.2f}\t"
-                f"{meta.domain_type.value}\t{constituents}\t{meta.observation_count}\n"
+                f"{meta.domain_type.value}\t{constituents}\t{meta.observation_count}"
+                f"{xref_field(domain_id)}\n"
             )
 
     logger.info(f"✓ Exported significant associations to: {output_file}")
@@ -950,7 +987,7 @@ def main():
     with open(top_file, "w") as f:
         f.write(
             f"rank\tdomain\t{term_col}\tp_value\tadj_p_value\todds_ratio\thyper_score\t"
-            "domain_type\tconstituent_domains\tn_observations\n"
+            f"domain_type\tconstituent_domains\tn_observations{xref_header}\n"
         )
         for rank, idx in enumerate(top_indices, 1):
             domain_idx = idx // len(go_list)
@@ -972,7 +1009,8 @@ def main():
             f.write(
                 f"{rank}\t{domain_id}\t{go_list[go_idx]}\t"
                 f"{pvalues[idx]:.6e}\t{adjusted_pvalues[idx]:.6e}\t{odds_ratios[idx]:.4f}\t{hyper_score:.2f}\t"
-                f"{meta.domain_type.value}\t{constituents}\t{meta.observation_count}\n"
+                f"{meta.domain_type.value}\t{constituents}\t{meta.observation_count}"
+                f"{xref_field(domain_id)}\n"
             )
 
     logger.info(f"✓ Exported top 100 associations to: {top_file}")
@@ -980,7 +1018,8 @@ def main():
     # Export propagated annotations if True Path Rule was applied
     if propagated_annotations:
         annotations_file = (
-            args.output_dir / f"domain_{output_label}_annotations_propagated.tsv"
+            args.output_dir
+            / f"domain_{key_prefix}{output_label}_annotations_propagated.tsv"
         )
         with open(annotations_file, "w") as f:
             f.write(
