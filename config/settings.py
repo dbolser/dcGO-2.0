@@ -251,6 +251,26 @@ class Config:
                 description="UniProt keyword list + hierarchy (True Path for --ontology keyword)",
                 required=False,
             ),
+            # UniProt subcellular-location controlled vocabulary: maps the
+            # location strings in CC SUBCELLULAR LOCATION comments to stable
+            # SL- accessions and defines their hierarchy (HI/HP lines).
+            # Consumed by src/uniprot_annotation_source.parse_subcell_vocabulary
+            # (run_dcgo_human.py --ontology subcellular).
+            "uniprot_subcell": DataSource(
+                name="uniprot_subcell",
+                url="https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/docs/subcell.txt",
+                description="UniProt subcellular location vocabulary + hierarchy (--ontology subcellular)",
+                required=False,
+            ),
+            # ChEBI chemical ontology, for True Path propagation of the ligand
+            # and cofactor layers (--ontology ligand|cofactor). The "lite"
+            # flavour carries the is_a graph without the chemical data blocks.
+            "chebi": DataSource(
+                name="chebi",
+                url="https://ftp.ebi.ac.uk/pub/databases/chebi/ontology/chebi_lite.obo",
+                description="ChEBI ontology (True Path for --ontology ligand|cofactor)",
+                required=False,
+            ),
             "goa_annotations": DataSource(
                 name="goa_annotations",
                 url="https://ftp.ebi.ac.uk/pub/databases/GO/goa/HUMAN/goa_human.gaf.gz",

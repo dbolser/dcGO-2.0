@@ -11,11 +11,17 @@ Usage:
 
 Options:
     --species STR            Species to analyze: 'human', 'mouse', etc. (default: human)
-    --ontology STR           Ontology: 'go', 'ec', 'reactome', 'keyword', 'disease', or 'xref' (default: go)
-    --xref-db STR            UniProt DR database name, required when --ontology xref (e.g. KEGG, Orphanet)
+    --ontology STR           Ontology to associate domains with (default: go). See
+                             src/ontology_registry.py, or --help, for the full list:
+                             go, ec, reactome, keyword, disease, orphanet, tcdb, merops,
+                             cazy, unipathway, complex, drugbank, pharos, condensate,
+                             subcellular, ligand, cofactor, rhea, xref
+    --xref-db STR            UniProt DR database name, required when --ontology xref (e.g. KEGG, BRENDA)
     --xref-type STR          Optional DR third-field filter for --ontology xref (e.g. 'phenotype')
     --enzyme-dat PATH        Path to Expasy enzyme.dat, used when --ontology ec
-    --uniprot-dat PATH       Path to UniProt Swiss-Prot flat file, used when --ontology reactome|keyword|disease|xref
+    --uniprot-dat PATH       Path to UniProt Swiss-Prot flat file, used by every UniProt-native ontology
+    --subcell PATH           Path to UniProt subcell.txt, used when --ontology subcellular
+    --chebi-obo PATH         Path to ChEBI OBO, for --ontology ligand|cofactor --enable-true-path
     --evidence-filter STR    Evidence code filter: 'all', 'manual', 'experimental' (default: manual)
     --fdr-threshold FLOAT    FDR significance threshold (default: 0.01)
     --num-cores INT          Number of CPU cores for parallel processing (default: 8)
@@ -38,6 +44,9 @@ Examples:
     uv run python run_dcgo_human.py --ontology reactome
     uv run python run_dcgo_human.py --ontology keyword
     uv run python run_dcgo_human.py --ontology disease            # OMIM phenotype (DR MIM)
+    uv run python run_dcgo_human.py --ontology subcellular        # CC SUBCELLULAR LOCATION
+    uv run python run_dcgo_human.py --ontology ligand             # FT /ligand_id (ChEBI)
+    uv run python run_dcgo_human.py --ontology tcdb               # transporter classification
     uv run python run_dcgo_human.py --ontology xref --xref-db KEGG # any DR database
 
     # Run with True Path Rule propagation
@@ -54,28 +63,25 @@ import numpy as np
 from loguru import logger
 from scipy.stats import hypergeom
 
-logger.remove()
-logger.add(sys.stderr, level="INFO")
-
-from src.annotation_source import AnnotationSource, GAFAnnotationSource, OntologySpec
+from src.annotation_source import restrict_to_universe
 from src.domain_annotation_parser import DomainAnnotationParser
-from src.ec_annotation_source import ECAnnotationSource, propagate_ec_annotations
-from src.hierarchy import closure_ancestors, propagate_via_ancestors
-from src.uniprot_annotation_source import (
-    UniProtCrossRefAnnotationSource,
-    UniProtKeywordAnnotationSource,
-    disease_source,
-    parse_keyword_hierarchy,
-    parse_reactome_relations,
-    reactome_source,
-)
 from src.hierarchical_inference import HierarchicalInferenceEngine
+from src.hierarchy import propagate_via_ancestors
 from src.ontology_processor import OntologyProcessor
+from src.ontology_registry import (
+    describe_ontologies,
+    get_ontology,
+    missing_inputs,
+    ontology_keys,
+)
 from src.sparse_fisher import (
     build_sparse_matrices,
     compute_contingency_tables_sparse,
 )
 from src.vectorized_fisher import benjamini_hochberg_correction, fisher_exact_parallel
+
+logger.remove()
+logger.add(sys.stderr, level="INFO")
 
 
 @dataclass
@@ -135,7 +141,11 @@ def calculate_hypergeometric_score(a: int, b: int, c: int, d: int) -> float:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="dcGO Pipeline - Human Protein Analysis"
+        description="dcGO Pipeline - Human Protein Analysis",
+        # Raw epilog so the ontology table below keeps its line breaks; argument
+        # help strings are still wrapped normally.
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="ontologies available to --ontology:\n" + describe_ontologies(),
     )
     parser.add_argument(
         "--evidence-filter",
@@ -172,24 +182,29 @@ def main():
     parser.add_argument(
         "--ontology",
         default="go",
-        choices=["go", "ec", "reactome", "keyword", "disease", "xref"],
-        help="Which ontology to associate domains with: 'go' (Gene Ontology, "
-        "from GOA), 'ec' (Enzyme Commission, from Expasy ENZYME), or a "
-        "UniProt-native vocabulary from the Swiss-Prot flat file: 'reactome', "
-        "'keyword', 'disease' (OMIM phenotype), or 'xref' for an arbitrary DR "
-        "database named by --xref-db (default: go)",
+        choices=ontology_keys(),
+        metavar="NAME",
+        help="Which ontology to associate domains with (default: go). The "
+        "full list, with descriptions, is at the end of this help.",
     )
     parser.add_argument(
         "--xref-db",
         default=None,
         help="UniProt DR database name to harvest when --ontology xref "
-        "(e.g. 'KEGG', 'Orphanet', 'DrugBank', 'PANTHER')",
+        "(e.g. 'KEGG', 'BRENDA', 'GuidetoPHARMACOLOGY')",
     )
     parser.add_argument(
         "--xref-type",
         default=None,
         help="Optional DR third-field filter for --ontology xref "
         "(e.g. 'phenotype' to keep only those typed entries)",
+    )
+    parser.add_argument(
+        "--xref-term-from-type",
+        action="store_true",
+        help="For --ontology xref, use the DR line's third field as the term "
+        "instead of the id (for databases that key the DR line by accession "
+        "and carry the vocabulary in that field)",
     )
     parser.add_argument(
         "--enzyme-dat",
@@ -231,6 +246,20 @@ def main():
         type=Path,
         default=Path("data/raw/uniprot_keywlist/keywlist.txt"),
         help="Path to UniProt keywlist.txt, for --ontology keyword --enable-true-path",
+    )
+    parser.add_argument(
+        "--subcell",
+        type=Path,
+        default=Path("data/raw/uniprot_subcell/subcell.txt"),
+        help="Path to UniProt subcell.txt (controlled vocabulary + hierarchy), "
+        "for --ontology subcellular",
+    )
+    parser.add_argument(
+        "--chebi-obo",
+        type=Path,
+        default=Path("data/raw/chebi/chebi_lite.obo"),
+        help="Path to the ChEBI ontology in OBO format, for --ontology "
+        "ligand/cofactor --enable-true-path",
     )
     parser.add_argument(
         "--enable-supra-domains",
@@ -292,20 +321,48 @@ def main():
         )
     logger.info(f"  Output directory: {args.output_dir}")
 
-    # True Path Rule propagation needs a term hierarchy: GO's OBO DAG, EC's
-    # implicit numbering, or a companion hierarchy file for reactome/keyword.
-    # 'disease' and 'xref' have no hierarchy wired up, so it's skipped for them.
-    if args.enable_true_path and args.ontology not in (
-        "go",
-        "ec",
-        "reactome",
-        "keyword",
-    ):
-        logger.warning(
+    # Everything the chosen ontology might need, resolved in one place. The
+    # registry (src/ontology_registry.py) says which of these it actually uses
+    # for its annotations and for its hierarchy.
+    ontology_entry = get_ontology(args.ontology)
+    ontology_paths = {
+        "gaf": Path(f"data/raw/goa_annotations/goa_{args.species}.gaf.gz"),
+        "go_obo": args.go_ontology,
+        "enzyme_dat": args.enzyme_dat,
+        "uniprot_dat": args.uniprot_dat,
+        "reactome_relations": args.reactome_relations,
+        "keywlist": args.keyword_list,
+        "subcell": args.subcell,
+        "chebi_obo": args.chebi_obo,
+    }
+
+    # True Path Rule propagation needs a term hierarchy: GO's OBO DAG, an
+    # implicit one in the term ids (EC, TCDB, MEROPS, CAZy), or a companion
+    # hierarchy file (Reactome, keywords, subcellular, ChEBI). Ontologies with
+    # no hierarchy (disease, Rhea, xref, …) cannot propagate.
+    if args.enable_true_path and not ontology_entry.supports_true_path:
+        logger.error(
             f"True Path propagation is not available for --ontology "
-            f"{args.ontology}; skipping it."
+            f"{args.ontology} (no term hierarchy). Re-run without "
+            "--enable-true-path."
         )
-        args.enable_true_path = False
+        return 1
+
+    # Fail on missing inputs before the expensive stages rather than degrading
+    # silently half-way through a multi-hour run.
+    missing = missing_inputs(
+        ontology_entry, ontology_paths, for_hierarchy=args.enable_true_path
+    )
+    if missing:
+        logger.error(
+            f"--ontology {args.ontology} needs input(s) that are missing: "
+            + "; ".join(missing)
+        )
+        logger.error(
+            "Download them: uv run python scripts/download_data.py --list "
+            "(then --datasets <name>)"
+        )
+        return 1
 
     # File paths - support different species
     interpro_file = Path(f"data/interim/protein2ipr_{args.species}.dat.gz")
@@ -319,49 +376,15 @@ def main():
     # Build the annotation source for the chosen ontology. Everything downstream
     # only sees a {protein_id: {term}} map, so the engine is ontology-agnostic —
     # see src/annotation_source.py for the seam.
-    if args.ontology == "ec":
-        if not args.enzyme_dat.exists():
-            logger.error(f"ENZYME data file not found: {args.enzyme_dat}")
-            logger.error(
-                "Download it: uv run python scripts/download_data.py --datasets enzyme"
-            )
-            return 1
-        annotation_source: AnnotationSource = ECAnnotationSource(args.enzyme_dat)
-    elif args.ontology in ("reactome", "keyword", "disease", "xref"):
-        # UniProt-native: terms come straight from the Swiss-Prot flat file,
-        # already keyed by accession, so no identifier mapping is needed.
-        if not args.uniprot_dat.exists():
-            logger.error(f"UniProt flat file not found: {args.uniprot_dat}")
-            logger.error(
-                "Download it: uv run python scripts/download_data.py "
-                "--datasets uniprot_sprot_dat"
-            )
-            return 1
-        if args.ontology == "reactome":
-            annotation_source = reactome_source(args.uniprot_dat)
-        elif args.ontology == "keyword":
-            annotation_source = UniProtKeywordAnnotationSource(args.uniprot_dat)
-        elif args.ontology == "disease":
-            annotation_source = disease_source(args.uniprot_dat)
-        else:  # xref: an arbitrary DR database named by --xref-db
-            annotation_source = UniProtCrossRefAnnotationSource(
-                args.uniprot_dat,
-                args.xref_db,
-                OntologySpec(
-                    ontology_id=args.xref_db,
-                    name=f"UniProt {args.xref_db} cross-reference",
-                ),
-                id_type=args.xref_type,
-            )
-    else:
-        goa_file = Path(f"data/raw/goa_annotations/goa_{args.species}.gaf.gz")
-        if not goa_file.exists():
-            logger.error(f"{args.species.title()} GOA file not found: {goa_file}")
-            logger.error(f"Please download GOA file for {args.species}")
-            return 1
-        annotation_source = GAFAnnotationSource(
-            goa_file, evidence_filter=args.evidence_filter, aspects={"P", "F", "C"}
-        )
+    annotation_source = ontology_entry.build_source(
+        ontology_paths,
+        {
+            "evidence_filter": args.evidence_filter,
+            "xref_db": args.xref_db,
+            "xref_type": args.xref_type,
+            "xref_term_from_type": args.xref_term_from_type,
+        },
+    )
 
     # Load data
     logger.info("")
@@ -377,6 +400,18 @@ def main():
 
     # Get intersection
     proteins_with_both = set(protein_go_map.keys()) & set(domain_architectures.keys())
+
+    # Restrict the annotation map to that intersection — it defines the protein
+    # universe every Fisher table is computed against. See the docstring of
+    # restrict_to_universe for why this matters for the UniProt-native sources.
+    annotated_proteins = len(protein_go_map)
+    protein_go_map = restrict_to_universe(protein_go_map, proteins_with_both)
+    if annotated_proteins > len(protein_go_map):
+        logger.info(
+            f"  Restricted annotations to the domain-annotated universe: "
+            f"{annotated_proteins:,} → {len(protein_go_map):,} proteins "
+            f"({annotated_proteins - len(protein_go_map):,} dropped, no domain data)"
+        )
 
     # Build protein-domain map (using lists for compatibility with ontology processor)
     # CRITICAL: Include both single domains AND supra-domains as per dcGO methodology
@@ -578,41 +613,20 @@ def main():
                 )
             )
 
-        if args.ontology == "ec":
-            # EC hierarchy is implicit in the numbering — propagate via ec_ancestors.
+        if ontology_entry.build_ancestors is not None:
+            # Every non-GO ontology propagates through the shared engine; only
+            # the *ancestors* differ (implicit in EC/TCDB/MEROPS/CAZy ids, or
+            # loaded from a hierarchy file for Reactome/keywords/subcellular/
+            # ChEBI). See src/ontology_registry.py.
             logger.info(
-                f"Propagating {len(significant_associations):,} EC associations up the EC hierarchy..."
+                f"Propagating {len(significant_associations):,} "
+                f"{ontology_label.upper()} associations up the "
+                f"{ontology_entry.spec.name} hierarchy..."
             )
-            propagated_annotations = propagate_ec_annotations(significant_associations)
-        elif args.ontology in ("reactome", "keyword"):
-            # UniProt-native vocabularies: propagate up a companion hierarchy file
-            # (Reactome pathway relations / UniProt keyword list) via the shared
-            # ancestor engine.
-            if args.ontology == "reactome":
-                hier_file = args.reactome_relations
-                child_to_parents = (
-                    parse_reactome_relations(hier_file) if hier_file.exists() else None
-                )
-            else:
-                hier_file = args.keyword_list
-                child_to_parents = (
-                    parse_keyword_hierarchy(hier_file) if hier_file.exists() else None
-                )
-            if child_to_parents is None:
-                logger.error(f"{ontology_label} hierarchy file not found: {hier_file}")
-                logger.error("Skipping True Path Rule propagation")
-            else:
-                logger.info(
-                    f"Propagating {len(significant_associations):,} {ontology_label.upper()} "
-                    f"associations up the {ontology_label} hierarchy..."
-                )
-                ancestors_fn = closure_ancestors(child_to_parents)
-                propagated_annotations = propagate_via_ancestors(
-                    significant_associations, ancestors_fn
-                )
-        elif not args.go_ontology.exists():
-            logger.error(f"GO ontology file not found: {args.go_ontology}")
-            logger.error("Skipping True Path Rule propagation")
+            ancestors_fn = ontology_entry.build_ancestors(ontology_paths)
+            propagated_annotations = propagate_via_ancestors(
+                significant_associations, ancestors_fn
+            )
         else:
             # Load GO ontology (OBO DAG) and apply optimal-level filtering.
             logger.info(f"Loading GO ontology from: {args.go_ontology}")

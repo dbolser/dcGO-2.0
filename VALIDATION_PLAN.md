@@ -350,6 +350,84 @@ synthetic split (mirror the §1 test approach — pure functions, tiny fixtures)
 
 ---
 
+### Breadth: does the predictive signal hold beyond GO? (2026-07-28) — DONE
+
+`validation/temporal_breadth.py` applies the §2 split to the ontologies added in
+`src/ontology_registry.py`. One archived Swiss-Prot release (**2021_02**,
+07-Apr-2021 — the same month as GOA release 205) supplies t0 for every
+UniProt-native layer at once, so seven ontologies are trained and scored under
+one protocol. Metrics: `validation/temporal_breadth_metrics.tsv`,
+`validation/temporal_breadth_go.tsv`.
+
+Statistic as in §2: predictions are proteins carrying a feature that lacked the
+term at t0; hits are those carrying it at t1; enrichment is the hit rate over the
+term's own acquisition rate. GO is included **under the identical protocol** as
+the anchor — without it, "weaker than GO" could not be said, because the 12.5×
+figure came from a different subset (supra-domains only) and a stricter truth
+(experimental evidence only).
+
+| Ontology | assoc. | predictions | hits | hit rate | expected | enrichment (95% CI) |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| **go** (anchor) | 92,377 | 3,139,544 | 106,816 | 3.40% | 0.30% | **11.3× [10.9, 11.8]** |
+| reactome | 54,685 | 1,487,359 | 2,056 | 0.14% | 0.02% | **8.0× [6.7, 9.6]** |
+| cofactor | 363 | 1,744 | 221 | 12.67% | 3.97% | **3.2× [1.7, 4.0]** |
+| subcellular | 13,373 | 507,262 | 7,005 | 1.38% | 0.49% | **2.9× [2.7, 3.0]** |
+| keyword | 85,323 | 2,619,504 | 35,350 | 1.35% | 0.79% | **1.7× [1.6, 1.8]** |
+| complex | 3,606 | 31,076 | 24 | 0.08% | ~0% | *degenerate, see below* |
+| disease | 44 | 369 | 0 | 0% | ~0% | *undefined* |
+| ligand | — | — | — | — | — | *not testable, see below* |
+
+(In-scope universe where it differs from all-domains; keyword and GO annotate
+essentially every protein, so the two coincide.)
+
+**The signal generalises.** Every ontology with enough data enriches above 1
+with the interval excluding it — dcGO's association-finding is not a GO artefact.
+GO remains strongest and Reactome follows; the ordering tracks how structured and
+curated the vocabulary is. Keywords come last because 720 near-universal terms
+sit at a 0.79% base rate, leaving little headroom.
+
+**Three results that must not be quoted at face value:**
+
+- **`complex` is a degenerate ratio, not a 265× triumph.** ComplexPortal averages
+  ~1.5 proteins per complex, so the base rate rounds to zero and any hit at all
+  divides by nearly nothing. 24 hits. The interval excludes 1, so signal exists;
+  the *magnitude* is uninterpretable. Report as "detectable, magnitude
+  meaningless".
+- **`disease` scored 0 hits on 369 predictions** — no signal, and enrichment is
+  undefined because expected hits ≈ 0 as well. This is the 53-association t0 run
+  playing out as predicted: 6,904 OMIM phenotypes over 5,029 proteins is too thin
+  for contingency tables. The queued Disease-Ontology re-keying (see `TODO.md`)
+  is the concrete fix — pool sparse OMIM terms into DO classes *before* testing.
+- **`ligand` cannot be tested at this split at all.** UniProt introduced the
+  structured `FT /ligand_id="ChEBI:…"` qualifier *after* 2021; the April 2021
+  release used free-text `/note="ATP"`. The layer is therefore entirely post-2022
+  annotation. Testing it needs a later t0 (2022_05 or 2023_01), which would be a
+  shorter, non-comparable split.
+
+**Controls and caveats.**
+
+- **In-scope control.** A sparse ontology could enrich merely because its
+  proteins are the ones that get curated at all, so every ontology is also
+  scored against only the proteins it reaches by t1. `cofactor` is the sharp
+  case: the hit rate rises 1.24% → 12.67% while enrichment holds at ~3× with the
+  interval still excluding 1, so that signal is term-specific rather than
+  scope-driven.
+- **No evidence filter exists off GO.** GO trains on non-IEA and scores against
+  experimental only; the UniProt layers have no such split, so an automated
+  annotation added between snapshots counts as a hit. The anchor row bounds how
+  much that matters: GO scores **11.3×** under the loose protocol against
+  **12.5×** under the strict one, i.e. the looser truth did not inflate GO — but
+  that is one ontology's worth of reassurance, not a general guarantee.
+- Same look-ahead caveat as §2: architectures come from the current
+  `protein2ipr`, so this is annotation-temporal, not prospective.
+
+- [ ] **Open:** re-test `ligand`/`cofactor` at a 2023 t0, once the structured
+      binding annotation exists in both snapshots.
+- [ ] **Open:** repeat with `--supra-only` to isolate the emergent claim per
+      ontology (the numbers above pool single domains and supra-domains).
+
+---
+
 ## 3. Comparison to the original dcGO  *(reproducibility)*
 
 A method claiming to implement dcGO must relate its output to the published one.
@@ -365,6 +443,36 @@ InterPro-entry-keyed, FDR<0.01.
 SUPERFAMILY (SCOP-based) and Pfam as member databases, and `protein2ipr` column 4
 carries the member signature (`SSFxxxxx` = SUPERFAMILY/SCOP, `PFxxxxx` = Pfam)
 for every match. So this is not a disjoint domain universe.
+
+**Resource check (2026-07-28).** Both dcGO websites are live, so this task is
+unblocked:
+
+| Resource | Status |
+| --- | --- |
+| `http://www.protdomainonto.pro/dcGO` (2023 site) | up — faceted search, hierarchy browser, enrichment tool. HTTP only, no HTTPS |
+| `https://supfam.org/SUPERFAMILY/dcGO/` (original) | up — bulk downloads still served by `cgi-bin/dcdownload.cgi` (incl. `?outer=PFAM`) |
+| `github.com/hfang-bristol/dcGO` | exists, last pushed 2023-05-01 |
+
+There is also a **third dcGO paper** we had not been comparing against:
+`docs/EMS185259.pdf` — Bao *et al.*, *The dcGO Domain-Centric Ontology Database
+in 2023* (JMB 435:168093). It supersedes the 2013 database paper and changes what
+"the original" means for this comparison:
+
+* **Domains.** 2023 adds Pfam and InterPro alongside SCOP superfamily/family —
+  so an InterPro-keyed comparison is now possible without re-keying. But the
+  paper reports only *~1,000 Pfam and ~800 InterPro domains* against our 19,449
+  InterPro entries in human; **verify that figure against the actual download
+  before citing it**, since it may be an increment rather than a total.
+* **Ontologies.** The 2023 set both grew and shrank. Added: MONDO, EFO, KEGG,
+  Reactome, PANTHER, WikiPathways, MitoCarta, DGIdb, Open Targets tractability
+  buckets, ENRICHR/TRRUST transcription factors, MSigDB hallmarks. **Dropped**
+  from the 2013 set: EC, UniPathway, UniProt keywords, DrugBank ATC codes.
+* **Consequence for §3.** Compare against 2023 for GO/Reactome, but the 2013
+  release is the only comparator for EC / UniPathway / keywords. Our
+  chemistry-level layers (`ligand`, `cofactor`, `rhea`) and `subcellular`,
+  `tcdb`, `merops`, `cazy`, `complex`, `condensate` have **no counterpart in any
+  dcGO release**, so for those the InterPro2GO-style and temporal tests are the
+  only available validation.
 
 - [ ] Download the original dcGO / SUPFAM domain–GO associations.
 - [ ] **Preferred:** re-key our domain parser on the `SSF` (or `PF`) signature
@@ -407,6 +515,39 @@ stage that doesn't help is a finding too — report it).
 ---
 
 ## 5. Decisions to settle before writing the paper
+
+### Held-out validation of the surprise score (2026-07-28) — DONE
+
+`validation/temporal_surprise.py` re-uses the §2 split (t0 = GOA 205, 2021-04;
+t1 = 2026-06) to ask whether the emergent-combination ranking predicts *future
+curation*. For each t0 association, the proteins carrying the combination that
+lacked the term at t0 are its predictions; hits are those annotated by t1; the
+control is the term's own acquisition rate over all domain-carrying proteins
+that lacked it. Metrics in `validation/temporal_surprise_metrics.tsv`, outcomes
+per association in `validation/temporal_surprise_associations.tsv`.
+
+- [x] **The supra-domain associations predict future curation: 12.5×
+      enrichment** over the terms' own acquisition rates (2,181 hits on 170,416
+      predictions vs ~175 expected), bootstrap CI [10.9, 14.4]. This is the
+      out-of-sample evidence the domain-combination claim was missing.
+- [x] **The surprise ranking is *not* demonstrably better than ranking by the
+      dcGO q-value.** At matched prediction budgets the point estimate favours
+      surprise 3/3 (15.5 vs 5.3, 21.2 vs 13.2, 11.6 vs 10.8) but a **paired**
+      bootstrap — re-ranking both ways inside each resample, because the two
+      rankings share a candidate pool and their independent intervals are
+      therefore correlated — puts zero inside every interval. Report it as "no
+      demonstrated ranking advantage"; the score's contribution is
+      interpretability (redundant-signature and curated-novelty filtering) and a
+      bias toward rarer, higher-IC terms, not ranking power.
+- [ ] **Open: the emergence/testability tension.** The most emergent
+      associations leave the fewest standing predictions (emergence requires
+      that carriers are already nearly all annotated), so the sharp end of the
+      ranking cannot be validated this way — `surprise top-25` yields 117
+      predictions against an expected 0.14 hits. A revised score should weigh
+      emergence against how many predictions it leaves outstanding.
+- [ ] **Open: same look-ahead caveat as §2.** Domain architectures come from the
+      current `protein2ipr`, so this is annotation-temporal, not prospective.
+
 
 - [ ] **True Path Rule default.** The original dcGO makes TPR central; here it is
       opt-in. Decide: make it default (recommended, with `--disable-true-path`

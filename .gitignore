@@ -100,7 +100,13 @@ Thumbs.db
 
 # Junk to ignore
 data/interim/human_proteins.txt
-results*/domain_go_associations_significant.tsv
+
+# Full per-ontology run output is regenerable and runs to tens of MB. The
+# `_top100` summaries are small and are tracked, so a reader can see what a run
+# produced without the repository carrying the whole table.
+results*/domain_*_associations_significant.tsv
+results*/domain_*_annotations_propagated.tsv
+results*/domain_*_surprising.tsv
 
 # Generated analysis output directories
 results_*/
@@ -114,3 +120,7 @@ results*_path/*
 data/raw/
 data/interim/
 *.dat.gz
+
+# Run logs are scratch, except the benchmark logs committed as provenance
+# (see validation/BENCHMARK_ARTIFACTS.md).
+logs/

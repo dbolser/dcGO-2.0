@@ -113,72 +113,62 @@ The parser automatically:
 
 ---
 
-## 2. Other Ontologies (HPO, DO, MP) ⚠️ NOT CURRENTLY SUPPORTED
+## 2. Other Ontologies ✅ IMPLEMENTED (18 beyond GO)
 
-### Available from UniProt/GOA?
+> This section previously said UniProt/GOA supplies only GO. That is wrong: GOA
+> supplies only GO, but the **UniProt flat file** carries a dozen more
+> vocabularies per accession, and the entry body carries several more.
 
-**Short answer**: No, UniProt/GOA only provides Gene Ontology (GO) annotations.
+`run_dcgo_human.py --ontology <name>` selects the annotation layer; the
+Fisher/FDR engine is unchanged, because everything enters through the
+`AnnotationSource` seam as `{protein → {term}}`. The dispatch table lives in
+`src/ontology_registry.py`; `--help` prints the current list.
 
-### Other Phenotype/Disease Ontologies
+| `--ontology` | Terms | Source | True Path hierarchy |
+| --- | --- | --- | --- |
+| `go` | Gene Ontology | GOA GAF (evidence-filtered) | `go-basic.obo` |
+| `ec` | Enzyme Commission | Expasy `enzyme.dat` | implicit in the number |
+| `reactome` | pathways | `DR Reactome` | `ReactomePathwaysRelation.txt` |
+| `keyword` | UniProt keywords | `KW` lines | `keywlist.txt` |
+| `subcellular` | `SL-` locations | `CC SUBCELLULAR LOCATION` | `subcell.txt` |
+| `ligand` | ChEBI ligands | `FT …/ligand_id` | `chebi_lite.obo` |
+| `cofactor` | ChEBI cofactors | `CC COFACTOR` | `chebi_lite.obo` |
+| `rhea` | Rhea reactions | `CC CATALYTIC ACTIVITY` | — |
+| `tcdb` | transporter classes | `DR TCDB` | implicit |
+| `merops` | peptidase families | `DR MEROPS` | implicit |
+| `cazy` | CAZy families | `DR CAZy` | implicit |
+| `disease` | OMIM phenotypes | `DR MIM` (phenotype) | — |
+| `orphanet` | rare diseases | `DR Orphanet` | — |
+| `unipathway` | metabolic pathways | `DR UniPathway` | — |
+| `complex` | protein complexes | `DR ComplexPortal` | — |
+| `drugbank` | drugs | `DR DrugBank` | — |
+| `pharos` | target development level | `DR Pharos` (3rd field) | — |
+| `condensate` | condensates | `DR CD-CODE` (3rd field) | — |
+| `xref` | any other DR database | `--xref-db NAME` | — |
 
-| Ontology | Name | Focus | Source |
-|----------|------|-------|--------|
-| **HPO** | Human Phenotype Ontology | Human phenotypes | Monarch Initiative |
-| **DO** | Disease Ontology | Human diseases | Disease Ontology Project |
-| **MP** | Mammalian Phenotype Ontology | Mouse phenotypes | MGI |
-| **OMIM** | Online Mendelian Inheritance in Man | Human genetic disorders | OMIM |
+### Evidence codes
 
-### Why Stick with GO for Now?
+Only GO has them. The UniProt-native layers are curated cross-references and
+comments, so there is no IEA/experimental distinction to filter — which is also
+why GO is taken from GOA (with `--evidence-filter`) rather than from UniProt's
+own `DR GO` lines, which include IEA.
 
-1. **Data Availability**: GOA provides comprehensive, well-curated GO annotations for all UniProt proteins
-2. **InterPro Integration**: InterPro domains already have GO term associations
-3. **Established Methodology**: dcGO was originally designed for GO terms
-4. **Statistical Power**: GO has the most annotations, providing better statistical inference
+### What is still missing, and why
 
-### Future Extension Possibilities
+HPO, MP and the Disease Ontology proper are **not** UniProt-keyed: HPO annotates
+HGNC genes, MGI annotates mouse genes, and DO/Mondo need a cross-ontology
+mapping from the OMIM/Orphanet ids UniProt does carry. Those need the identifier
+mapping backbone described in `FUTURE_WORK.md` §3 — the only remaining reason to
+build it.
 
-While not currently implemented, the pipeline could theoretically be extended to support other ontologies:
+Deliberately excluded, though reachable through `xref`:
 
-#### HPO (Human Phenotype Ontology)
-- **Source**: https://hpo.jax.org/
-- **Data**: Gene-phenotype associations
-- **Format**: Similar to GAF, could use same methodology
-- **Use case**: Link domains to human phenotypes
+* **1:1 accession mirrors** (AlphaFoldDB, STRING, GeneCards, DisGeNET, KEGG gene
+  ids, …). Every "term" has one protein, so no contingency table has signal.
+* **Domain databases** (Pfam, PANTHER, SUPFAM, CDD, PROSITE, …). Associating
+  InterPro domains with domain signatures is circular.
 
-#### Disease Ontology (DO)
-- **Source**: https://disease-ontology.org/
-- **Data**: Gene-disease associations
-- **Challenge**: Less comprehensive domain-disease data
-
-#### Mammalian Phenotype (MP)
-- **Source**: http://www.informatics.jax.org/
-- **Data**: Mouse gene-phenotype associations
-- **Challenge**: Need mouse protein-domain mappings
-
-### Potential Implementation Path
-
-If you wanted to add HPO support in the future:
-
-1. Download HPO annotations (e.g., from Monarch Initiative)
-2. Parse HPO phenotype-gene associations
-3. Use the same dcGO methodology (Fisher's exact test)
-4. Generate domain-phenotype associations
-
-However, this would require:
-- HPO annotation files in a parseable format
-- HPO ontology structure (OBO format)
-- Validation that domain-phenotype associations make biological sense
-
-### Recommendation
-
-**Stick with GO for now** because:
-- ✅ Comprehensive data availability
-- ✅ Well-established methodology
-- ✅ Strong statistical power
-- ✅ Direct InterPro-GO associations already exist
-- ✅ Widely used and validated
-
-Once you have a working dcGO pipeline for GO terms, you could consider extending to other ontologies as a separate project.
+The measurements behind those calls are in `docs/uniprot_ontology_survey.md`.
 
 ---
 
@@ -188,8 +178,10 @@ Once you have a working dcGO pipeline for GO terms, you could consider extending
 |---------|--------|---------------|
 | GO evidence filtering | ✅ Implemented | `evidence_filter = 'manual'` |
 | GO aspect filtering | ✅ Implemented | `aspects = {'P', 'F', 'C'}` |
-| HPO support | ❌ Not available | - |
-| DO support | ❌ Not available | - |
-| MP support | ❌ Not available | - |
+| 18 non-GO ontologies | ✅ Implemented | `--ontology reactome\|ligand\|subcellular\|…` |
+| HPO / MP / DO-proper support | ❌ Needs the id-mapping backbone | see `FUTURE_WORK.md` §3 |
 
-The pipeline now provides robust GO annotation quality control through evidence code filtering, which is the most important quality metric for functional annotations. Other ontologies would require separate data sources and validation.
+Evidence-code filtering remains the main quality control for GO. For the
+UniProt-native layers the equivalent control is *which layer you choose*: the
+`CC`/`FT` layers are manually curated with ECO evidence in the flat file, while
+`DR` cross-references inherit whatever the source database asserts.

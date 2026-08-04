@@ -103,3 +103,28 @@ class GAFAnnotationSource(AnnotationSource):
             evidence_filter=self.evidence_filter,
             aspects=self.aspects,
         )
+
+
+def restrict_to_universe(
+    protein_terms: Dict[str, Set[str]], universe: Set[str]
+) -> Dict[str, Set[str]]:
+    """Drop annotations for proteins outside the analysis universe.
+
+    The Fisher engine's protein universe is the *intersection* of the domain map
+    and the annotation map — a protein with no domain assignment is missing
+    data, not evidence that a domain is absent. ``build_sparse_matrices`` keys
+    its rows off the **union** of the two maps, so the caller has to narrow the
+    annotation map itself.
+
+    This matters far more for the UniProt-native sources than it does for GOA.
+    ``protein2ipr`` is extracted per species, but ``uniprot_sprot.dat`` is the
+    whole of Swiss-Prot, so a ``--species human --ontology reactome`` run parsed
+    39,418 Reactome-annotated proteins from every organism; without this
+    restriction each of the ~28k non-human ones entered every contingency table
+    as a domain-negative observation and shifted the term backgrounds.
+    """
+    return {
+        protein: terms
+        for protein, terms in protein_terms.items()
+        if protein in universe
+    }

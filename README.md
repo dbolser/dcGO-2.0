@@ -116,24 +116,67 @@ uv run python run_dcgo_human.py --ontology xref --xref-db KEGG      # any DR dat
 ```
 
 `disease` uses `DR MIM` restricted to `phenotype` entries (dropping the `gene`
-links). `xref` opens **any** DR database by name, so KEGG / Orphanet / DisGeNET /
-DrugBank / PANTHER / … need no code change — add `--xref-type phenotype` to filter
-a typed database. Results land in `results/domain_<vocab>_associations_*.tsv`
-(e.g. `domain_disease_*`, `domain_kegg_*`), leaving GO/EC outputs untouched.
+links). `xref` opens **any** DR database by name, so KEGG / BRENDA / PANTHER / …
+need no code change — add `--xref-type phenotype` to filter a typed database, or
+`--xref-term-from-type` for databases that key the `DR` line by accession and put
+the vocabulary in the third field. Results land in
+`results/domain_<vocab>_associations_*.tsv` (e.g. `domain_disease_*`,
+`domain_kegg_*`), leaving GO/EC outputs untouched.
 
-`--enable-true-path` also propagates **reactome** and **keyword** associations up
-their hierarchies, using companion files (downloaded separately):
+#### The full ontology list
+
+A survey of every `DR` database in the human subset of Swiss-Prot
+(`docs/uniprot_ontology_survey.md`, reproducible with
+`scripts/survey_uniprot_ontologies.py`) separates real vocabularies from 1:1
+accession mirrors (AlphaFoldDB, STRING, GeneCards …, useless for an enrichment
+test) and from domain databases (Pfam, PANTHER …, circular). The vocabularies,
+plus the layers curated into the entry body rather than into `DR` lines, are
+registered in `src/ontology_registry.py`:
+
+| `--ontology` | Terms | Source | Hierarchy |
+| --- | --- | --- | --- |
+| `go` | Gene Ontology | GOA GAF | `go-basic.obo` |
+| `ec` | Enzyme Commission | Expasy `enzyme.dat` | implicit in the number |
+| `reactome` | pathways | `DR Reactome` | `ReactomePathwaysRelation.txt` |
+| `keyword` | UniProt keywords | `KW` | `keywlist.txt` |
+| `subcellular` | `SL-` locations | `CC SUBCELLULAR LOCATION` | `subcell.txt` |
+| `ligand` | ChEBI ligands | `FT …/ligand_id` | `chebi_lite.obo` |
+| `cofactor` | ChEBI cofactors | `CC COFACTOR` | `chebi_lite.obo` |
+| `rhea` | Rhea reactions | `CC CATALYTIC ACTIVITY` | — |
+| `tcdb` | transporter classes | `DR TCDB` | implicit (`8.A.98.1.10`) |
+| `merops` | peptidase families | `DR MEROPS` | implicit (`S01.151 → S01 → S`) |
+| `cazy` | CAZy families | `DR CAZy` | implicit (`GT32 → GT`) |
+| `disease` | OMIM phenotypes | `DR MIM` (phenotype) | — |
+| `orphanet` | rare diseases | `DR Orphanet` | — |
+| `unipathway` | metabolic pathways | `DR UniPathway` | — |
+| `complex` | protein complexes | `DR ComplexPortal` | — |
+| `drugbank` | drugs | `DR DrugBank` | — |
+| `pharos` | target development level | `DR Pharos` (3rd field) | — |
+| `condensate` | biomolecular condensates | `DR CD-CODE` (3rd field) | — |
+| `xref` | anything else | `DR <--xref-db>` | — |
 
 ```bash
-uv run python scripts/download_data.py --datasets reactome_relations uniprot_keywlist
-uv run python run_dcgo_human.py --ontology reactome --enable-true-path  # up Reactome pathways
-uv run python run_dcgo_human.py --ontology keyword  --enable-true-path  # up the keyword DAG
+uv run python run_dcgo_human.py --ontology subcellular   # where the domain puts the protein
+uv run python run_dcgo_human.py --ontology ligand        # what chemistry the domain binds
+uv run python run_dcgo_human.py --ontology tcdb          # transporter classification
 ```
 
-Reactome uses `ReactomePathwaysRelation.txt` (parent/child) and keywords use
-`keywlist.txt` (the `HI` hierarchy) — same shared engine as EC/GO
-(`src/hierarchy.py`). `disease`/`xref` have no hierarchy wired up, so
-`--enable-true-path` is skipped there.
+`--enable-true-path` propagates every ontology in the "Hierarchy" column above
+through the shared engine in `src/hierarchy.py` — OBO graphs, hierarchies
+implicit in the term id, and companion hierarchy files alike:
+
+```bash
+uv run python scripts/download_data.py --datasets reactome_relations uniprot_keywlist \
+    uniprot_subcell chebi
+uv run python run_dcgo_human.py --ontology reactome    --enable-true-path
+uv run python run_dcgo_human.py --ontology subcellular --enable-true-path
+uv run python run_dcgo_human.py --ontology ligand      --enable-true-path
+```
+
+For an ontology with no hierarchy (`disease`, `rhea`, `xref`, …),
+`--enable-true-path` now **fails with an explicit error** rather than running
+without propagation, and any missing input is reported before the expensive
+stages start.
 
 > **Note on evidence:** these are UniProt-native *cross-references*, not GO
 > annotations, so there is no IEA/evidence code to filter. (GO is the exception —
@@ -141,9 +184,37 @@ Reactome uses `ReactomePathwaysRelation.txt` (parent/child) and keywords use
 > evidence filter instead.) No source is "preferred"; if the same annotation
 > appears in UniProt and a primary DB, they deduplicate to the union.
 
-Adding any ontology means writing one `AnnotationSource` subclass — see
-`src/annotation_source.py`, `src/ec_annotation_source.py`, and
-`src/uniprot_annotation_source.py` for the pattern.
+Adding any ontology means one `OntologyEntry` in `src/ontology_registry.py`,
+backed by an `AnnotationSource` subclass — see `src/annotation_source.py`,
+`src/ec_annotation_source.py`, and `src/uniprot_annotation_source.py` for the
+pattern.
+
+---
+
+## Finding the emergent predictions (surprise score)
+
+The associations that matter most are the ones a *combination* of domains
+supports but none of its constituents does — the signal single-domain and
+homology methods cannot see. `scripts/rank_surprising_associations.py` ranks
+them:
+
+```bash
+uv run python scripts/rank_surprising_associations.py --ontology go
+```
+
+Each supra-domain association is scored as
+`-log10(q_emergence) × distinctness × novelty`: a binomial test of the observed
+rate against what the parts already predict (noisy-OR over constituents, floored
+by the best sub-combination and by the term's background rate), times a penalty
+for constituents that are really one region annotated by redundant InterPro
+signatures, times a discount for what InterPro2GO already records.
+
+On the current human GO run this puts textbook multi-domain architectures on top
+— SH2 + kinase → non-receptor tyrosine kinase activity, PH + EF-hand → PLC
+activity, BTB/POZ + C2H2 → transcriptional repressor — recovered without being
+told about them. Output: `results/domain_<ontology>_surprising.tsv`, with every
+component in its own column. Full method, results and caveats:
+**[SURPRISE_SCORE.md](SURPRISE_SCORE.md)**.
 
 ---
 
@@ -169,18 +240,21 @@ writing `data/interim/protein2ipr_<species>.dat.gz` so subsequent runs are fast.
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--species` | `human` | Species / GOA file to analyze |
-| `--ontology` | `go` | Ontology: `go`, `ec`, `reactome`, `keyword`, `disease`, `xref` |
+| `--ontology` | `go` | Ontology to associate domains with — 19 registered, see the table above or `--help` |
 | `--xref-db` | — | UniProt DR database name (required for `--ontology xref`, e.g. `KEGG`) |
 | `--xref-type` | — | Optional DR third-field filter for `xref` (e.g. `phenotype`) |
+| `--xref-term-from-type` | off | For `xref`, take the term from the DR third field instead of the id |
 | `--enzyme-dat` | `data/raw/enzyme/enzyme.dat` | Expasy ENZYME file (used when `--ontology ec`) |
-| `--uniprot-dat` | `data/raw/uniprot_sprot_dat/uniprot_sprot.dat.gz` | UniProt flat file (used when `--ontology reactome`/`keyword`/`disease`/`xref`) |
+| `--uniprot-dat` | `data/raw/uniprot_sprot_dat/uniprot_sprot.dat.gz` | UniProt flat file (every UniProt-native ontology) |
+| `--subcell` | `data/raw/uniprot_subcell/subcell.txt` | Subcellular-location vocabulary (`--ontology subcellular`) |
+| `--chebi-obo` | `data/raw/chebi/chebi_lite.obo` | ChEBI ontology (True Path for `ligand`/`cofactor`) |
 | `--evidence-filter` | `manual` | GO evidence codes: `all`, `manual`, `experimental` |
 | `--fdr-threshold` | `0.01` | FDR (q-value) significance cutoff |
 | `--num-cores` | `8` | CPU cores for parallel Fisher tests |
 | `--batch-size` | `50000` | Fisher test batch size |
 | `--enable-supra-domains` / `--disable-supra-domains` | enabled | Test contiguous domain combinations |
 | `--enable-shrinkage` | off | Empirical-Bayes shrinkage for supra-domains |
-| `--enable-true-path` | off | Propagate associations up the term hierarchy (GO via OBO DAG, EC via numbering) |
+| `--enable-true-path` | off | Propagate associations up the term hierarchy (fails if the ontology has none) |
 | `--go-ontology` | `data/raw/go_ontology/go-basic.obo` | GO OBO file (GO only; required for `--ontology go --enable-true-path`) |
 | `--output-dir` | `results/` | Output directory |
 
