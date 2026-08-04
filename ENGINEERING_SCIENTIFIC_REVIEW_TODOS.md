@@ -14,7 +14,7 @@ yet establish robust general performance, calibration, or superiority.
 
 ## P0: Software launch blockers
 
-- [ ] Fix `run_analysis.sh`. It passes the nonexistent options
+- [x] Fix `run_analysis.sh`. It passes the nonexistent options
   `--disable-true-path` and `--disable-shrinkage`; with `set -e`, the advertised
   eight-configuration analysis exits immediately.
 - [ ] Fix and test the installed CLI. `pyproject.toml` declares
@@ -27,13 +27,13 @@ yet establish robust general performance, calibration, or superiority.
   reported Ruff errors are fixed (the last three, `E402` in
   `validation/sprint1_validation.py`, by moving the logger setup below the
   imports rather than suppressing the rule).
-- [ ] Add a small end-to-end test that invokes the installed CLI on fixtures and
+- [x] Add a small end-to-end test that invokes the installed CLI on fixtures and
   verifies schema-valid output. The unit and integration tests do not currently
   demonstrate that the installed command works.
 - [ ] Fail rather than silently degrade when requested functionality is
   unavailable. In particular, a run using `--enable-true-path` currently logs an
   error and succeeds without propagation if the ontology is absent.
-- [ ] Validate CLI parameters: FDR range, positive batch size and core count,
+- [x] Validate CLI parameters: FDR range, positive batch size and core count,
   shrinkage range, supported input/species selection, non-empty protein
   intersection, and non-empty feature spaces.
 - [x] Pin every production input using a release identifier, source URL, and
@@ -124,10 +124,10 @@ yet establish robust general performance, calibration, or superiority.
 - [ ] Add provenance and interpretation fields to output: input releases, GO
   aspect, evidence policy, contingency cells `a/b/c/d`, direct/propagated status,
   and scoring method.
-- [ ] Replace `calculate_hypergeometric_score`'s fallback value of `50.0` with an
+- [x] Replace `calculate_hypergeometric_score`'s fallback value of `50.0` with an
   explicit failure or missing-value state. A numerical error must not become a
   plausible medium-confidence score.
-- [ ] Avoid overstating parallelism. `--num-cores` is logged but currently unused
+- [x] Avoid overstating parallelism. `--num-cores` is logged but currently unused
   by the Cython Fisher implementation.
 - [ ] Remove unsupported legacy modules and dependencies or bring them under
   testing. The old data-acquisition and database code increases the maintenance
