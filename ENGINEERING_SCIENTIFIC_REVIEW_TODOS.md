@@ -44,18 +44,40 @@ yet establish robust general performance, calibration, or superiority.
   using the same 2021-to-2026 benchmark used for the headline result. Freeze
   choices on a development interval or nested temporal split, then evaluate once
   on an untouched interval.
-- [ ] Add protein-level bootstrap confidence intervals for F-max, AUPRC, and
-  paired differences versus baselines.
-- [ ] Replace the single random-domain shuffle with many seeded permutations.
+- [x] Add protein-level bootstrap confidence intervals for F-max, AUPRC, and
+  paired differences versus baselines. **Done 2026-08-04** —
+  `validation/resampling.py` (`paired_bootstrap`, one protein resample per
+  replicate shared by every method), driven by `validation/ablation.py`;
+  1,000 replicates; results in `validation/ablation_paired_bootstrap.tsv` and
+  VALIDATION_PLAN §4. The paired test changes a headline: dcGO's AUPRC advantage
+  over naive does **not** survive it at IC≥0 in any aspect.
+- [x] Replace the single random-domain shuffle with many seeded permutations.
   Report the null distribution, confidence interval, and empirical p-value.
-- [ ] Complete the planned ablation: single domains; plus supra-domains; plus
-  shrinkage; plus True Path Rule; and the full method.
+  **Done 2026-08-04** — `validation/temporal_benchmark.py --n-permutations`
+  (default 100; permutation 0 is the old single shuffle) and the same in
+  `validation/ablation.py` (200). Null mean/sd/percentile interval and empirical
+  p in `validation/temporal_benchmark_permutation_null.tsv` and
+  `validation/ablation_permutation_null.tsv`. dcGO clears the null in all 24
+  aspect × IC × metric cells at the attainable floor 1/(n+1). The exchangeability
+  assumption, what the permutation preserves (term base rates, architectures,
+  prediction coverage) and what it cannot test (the Fisher+BH stage) are stated
+  in VALIDATION_PLAN §2.
+- [x] Complete the planned ablation: single domains; plus supra-domains; plus
+  shrinkage; plus True Path Rule; and the full method. **Done 2026-08-04** —
+  `validation/ablation.py`; VALIDATION_PLAN §4. **The result is negative:**
+  supra-domains 0/12 cells improved, shrinkage 0/12, True Path 12/12 *worse*.
+  The best configuration on this benchmark is single domains only.
 - [ ] Establish the statistical validity of the claimed empirical-Bayes
   shrinkage, or rename it as a heuristic. The implementation geometrically
   interpolates observed and constituent p-values using a hand-set decay. It is
   not presently a fitted empirical-Bayes model, and the transformed quantities
   have not been shown to be valid p-values. BH correction of those values does
   not therefore guarantee nominal FDR control.
+  **Still open, and now empirically confirmed (2026-08-04):** enabling it takes
+  the FDR<0.01 association count from 163,277 to 463,924 (+184%), because 56.4%
+  of supra-domain p-values are *decreased*, not increased. A shrinkage toward a
+  null prior cannot increase rejections. It also buys nothing: 0/12 ablation
+  cells move. Rename it, or replace it with a fitted hierarchical model.
 - [ ] Pre-specify the primary endpoint. The unfiltered result loses to the naive
   method for MF, while the headline superiority depends on IC filtering. The
   IC-filtered analysis is scientifically reasonable, but should be a
@@ -104,11 +126,18 @@ yet establish robust general performance, calibration, or superiority.
 
 ## P1: Scientific analysis and reporting
 
-- [ ] Report counts at every selection stage: t0 proteins, t1 proteins,
+- [x] Report counts at every selection stage: t0 proteins, t1 proteins,
   no-knowledge candidates, proteins with domains, aspect-specific cohorts, and
-  cohorts retained at each IC threshold.
-- [ ] Report prediction coverage alongside F-max. CAFA-style precision can omit
-  proteins without predictions while recall includes them.
+  cohorts retained at each IC threshold. **Done 2026-08-04** —
+  `validation/ablation_selection_counts.tsv`. The concern is confirmed: MF keeps
+  only 41% of its cohort at IC≥2, CC only 27% at IC≥6, so cross-floor
+  comparisons are not paired. Every paired test in §4 is within one (aspect, IC)
+  cell.
+- [x] Report prediction coverage alongside F-max. CAFA-style precision can omit
+  proteins without predictions while recall includes them. **Done 2026-08-04** —
+  `coverage_at_fmax` and `coverage_any` columns of
+  `validation/ablation_metrics.tsv`. dcGO covers 42–71% of the cohort; the naive
+  baseline covers 100%.
 - [ ] Verify F-max and AUPRC against an independent CAFA evaluation
   implementation. The current evaluator samples 51 score quantiles and computes
   trapezoidal AUPRC using an upper envelope; document these choices and check

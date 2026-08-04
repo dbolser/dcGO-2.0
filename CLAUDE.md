@@ -42,7 +42,7 @@ Key `src/` modules:
 - `domain_annotation_parser.py` - Parses `protein2ipr` domain mappings and builds domain architectures.
 - `sparse_fisher.py` - Sparse contingency-table construction for domain × GO.
 - `vectorized_fisher.py` - Vectorized Fisher's exact tests (Cython `fisher`) + Benjamini–Hochberg FDR.
-- `hierarchical_inference.py` - Supra-domain generation and optional empirical-Bayes shrinkage.
+- `hierarchical_inference.py` - Supra-domain generation and the optional `--enable-shrinkage` step. **The step is a heuristic, not empirical Bayes** — it interpolates a supra-domain's log p-value toward its constituents' geometric mean with a hand-set decay `alpha = strength * exp(-n/3)`, which *lowers* 56% of them and nearly triples the FDR<0.01 count. See `VALIDATION_PLAN.md` §4.
 - `ontology_processor.py` - True Path Rule / GO DAG propagation (opt-in).
 - `database_manager.py` - SQLite storage/export helpers.
 - `data_acquisition.py` - Older async (aiohttp) downloader library; **not** on the supported path (use `scripts/download_data.py`).
@@ -58,14 +58,14 @@ uv sync --group dev  # + dev deps (pytest, ruff, mypy)
 ### Code Quality
 CI (`.github/workflows/ci.yml`) uses ruff:
 ```bash
-uv run ruff check src/ tests/
+uv run ruff check src/ tests/ validation/
 uv run ruff format --check
 ```
 `mypy` is available via the dev group (`uv run mypy src/`) but is not enforced in CI.
 
 ### Testing
 ```bash
-uv run pytest                          # all tests (155, ~5 s)
+uv run pytest                          # all tests (417, ~5 s)
 uv run pytest tests/unit -v            # unit tests
 uv run pytest tests/integration -v     # integration tests
 uv run pytest --cov=src --cov-report=html
@@ -88,6 +88,13 @@ uv run python run_dcgo_human.py --ontology ligand      # FT /ligand_id (ChEBI)
 
 # Rank the emergent domain-combination predictions
 uv run python scripts/rank_surprising_associations.py --ontology go
+
+# Component ablation + permutation null + paired bootstrap CIs (VALIDATION_PLAN §4).
+# Needs one pipeline run per rung under --run-dir; see validation/ablation.py.
+uv run python validation/ablation.py \
+    --t0-gaf data/raw/goa_archive/goa_human.gaf.205.gz \
+    --t1-gaf data/raw/goa_annotations/goa_human.gaf.gz \
+    --run-dir results/ablation --n-bootstrap 1000 --n-permutations 200
 
 # HPC batch script
 sbatch scripts/run_dcgo_hpc.sh
@@ -138,15 +145,34 @@ A full multi-organism run would be substantially heavier and is not yet implemen
 ## Known Limitations
 
 - No local domain scanning — only pre-computed InterPro annotations are consumed.
+- **The component ablation (§4, 2026-08-04) is negative for two of three
+  components — read `VALIDATION_PLAN.md` §4 before claiming any of them helps.**
+  Over 12 aspect × IC cells with a paired protein-level bootstrap: supra-domains
+  improve 0/12, shrinkage improves 0/12, and the True Path Rule is *significantly
+  worse* in 12/12. On the §2 benchmark the best configuration is single domains
+  only. The supra-domain machinery's demonstrated value is the emergent
+  combinations in `SURPRISE_SCORE.md`, not protein-centric F_max.
+- **`--enable-shrinkage` is not a shrinkage.** It geometrically interpolates a
+  supra-domain's p-value toward its constituents' geometric mean, which
+  *decreases* 56% of them and takes the FDR<0.01 count from 163,277 to 463,924.
+  BH on those values does not control FDR. Off by default; leave it off.
 - True Path Rule is opt-in (`--enable-true-path`), not part of the default run;
-  it now errors out for ontologies with no hierarchy instead of silently skipping.
+  it now errors out for ontologies with no hierarchy instead of silently
+  skipping. Its parental-background filter computes the background from the
+  **unpropagated** annotation map, so parents with no direct annotation have an
+  empty background and every child is rejected untested (54,951 such rejections
+  on the human t0 run). That is a defect, not a tuning choice.
 - The surprise score re-ranks associations that already passed the dcGO FDR
   filter, using the same proteins — it measures internal consistency of the
   evidence, not out-of-sample performance.
-- Validation covers InterPro2GO coverage (§1, ~65%) and a temporal CAFA-style
-  benchmark (§2, `validation/temporal_benchmark.py`: dcGO beats the random-domain
-  null 1.7–3.2× but trails the naive F_max baseline). Still open: ablation (§4),
-  score calibration (§5), original-dcGO comparison (§3). See `VALIDATION_PLAN.md`.
+- Validation covers InterPro2GO coverage (§1, ~65%), a temporal CAFA-style
+  benchmark (§2, `validation/temporal_benchmark.py`) and the §4 ablation with
+  bootstrap CIs and a permutation null (`validation/ablation.py`,
+  `validation/resampling.py`). dcGO clears a 100–200-permutation random-domain
+  null in every cell at the attainable p-floor, and beats the naive **F_max**
+  baseline on informative terms — but **loses to naive on AUPRC** at IC≥0 in all
+  aspects. Still open: score calibration (§5), original-dcGO comparison (§3), an
+  untouched evaluation interval. See `VALIDATION_PLAN.md`.
 
 ## Package Structure
 
@@ -156,6 +182,10 @@ extract_human_interpro.py    # Human subset extraction
 scripts/download_data.py     # Dataset downloader
 scripts/rank_surprising_associations.py  # Surprise score driver
 scripts/survey_uniprot_ontologies.py     # Which UniProt vocabularies are usable
+validation/
+├── temporal_benchmark.py    # §2 CAFA-style temporal benchmark + permutation null
+├── resampling.py            # Bootstrap CIs / paired differences / empirical p-values
+└── ablation.py              # §4 component ablation driver (one tidy TSV per artefact)
 src/
 ├── annotation_source.py     # AnnotationSource seam (protein → ontology term)
 ├── ontology_registry.py     # --ontology dispatch table (sources + hierarchies)

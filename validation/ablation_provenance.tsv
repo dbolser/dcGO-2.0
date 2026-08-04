@@ -1,0 +1,10 @@
+rung	label	adds	predictions_file	n_rows	n_domains	score
+single	single domains	-	results/ablation/single/domain_go_associations_significant.tsv	43656	6314	-log10(q)
+single__p	single domains (p-ranked)	sensitivity: score column only	results/ablation/single/domain_go_associations_significant.tsv	43656	6314	-log10(p)
+supra	+ supra-domains	supra-domains	results/ablation/supra/domain_go_associations_significant.tsv	163277	27200	-log10(q)
+supra__p	+ supra-domains (p-ranked)	sensitivity: score column only	results/ablation/supra/domain_go_associations_significant.tsv	163277	27200	-log10(p)
+supra_shrink	+ shrinkage	hierarchical shrinkage	results/ablation/supra_shrink/domain_go_associations_significant.tsv	463924	60336	-log10(q)
+supra_shrink__p	+ shrinkage (p-ranked)	sensitivity: score column only	results/ablation/supra_shrink/domain_go_associations_significant.tsv	463924	60336	-log10(p)
+supra_tpr	+ True Path Rule	parental-background filter + propagation	results/ablation/supra/domain_go_annotations_propagated.tsv	101873	11517	-log10(q)
+full	full method	shrinkage + True Path Rule	results/ablation/supra_shrink/domain_go_annotations_propagated.tsv	131456	19879	-log10(q)
+naive	CAFA naive baseline	-	-	20009	0	propagated t0 term frequency

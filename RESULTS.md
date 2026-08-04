@@ -53,6 +53,49 @@ Benchmark sizes (IC≥0): **BP 324 / MF 418 / CC 572** proteins.
 informative terms are required (BP 0.115→0.010, MF 0.464→0.018, CC 0.343→0.044
 over IC 0→6). dcGO degrades gracefully because its predictions are specific.
 
+> **Four corrections from the §4 uncertainty work (2026-08-04).** Read them
+> before citing this table. Detail in `VALIDATION_PLAN.md` §2 (permutation null)
+> and §4 (ablation).
+>
+> 1. **The `random` column is a single shuffle.** It is now a distribution over
+>    100 seeded permutations. dcGO clears it everywhere with the smallest
+>    attainable empirical p (1/101), but two of the ratios above were drawn from
+>    the null's upper tail and understate the margin: **MF ≥2 is 7.5×, not 4.2×;
+>    MF ≥4 is 9.0×, not 4.7×** (against the null mean). Use
+>    `validation/temporal_benchmark_permutation_null.tsv`.
+> 2. **The F_max wins survive a paired protein-level bootstrap; the AUPRC wins
+>    do not.** Naive *significantly beats* dcGO on AUPRC at IC≥0 in all three
+>    aspects, and at every IC floor in CC — it predicts every term for every
+>    protein and so owns the high-recall end of the curve. "Beats naive in every
+>    aspect on informative terms" is an **F_max** statement only.
+> 3. **Coverage.** dcGO makes no prediction at all for ~45% of the benchmark
+>    cohort (BP 0.55, MF 0.63–0.71, CC 0.42–0.52 coverage); naive covers 100%.
+>    CAFA recall already charges for this, but the F_max values above should be
+>    read against it.
+> 4. **These numbers are from a pipeline version that has since changed.**
+>    Re-running the t0 training command on current `main` gives 163,277
+>    significant associations, not the 164,549 behind this table, because
+>    `restrict_to_universe` now narrows the Fisher protein universe to
+>    domain-annotated proteins (18,735 → 18,382). The current behaviour is the
+>    correct one; the table is an artefact of the earlier version.
+
+## What each pipeline component contributes (ablation, 2026-08-04)
+
+Paired protein-level bootstrap, 1,000 replicates, 12 aspect × IC-floor cells.
+Full detail and the mechanisms in `VALIDATION_PLAN.md` §4.
+
+| Component | Cells where it helps | Cells where it hurts | Verdict |
+|---|---:|---:|---|
+| Supra-domains | **0 / 12** | 1 / 12 | No measurable effect, at 5.3× the feature space |
+| Hierarchical shrinkage | **0 / 12** | **0 / 12** | No effect on prediction — but it takes the "significant" association count from 163,277 to **463,924** by *decreasing* 56% of supra p-values. Not a shrinkage; BH on its output does not control FDR. |
+| True Path Rule | 0 / 12 | **12 / 12** | Significantly **worse** (−0.04 to −0.24 F_max). Its parental-background filter keeps 14% of associations, and 54,951 parent tests are rejected *untested* because the background uses the unpropagated annotation map. |
+
+**On this benchmark the best configuration is the simplest one: single domains,
+no shrinkage, no True Path.** `full − single` is significantly negative in all
+twelve cells. The supra-domain machinery's demonstrated value is elsewhere — the
+*emergent* combinations validated in `SURPRISE_SCORE.md` — not in
+protein-centric F_max.
+
 ## What each restored method piece contributes
 
 Both were part of the original dcGO Predictor and had been dropped; restoring them
