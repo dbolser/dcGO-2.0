@@ -42,8 +42,11 @@ This file is just loose notes.
   in `docs/uniprot_ontology_survey.md` + `docs/dr_survey.tsv`.
 - ~~**Held-out validation of the surprise score**~~ — `validation/temporal_surprise.py`.
   The *associations* predict future curation (12.5×); the *ranking* is not
-  demonstrably better than the dcGO q-value (paired bootstrap spans zero at every
-  prediction budget). Verdict written up in `SURPRISE_SCORE.md`.
+  demonstrably better than the dcGO q-value, and at matched prediction budgets
+  the comparison is not resolvable at all — 9,923 of 10,136 associations score
+  exactly 0.000, so most of a budget slice is an arbitrary tie-break. Verdict,
+  the bootstrap diagnosis behind it, and the percentile/basic/BCa intervals
+  side by side, in `SURPRISE_SCORE.md`.
 - ~~**Predictive power across the breadth**~~ — `validation/temporal_breadth.py`.
   One archived Swiss-Prot release (2021_02) gives t0 for every UniProt-native
   layer. GO 11.3×, reactome 8.0×, cofactor 3.2×, subcellular 2.9×, keyword 1.7×;
