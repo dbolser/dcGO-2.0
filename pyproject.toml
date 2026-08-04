@@ -87,6 +87,8 @@ include = [
     "/config",
     "/examples",
     "/run_dcgo_human.py",
+    "/CITATION.cff",
+    "/REPRODUCIBILITY.md",
     "/README.md",
     "/LICENSE",
 ]

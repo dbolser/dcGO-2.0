@@ -25,8 +25,13 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev
 
+      # Lint the whole product, not just the library: the runner, the download
+      # and analysis scripts, the config, and the validation programs that
+      # produce the reported numbers.
       - name: Lint (ruff)
-        run: uv run ruff check src/ tests/
+        run: >-
+          uv run ruff check src/ tests/ config/ scripts/ validation/
+          run_dcgo_human.py extract_human_interpro.py
 
       - name: Format check (ruff)
         run: uv run ruff format --check
