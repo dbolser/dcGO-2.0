@@ -16,6 +16,12 @@ one aspect where naive leads at face value — because its "truth" is dominated 
 single near-universal term (`protein binding`, 84.6% of experimental MF
 annotations) — and dcGO overtakes it decisively the moment that noise is removed.
 
+**This headline is about F_max only.** On AUPRC, from the same run, naive leads
+in all three aspects at IC≥0 and in CC at IC≥2 and IC≥4 as well
+([VALIDATION_PLAN.md](VALIDATION_PLAN.md) §2). The primary endpoint was not
+pre-specified, so read the above as a descriptive retrospective result at one
+operating point, not as a general claim of superiority.
+
 ## Setup
 
 - **Split:** train = GOA release 205 (2021-04); test = current (2026-06), ~5-year gap.

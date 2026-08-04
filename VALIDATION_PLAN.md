@@ -26,7 +26,17 @@ because its truth is dominated by `protein binding` (84.6% of experimental MF
 annotations, near-zero IC) — and dcGO overtakes it decisively the moment that
 noise is excluded (IC≥2: 0.365 vs 0.053). This confirms the concern that a
 temporal CAFA benchmark rewards recovery of the popularity-weighted curation
-frontier; on informative function, dcGO is clearly ahead.
+frontier; **on informative function, and measured by F_max, dcGO is ahead**.
+
+**All of that is F_max.** AUPRC, computed in the same run, points the other way
+at IC≥0 in every aspect (naive BP 0.314 vs 0.137, MF 0.325 vs 0.195, CC 0.513
+vs 0.240) and keeps pointing the other way in CC at IC≥2 and IC≥4. So the
+claim above is about one metric at one operating point, and the metric was
+chosen after both were computed. The defensible summary is the external
+review's: domain-derived associations contain predictive signal for later human
+GO annotations and outperform simple baselines in several retrospective
+settings, particularly for higher-information GO terms. See the AUPRC note in
+§2.
 
 ### Next steps (as of 2026-07-09, after the §2 benchmark + method audit)
 
