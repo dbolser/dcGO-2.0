@@ -142,7 +142,11 @@ A full multi-organism run would be substantially heavier and is not yet implemen
   it now errors out for ontologies with no hierarchy instead of silently skipping.
 - The surprise score re-ranks associations that already passed the dcGO FDR
   filter, using the same proteins — it measures internal consistency of the
-  evidence, not out-of-sample performance.
+  evidence, not out-of-sample performance. It is also **not a total order**: on
+  the GO run 9,923 of 10,136 evaluated associations score exactly 0.000, so any
+  comparison reaching deeper than its ~213 scored associations is comparing an
+  arbitrary tie-break. `validation/temporal_surprise.py` detects this and refuses
+  to quote an interval rather than reporting one — see `SURPRISE_SCORE.md`.
 - Validation covers InterPro2GO coverage (§1, ~65%) and a temporal CAFA-style
   benchmark (§2, `validation/temporal_benchmark.py`: dcGO beats the random-domain
   null 1.7–3.2× but trails the naive F_max baseline). Still open: ablation (§4),

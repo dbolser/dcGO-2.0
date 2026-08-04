@@ -1,23 +1,47 @@
 stratum	n_associations	n_predictions	n_hits	hit_rate	expected_rate	enrichment	enrichment_ci_low	enrichment_ci_high	mean_per_association_enrichment
 surprise top-25	25	117	0	0.0000	0.0008	0.00	0.00	0.00	0.00
-surprise top-100	100	481	12	0.0249	0.0015	16.46	6.61	24.34	14.14
-surprise top-500	500	4440	56	0.0126	0.0009	14.78	11.00	21.82	295.29
-surprise top-2000	2000	42992	457	0.0106	0.0008	13.64	8.70	19.54	265.16
-surprise all (10136)	10136	170416	2181	0.0128	0.0010	12.49	10.61	14.13	176.31
-dcgo top-25	25	3585	39	0.0109	0.0020	5.32	1.55	18.66	47.22
-dcgo top-100	100	7293	109	0.0149	0.0014	10.31	5.73	21.33	43.82
-dcgo top-500	500	18651	393	0.0211	0.0016	13.23	8.93	19.08	235.71
-dcgo top-2000	2000	45988	825	0.0179	0.0016	11.02	8.44	13.35	133.32
-dcgo all (10136)	10136	170416	2181	0.0128	0.0010	12.49	10.94	13.75	176.31
-surprise @2000 preds	363	2007	22	0.0110	0.0007	15.48	9.71	23.48	181.87
-surprise @10000 preds	580	10312	101	0.0098	0.0005	21.17	16.82	27.76	438.92
-surprise @40000 preds	1391	40077	361	0.0090	0.0008	11.63	7.80	16.55	311.21
-dcgo @2000 preds	17	2031	33	0.0162	0.0031	5.28	1.54	22.78	47.25
-dcgo @10000 preds	169	10003	183	0.0183	0.0014	13.22	9.42	22.04	69.37
-dcgo @40000 preds	1630	40004	714	0.0178	0.0017	10.81	7.71	14.20	122.88
+surprise top-100	100	481	12	0.0249	0.0015	16.47	5.73	26.04	14.25
+surprise top-500	500	4440	56	0.0126	0.0009	14.78	10.68	21.00	280.13
+surprise top-2000	2000	42992	457	0.0106	0.0008	13.62	9.63	19.71	254.04
+surprise all (10136)	10136	170416	2181	0.0128	0.0010	12.49	10.87	14.39	170.98
+dcgo top-25	25	3585	39	0.0109	0.0020	5.32	1.71	15.58	47.09
+dcgo top-100	100	7293	109	0.0149	0.0015	10.30	5.79	21.25	43.87
+dcgo top-500	500	18651	393	0.0211	0.0016	13.23	9.39	19.53	236.78
+dcgo top-2000	2000	45951	819	0.0178	0.0016	10.95	8.90	13.71	132.49
+dcgo all (10136)	10136	170416	2181	0.0128	0.0010	12.49	10.86	14.41	170.98
+surprise @2000 preds	363	2007	22	0.0110	0.0007	15.48	8.52	23.13	173.05
+surprise @10000 preds	580	10312	101	0.0098	0.0005	21.17	15.22	30.21	417.57
+surprise @40000 preds	1391	40077	361	0.0090	0.0008	11.62	8.01	17.34	298.11
+dcgo @2000 preds	17	2031	33	0.0162	0.0031	5.28	1.62	16.56	47.13
+dcgo @10000 preds	169	10003	183	0.0183	0.0014	13.21	8.42	22.07	68.83
+dcgo @40000 preds	1630	40004	714	0.0178	0.0017	10.81	8.73	13.67	122.59
 
 # paired ranking comparison (surprise - dcgo)
-budget	enrichment_surprise	enrichment_dcgo	difference	diff_ci_low	diff_ci_high	fraction_favouring_surprise
-2000	15.48	5.28	10.19	-87.28	18.95	0.700
-10000	21.17	13.22	7.96	-8.93	7.06	0.320
-40000	11.63	10.81	0.82	-1.01	4.54	0.800
+# design=reselect: the budget is re-filled from scratch inside every
+#   resample, so the composition of the top of each ranking is
+#   resampled too. design=fixed: the two budget slices are held at the
+#   ones the observed ranking produced and the resample only re-weights
+#   associations (shared members move together, so it stays paired).
+# 'point' is the statistic each design's replicates are compared to.
+# trustworthy=False means the bootstrap on that row cannot support an
+#   interval. resolvable=False is stronger: the comparison itself is
+#   not answerable at this budget (too few associations fit, or most of
+#   a slice is an arbitrary tie-break) — see 'verdict', and do not quote
+#   any interval from that budget however trustworthy the row looks.
+budget	design	n_assoc_surprise	n_assoc_dcgo	enrichment_surprise	enrichment_dcgo	point	pct_low	pct_high	basic_low	basic_high	bca_low	bca_high	boot_mean	boot_median	boot_sd	boot_skew	z0	acceleration	fraction_favouring_surprise	n_resamples	trustworthy	resolvable	verdict	note
+2000	reselect	363	17	15.48	5.28	10.19	-83.81	18.50	1.88	104.20	-42.78	21.50	-2.05	8.22	24.93	-1.93	0.327	-0.0133	0.748	10000	true	false	unresolvable: only 17 associations fit the budget	ok
+2000	fixed	363	17	15.48	5.28	10.19	-3.29	18.84	1.55	23.68	-0.71	20.02	9.13	9.70	6.60	-4.03	0.108	0.0096	0.948	10000	true	false	unresolvable: only 17 associations fit the budget	ok
+10000	reselect	580	169	21.17	13.21	7.96	-8.05	17.57	-1.65	23.96	-4.57	21.17	5.51	6.16	6.77	-0.25	0.282	-0.0036	0.781	10000	true	false	unresolvable: most of a slice is an arbitrary tie-break	ok
+10000	fixed	580	169	21.17	13.21	7.96	-2.33	18.11	-2.19	18.25	-2.30	18.15	7.89	7.88	5.12	-0.06	0.015	-0.0060	0.945	10000	true	false	unresolvable: most of a slice is an arbitrary tie-break	ok
+40000	reselect	1391	1630	11.62	10.81	0.81	-3.00	7.25	-5.62	4.63	-4.63	5.28	1.64	1.44	2.64	0.38	-0.251	-0.0519	0.720	10000	true	false	unresolvable: most of a slice is an arbitrary tie-break	ok
+40000	fixed	1391	1630	11.62	10.81	0.81	-2.99	5.93	-4.30	4.61	-3.87	5.03	1.12	0.92	2.31	0.39	-0.049	-0.0806	0.667	10000	true	false	unresolvable: most of a slice is an arbitrary tie-break	ok
+
+# tie-break sensitivity of the same difference
+# Not a bootstrap: the data never changes, only the order of
+#   associations that share a rank score. If 'observed' sits at an
+#   extreme percentile of this spread, the statistic is a property of
+#   the input file's order rather than of the ranking.
+budget	n_shuffles	observed	median	low	high	observed_percentile	fraction_favouring_surprise	ambiguous_surprise	slice_surprise	ambiguous_dcgo	slice_dcgo
+2000	2000	10.19	9.82	0.57	20.00	0.536	0.986	150	363	0	17
+10000	2000	7.96	0.12	-5.53	7.57	0.980	0.513	367	580	0	169
+40000	2000	0.81	1.77	-0.94	5.71	0.269	0.877	1178	1391	0	1630

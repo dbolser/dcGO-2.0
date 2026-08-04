@@ -528,17 +528,23 @@ per association in `validation/temporal_surprise_associations.tsv`.
 
 - [x] **The supra-domain associations predict future curation: 12.5×
       enrichment** over the terms' own acquisition rates (2,181 hits on 170,416
-      predictions vs ~175 expected), bootstrap CI [10.9, 14.4]. This is the
-      out-of-sample evidence the domain-combination claim was missing.
+      predictions vs ~175 expected), 95% percentile CI [10.87, 14.39]. These
+      strata are fixed sets, so this is an ordinary bootstrap and the interval is
+      sound. This is the out-of-sample evidence the domain-combination claim was
+      missing.
 - [x] **The surprise ranking is *not* demonstrably better than ranking by the
-      dcGO q-value.** At matched prediction budgets the point estimate favours
-      surprise 3/3 (15.5 vs 5.3, 21.2 vs 13.2, 11.6 vs 10.8) but a **paired**
-      bootstrap — re-ranking both ways inside each resample, because the two
-      rankings share a candidate pool and their independent intervals are
-      therefore correlated — puts zero inside every interval. Report it as "no
-      demonstrated ranking advantage"; the score's contribution is
-      interpretability (redundant-signature and curated-novelty filtering) and a
-      bias toward rarer, higher-IC terms, not ranking power.
+      dcGO q-value — and at these budgets the comparison is not resolvable at
+      all.** The score assigns exactly 0.000 to 9,923 of the 10,136 evaluated
+      associations (`q_emergence` saturates at 1), so a slice sized by prediction
+      budget is mostly an arbitrary tie-break: 63% of it at 10,000 predictions,
+      85% at 40,000. Re-breaking the tie at random moves the observed +7.96 at
+      the 10,000 budget to +0.12 [−5.53, +7.57] — the observed value is the 98th
+      percentile of its own tie-break spread. At 2,000 predictions only 17 dcGO
+      associations fit, and the percentile and basic intervals disagree about the
+      *sign*. Report it as "no demonstrated ranking advantage"; the score's
+      contribution is interpretability (redundant-signature and curated-novelty
+      filtering) and a bias toward rarer, higher-IC terms, not ranking power.
+      Re-running the head-to-head needs a graded emergence score first.
 - [ ] **Open: the emergence/testability tension.** The most emergent
       associations leave the fewest standing predictions (emergence requires
       that carriers are already nearly all annotated), so the sharp end of the
