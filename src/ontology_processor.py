@@ -11,7 +11,7 @@ import networkx as nx
 import obonet
 import pandas as pd
 from pathlib import Path
-from typing import Dict, List, Set, Union
+from typing import Callable, Dict, List, Set, Union
 from loguru import logger
 from dataclasses import dataclass
 from scipy.stats import fisher_exact
@@ -21,14 +21,23 @@ import gzip
 class _BackgroundIndex:
     """Inverted term->proteins / domain->proteins index for the parental-background test.
 
-    Purely a performance structure: it changes no count and no p-value. The
-    parental-background test needs, for each (domain, child, parent), the four
-    cells of a contingency table restricted to the proteins carrying the parent
-    term. Computed straight from the maps that is four passes over the whole
-    proteome *per parent test* — with ~165k significant associations and ~2
-    parents each, that is ~10^10 Python-level membership checks and the True Path
-    stage never finishes on a real human run (measured: hours). Inverting the two
-    maps once turns every cell into a set intersection.
+    The term index is **propagated**: a protein annotated to a child term is
+    counted under every ancestor of that term. That is the True Path Rule, and
+    it is what "the proteins annotated to the parent" has to mean for this test
+    to be answerable. Indexing only direct annotations gave any parent term that
+    nobody is annotated to *directly* an empty background, so the test raised
+    and the conservative ``except`` in the caller discarded the child untested —
+    54,951 times on the human t0 run, leaving only ~14% of associations and
+    collapsing prediction coverage to 0.22-0.50. The §4 ablation's "True Path
+    hurts in 12/12 cells" was measured with that defect in place.
+
+    The domain index needs no such treatment: domains have no hierarchy here.
+
+    Inverting the maps is also what makes the stage finish at all. Computed
+    straight from the maps, each cell is a pass over the whole proteome *per
+    parent test* — with ~165k significant associations and ~2 parents each that
+    is ~10^10 Python-level membership checks, and the stage never completes on a
+    real human run (measured: hours).
     """
 
     __slots__ = ("term_proteins", "domain_proteins")
@@ -37,11 +46,21 @@ class _BackgroundIndex:
         self,
         protein_domain_map: Dict[str, List[str]],
         protein_go_map: Dict[str, Set[str]],
+        get_ancestors: "Callable[[str], Set[str]] | None" = None,
     ) -> None:
         term_proteins: Dict[str, set] = {}
+        # Ancestors are looked up once per distinct term, not once per
+        # (protein, term): the annotation map has ~10^6 pairs over ~10^4 terms.
+        ancestor_cache: Dict[str, Set[str]] = {}
         for protein, terms in protein_go_map.items():
             for term in terms:
                 term_proteins.setdefault(term, set()).add(protein)
+                if get_ancestors is None:
+                    continue
+                if term not in ancestor_cache:
+                    ancestor_cache[term] = set(get_ancestors(term))
+                for ancestor in ancestor_cache[term]:
+                    term_proteins.setdefault(ancestor, set()).add(protein)
         domain_proteins: Dict[str, set] = {}
         for protein, domains in protein_domain_map.items():
             for domain in domains:
@@ -306,7 +325,7 @@ class OntologyProcessor:
         total_associations = len(significant_associations)
         # Invert the maps once; see _BackgroundIndex for why this is not optional
         # at real scale. The counts it produces are identical to the direct scan.
-        index = _BackgroundIndex(protein_domain_map, protein_go_map)
+        index = _BackgroundIndex(protein_domain_map, protein_go_map, self.get_ancestors)
         self._filter_rejections: Dict[str, int] = {}
 
         for i, assoc in enumerate(significant_associations):
@@ -340,8 +359,9 @@ class OntologyProcessor:
             logger.info(
                 f"  {sum(self._filter_rejections.values()):,} parent tests could not be "
                 f"evaluated and their associations were rejected untested ({detail}). "
-                "The background comes from the unpropagated annotation map, so a "
-                "parent term nobody is directly annotated to has an empty background."
+                "The background is propagated, so this should now be rare; a large "
+                "count here means the ontology graph or the annotation map is not "
+                "what the filter expects."
             )
         return filtered_associations
 
@@ -409,14 +429,16 @@ class OntologyProcessor:
             except Exception as e:
                 # Conservative: if we can't test, reject the association.
                 #
-                # In practice this branch dominates: the background is built from
-                # the *unpropagated* annotation map, so any parent term with no
-                # direct annotation has an empty background and every child of it
-                # is rejected untested. That is a substantive property of this
-                # filter, not an edge case — it is why the True Path rung retains
-                # only ~14% of associations (VALIDATION_PLAN §4). Logged per
-                # occurrence it produced 110k warning lines and a 19 MB log, so it
-                # is counted here and reported once by the caller instead.
+                # This branch used to dominate, because the background was built
+                # from the *unpropagated* annotation map: any parent term with no
+                # direct annotation had an empty background, so the test raised
+                # and every child of it was discarded untested (54,951 times on
+                # the human t0 run, leaving ~14% of associations). _BackgroundIndex
+                # now propagates, so a parent's background includes everything
+                # annotated beneath it and the branch should be rare. It is still
+                # counted rather than logged per occurrence — at 110k occurrences
+                # that produced a 19 MB log — and the caller reports the total, so
+                # a regression here is visible rather than silent.
                 self._filter_rejections[type(e).__name__] = (
                     self._filter_rejections.get(type(e).__name__, 0) + 1
                 )
@@ -461,7 +483,9 @@ class OntologyProcessor:
         # point apply_optimal_level_filter passes a shared one so the inversion
         # happens once per run instead of once per test.
         if index is None:
-            index = _BackgroundIndex(protein_domain_map, protein_go_map)
+            index = _BackgroundIndex(
+                protein_domain_map, protein_go_map, self.get_ancestors
+            )
 
         # Get all proteins annotated with parent term (background set)
         parent_proteins = index.term_proteins.get(parent_term, frozenset())
