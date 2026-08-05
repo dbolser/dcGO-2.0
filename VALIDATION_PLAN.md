@@ -14,7 +14,8 @@ engineering cleanup: the code runs; this is about showing the results are
 | **§2 Temporal held-out benchmark (CAFA-style)** | ✅ **done (#8)** — 2021→2026 CAFA split; see results below |
 | §3 Compare to original dcGO | ✅ **done (2026-08-04)** — SSF re-keying + published-dcGO join; precision 0.54–0.63, recall uninterpretable (see §3.1) |
 | **§4 Component ablation + uncertainty** | ✅ **done (2026-08-04)** — ladder, permutation null, paired bootstrap CIs; **the result is negative for two of three components** |
-| §5 Pre-paper method decisions | ⬜ open (#11) |
+| **§5 Pre-paper method decisions** | 🟡 partly done (2026-08-05) — shrinkage removed, True Path background fixed, BH families split, `--min-support` added; minimum-support *policy* still open |
+| **Untouched evaluation axis** | ✅ **done (2026-08-05)** — mouse, matched 2021→2026 window; performance improves in all 9 cells. Nested human split (205→215→current) in progress |
 | §6 Reproducibility | ⬜ open (#12) |
 
 **Where §2 landed:** with the calibrated **p-score** predictor (default) and a

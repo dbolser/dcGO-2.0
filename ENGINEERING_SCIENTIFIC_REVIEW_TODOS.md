@@ -77,8 +77,10 @@ yet establish robust general performance, calibration, or superiority.
   `validation/ablation.py`; VALIDATION_PLAN §4. **The result is negative:**
   supra-domains 0/12 cells improved, shrinkage 0/12, True Path 12/12 *worse*.
   The best configuration on this benchmark is single domains only.
-- [ ] Establish the statistical validity of the claimed empirical-Bayes
-  shrinkage, or rename it as a heuristic. The implementation geometrically
+- [x] Establish the statistical validity of the claimed empirical-Bayes
+  shrinkage, or rename it as a heuristic. *(Neither: it was removed. It pulled
+  p-values toward significance, not away, and interpolated p-values are not
+  valid p-values under any null.)* The implementation geometrically
   interpolates observed and constituent p-values using a hand-set decay. It is
   not presently a fitted empirical-Bayes model, and the transformed quantities
   have not been shown to be valid p-values. BH correction of those values does
@@ -104,8 +106,10 @@ yet establish robust general performance, calibration, or superiority.
   shuffled-domain null establish signal, but not state-of-the-art utility.
   Include original dcGO output where feasible and at least one independent
   protein-function or domain-based predictor.
-- [ ] Add an external validation axis: another species, a later untouched time
-  interval, or both.
+- [x] Add an external validation axis: another species, a later untouched time
+  interval, or both. *(Mouse, matched 2021→2026 window: performance improves in
+  all 9 aspect × IC cells and clears the permutation null in all 24. Nested
+  human split 205→215→current in progress.)*
 
 ## P1: Engineering and reproducibility
 
