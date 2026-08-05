@@ -178,3 +178,49 @@ def benjamini_hochberg_correction(
         threshold = 0.0
 
     return adjusted, threshold
+
+
+def benjamini_hochberg_by_family(
+    pvalues: np.ndarray, family: np.ndarray, alpha: float = 0.05
+) -> Tuple[np.ndarray, dict]:
+    """Apply BH separately within each hypothesis family.
+
+    A supra-domain is not an exchangeable sibling of its own constituent
+    domains: it is a different kind of hypothesis, tested on a nested subset of
+    the same proteins. Correcting both in one family means the 5.3x larger
+    supra-domain space makes the threshold stricter for single-domain
+    hypotheses that nobody asked to be penalised by it, and it is part of what
+    the review means by "BH is applied across a highly dependent hierarchical
+    hypothesis family".
+
+    Each family controls FDR at ``alpha`` within itself. That is a deliberate
+    choice and not the same guarantee as one pooled correction: the expected
+    proportion of false discoveries is controlled per family, so a reader who
+    pools the two output sets is looking at a union of two separately
+    controlled sets, not a set controlled at ``alpha`` overall.
+
+    Args:
+        pvalues: Array of p-values.
+        family: Array of the same length assigning each test to a family; any
+            hashable label works (e.g. ``"single"`` / ``"supra"``).
+        alpha: FDR threshold applied within each family.
+
+    Returns:
+        ``(adjusted, thresholds)`` where ``thresholds`` maps each family label
+        to its own p-value cutoff.
+    """
+    if len(pvalues) != len(family):
+        raise ValueError(
+            f"pvalues and family must be the same length, got "
+            f"{len(pvalues)} and {len(family)}"
+        )
+    adjusted = np.empty(len(pvalues), dtype=np.float64)
+    thresholds: dict = {}
+    for label in np.unique(family):
+        members = np.flatnonzero(family == label)
+        family_adjusted, family_threshold = benjamini_hochberg_correction(
+            pvalues[members], alpha=alpha
+        )
+        adjusted[members] = family_adjusted
+        thresholds[label] = family_threshold
+    return adjusted, thresholds

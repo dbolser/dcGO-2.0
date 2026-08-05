@@ -44,7 +44,6 @@ Key `src/` modules:
 - `domain_annotation_parser.py` - Parses `protein2ipr` domain mappings and builds domain architectures. `--domain-key` chooses *which column is a domain*: `interpro` (the integrated entry, default) or `ssf` (the SUPERFAMILY signature, whose numeric part is the SCOP sunid — the published dcGO's domain universe, used by VALIDATION_PLAN §3). Non-matching member-database rows are dropped **at parse time**, before the sort-by-start, so supra-domain contiguity is computed over the chosen universe only.
 - `sparse_fisher.py` - Sparse contingency-table construction for domain × GO.
 - `vectorized_fisher.py` - Vectorized Fisher's exact tests (Cython `fisher`) + Benjamini–Hochberg FDR.
-- `hierarchical_inference.py` - Supra-domain generation and the optional `--enable-shrinkage` step. **The step is a heuristic, not empirical Bayes** — it interpolates a supra-domain's log p-value toward its constituents' geometric mean with a hand-set decay `alpha = strength * exp(-n/3)`, which *lowers* 56% of them and nearly triples the FDR<0.01 count. See `VALIDATION_PLAN.md` §4.
 - `ontology_processor.py` - True Path Rule / GO DAG propagation (opt-in).
 
 ## Development Commands
@@ -162,14 +161,18 @@ A full multi-organism run would be substantially heavier and is not yet implemen
 - **The component ablation (§4, 2026-08-04) is negative for two of three
   components — read `VALIDATION_PLAN.md` §4 before claiming any of them helps.**
   Over 12 aspect × IC cells with a paired protein-level bootstrap: supra-domains
-  improve 0/12, shrinkage improves 0/12, and the True Path Rule is *significantly
+  improve 0/12 and the True Path Rule is *significantly
   worse* in 12/12. On the §2 benchmark the best configuration is single domains
   only. The supra-domain machinery's demonstrated value is the emergent
   combinations in `SURPRISE_SCORE.md`, not protein-centric F_max.
-- **`--enable-shrinkage` is not a shrinkage.** It geometrically interpolates a
-  supra-domain's p-value toward its constituents' geometric mean, which
-  *decreases* 56% of them and takes the FDR<0.01 count from 163,277 to 463,924.
-  BH on those values does not control FDR. Off by default; leave it off.
+- **`--enable-shrinkage` was removed** (2026-08-05). It geometrically
+  interpolated each supra-domain p-value toward the geometric mean of its
+  constituents', which pulled thin evidence *toward* its well-supported parts —
+  a 3-protein combination at p=0.01 became p=1e-24 — taking FDR<0.01 rejections
+  from 163,277 to 463,924 (+184%). The output was not a valid p-value under any
+  null, so BH did not control FDR on it, and the ablation found no effect on
+  prediction quality in any of 12 cells. A genuine version would shrink the
+  observed *rate* and recompute Fisher, which is a different method.
 - True Path Rule is opt-in (`--enable-true-path`), not part of the default run;
   it now errors out for ontologies with no hierarchy instead of silently
   skipping. Its parental-background filter computes the background from the
@@ -222,7 +225,6 @@ src/
 ├── domain_annotation_parser.py  # protein2ipr parsing
 ├── sparse_fisher.py         # Sparse contingency tables
 ├── vectorized_fisher.py     # Fisher's exact tests + BH-FDR
-├── hierarchical_inference.py    # Supra-domains + shrinkage
 └── ontology_processor.py    # True Path Rule
 config/settings.py           # Dataset URLs + configuration
 ```

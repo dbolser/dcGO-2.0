@@ -29,7 +29,6 @@ def _args(**overrides) -> argparse.Namespace:
         fdr_threshold=0.01,
         batch_size=50000,
         num_cores=8,
-        shrinkage_strength=0.5,
         species="human",
     )
     defaults.update(overrides)
@@ -52,13 +51,6 @@ class TestAcceptsValidArguments:
     ) -> None:
         validate_arguments(_args(fdr_threshold=threshold), parser)
 
-    @pytest.mark.parametrize("strength", [0.0, 0.5, 1.0])
-    def test_shrinkage_boundaries(
-        self, strength: float, parser: argparse.ArgumentParser
-    ) -> None:
-        """0 and 1 are both meaningful: no shrinkage, and full shrinkage."""
-        validate_arguments(_args(shrinkage_strength=strength), parser)
-
 
 class TestRejectsInvalidArguments:
     @pytest.mark.parametrize(
@@ -71,8 +63,6 @@ class TestRejectsInvalidArguments:
             ({"batch_size": -1}, "--batch-size"),
             ({"num_cores": 0}, "--num-cores"),
             ({"num_cores": -4}, "--num-cores"),
-            ({"shrinkage_strength": 1.5}, "--shrinkage-strength"),
-            ({"shrinkage_strength": -0.5}, "--shrinkage-strength"),
             ({"species": ""}, "--species"),
             ({"species": "../etc/passwd"}, "--species"),
         ],

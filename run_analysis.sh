@@ -21,19 +21,15 @@ JOBS="${JOBS:-2}"
 GO_OBO="${GO_OBO:-data/raw/go_ontology/go-basic.obo}"
 
 # Configuration name, then the flags that define it. The pipeline's defaults are
-# supra-domains ON, True Path OFF, shrinkage OFF, so "disabling" True Path or
-# shrinkage means omitting their flags — there are deliberately no
-# --disable-true-path / --disable-shrinkage options, and earlier versions of
-# this script passed both, which made every configuration fail immediately.
+# supra-domains ON and True Path OFF, so "disabling" True Path means omitting
+# its flag — there is deliberately no --disable-true-path option, and an earlier
+# version of this script passed one, which made every configuration fail
+# immediately.
 CONFIGS=(
   "01_baseline|--disable-supra-domains"
   "02_true_path_only|--disable-supra-domains --enable-true-path --go-ontology ${GO_OBO}"
   "03_supra_only|"
   "04_supra_true_path|--enable-true-path --go-ontology ${GO_OBO}"
-  "05_supra_shrinkage|--enable-shrinkage --shrinkage-strength 0.5"
-  "06_full_dcgo_05|--enable-true-path --go-ontology ${GO_OBO} --enable-shrinkage --shrinkage-strength 0.5"
-  "07_full_dcgo_07|--enable-true-path --go-ontology ${GO_OBO} --enable-shrinkage --shrinkage-strength 0.7"
-  "08_full_dcgo_03|--enable-true-path --go-ontology ${GO_OBO} --enable-shrinkage --shrinkage-strength 0.3"
 )
 
 INTERPRO="data/interim/protein2ipr_${SPECIES}.dat.gz"
@@ -130,10 +126,6 @@ echo "  01_baseline          Single domains only"
 echo "  02_true_path_only    Single domains + GO DAG propagation"
 echo "  03_supra_only        + contiguous domain combinations (the default)"
 echo "  04_supra_true_path   + GO DAG propagation"
-echo "  05_supra_shrinkage   + shrinkage toward constituent domains (0.5)"
-echo "  06_full_dcgo_05      Everything, shrinkage 0.5"
-echo "  07_full_dcgo_07      Everything, shrinkage 0.7"
-echo "  08_full_dcgo_03      Everything, shrinkage 0.3"
 echo ""
 echo "Per configuration:"
 echo "  domain_go_associations_significant.tsv   all associations at FDR < 0.01"
