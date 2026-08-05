@@ -43,6 +43,7 @@ def make_args(tmp_path, **overrides):
         ontology="go",
         evidence_filter="manual",
         fdr_threshold=0.01,
+        min_support=0,
         enable_true_path=False,
         enable_supra_domains=True,
         num_cores=4,
@@ -160,6 +161,8 @@ def test_thresholds_are_recorded(tmp_path, fake_inputs):
     assert thresholds["evidence_filter"] == "manual"
     # Single domains and supra-domains are corrected as separate families.
     assert thresholds["fdr_families"] == ["single", "supra"]
+    # No support filter unless --min-support is given.
+    assert thresholds["min_proteins_per_association"] is None
     assert thresholds["max_supra_domain_length"] == 3
     assert thresholds["fisher_alternative"] == "greater"
     # Every parameter of the invocation is preserved verbatim as well.

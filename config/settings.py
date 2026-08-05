@@ -104,6 +104,10 @@ class ProcessingParameters:
     """Statistical and processing parameters with validation."""
 
     fdr_threshold: float = 0.01
+    #: Not read by the supported ``run_dcgo_human.py`` path, which applies no
+    #: minimum-support filter unless ``--min-support`` is given. Kept because
+    #: ``DCGO_MIN_PROTEINS`` and the validation below are part of this dataclass'
+    #: public surface; see CLAUDE.md for why the default is no filter.
     min_proteins_per_association: int = 3
     max_supra_domain_length: int = 3
     alpha_threshold: float = 0.05

@@ -135,7 +135,12 @@ download_data.py → extract_human_interpro.py → run_dcgo_human.py
 supported `run_dcgo_human.py` path takes most parameters via CLI flags rather
 than from `Config`. Key defaults:
 - `FDR_THRESHOLD = 0.01` - False discovery rate cutoff
-- `MIN_PROTEINS_PER_ASSOCIATION = 3` - Minimum evidence requirement
+- `MIN_PROTEINS_PER_ASSOCIATION = 3` - **not applied by the supported path.**
+  `run_dcgo_human.py` keeps an association on FDR significance alone unless
+  `--min-support N` is passed. The default is deliberately no filter: the
+  emergent domain combinations this method exists to find sit at n = 2-8
+  proteins, so a non-zero default would delete them. `--min-support` is applied
+  *after* the BH correction, so it never alters the hypothesis family.
 - `MAX_SUPRA_DOMAIN_LENGTH = 3` - Maximum contiguous domain combinations
 - `NUM_CORES = 8` - Parallel processing default
 
