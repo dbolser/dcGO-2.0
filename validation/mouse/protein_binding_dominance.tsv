@@ -1,0 +1,9 @@
+statistic	value	share
+proteins with any annotation	9,136	
+distinct (protein, term) pairs	19,752	
+annotation lines	42,706	
+annotation lines carrying GO:0005515	20,782	48.7% of lines
+proteins carrying GO:0005515	5,637	61.7% of proteins
+proteins carrying ONLY GO:0005515	2,365	25.9% of proteins
+median terms per protein	2	
+source	goa_mouse.gaf.gz	
