@@ -885,10 +885,17 @@ def main():
         dtype=bool,
         count=len(domain_list),
     )
-    family = np.where(is_supra, "supra", "single").repeat(len(go_list))
+    # A bool, not a string array. `is_supra` is per *domain*; the flattened test
+    # index is domain-major, so repeating it by the term count gives the
+    # per-test assignment. At 1.69e9 tests a <U6 array of "single"/"supra"
+    # would be 40.6 GB against 1.69 GB for this.
+    family = np.repeat(is_supra, len(go_list))
 
     adjusted_pvalues, thresholds = benjamini_hochberg_by_family(
-        pvalues, family, alpha=args.fdr_threshold
+        pvalues,
+        family,
+        alpha=args.fdr_threshold,
+        labels={False: "single", True: "supra"},
     )
     del family, is_supra
 
@@ -1093,9 +1100,13 @@ def main():
     logger.info(f"✓ Exported significant associations to: {output_file}")
     logger.info(f"  {n_significant:,} associations (FDR < {args.fdr_threshold})")
 
-    # Export top associations with hypergeometric scores and domain types
+    # Export top associations with hypergeometric scores and domain types.
+    # Ranked over the *significant* set, so --min-support applies here too. It
+    # used to rank over every test, which meant a --min-support 3 run still
+    # published 1- and 2-protein pairs in the top100 while the CLI said those
+    # associations were discarded.
     top_file = args.output_dir / f"{assoc_stem}_top100.tsv"
-    top_indices = np.argsort(pvalues)[:100]
+    top_indices = significant_indices[np.argsort(pvalues[significant_indices])][:100]
     with open(top_file, "w") as f:
         f.write(
             f"rank\tdomain\t{term_col}\tp_value\tadj_p_value\todds_ratio\thyper_score\t"
