@@ -181,7 +181,10 @@ def benjamini_hochberg_correction(
 
 
 def benjamini_hochberg_by_family(
-    pvalues: np.ndarray, family: np.ndarray, alpha: float = 0.05
+    pvalues: np.ndarray,
+    family: np.ndarray,
+    alpha: float = 0.05,
+    labels: "dict | None" = None,
 ) -> Tuple[np.ndarray, dict]:
     """Apply BH separately within each hypothesis family.
 
@@ -199,11 +202,20 @@ def benjamini_hochberg_by_family(
     pools the two output sets is looking at a union of two separately
     controlled sets, not a set controlled at ``alpha`` overall.
 
+    Pass ``family`` in the most compact dtype that distinguishes the families —
+    a bool for two of them — and use ``labels`` to name them in the result. At
+    the scale this runs (1.69e9 tests on a supra-enabled human run) a ``<U6``
+    string array would be **40.6 GB**, against 1.69 GB for a bool, and would
+    risk exhausting memory on the main analysis path before the correction even
+    starts.
+
     Args:
         pvalues: Array of p-values.
-        family: Array of the same length assigning each test to a family; any
-            hashable label works (e.g. ``"single"`` / ``"supra"``).
+        family: Array of the same length assigning each test to a family.
         alpha: FDR threshold applied within each family.
+        labels: Optional map from a ``family`` value to the name it should carry
+            in the returned ``thresholds``. Values absent from the map keep
+            their raw form.
 
     Returns:
         ``(adjusted, thresholds)`` where ``thresholds`` maps each family label
@@ -222,5 +234,10 @@ def benjamini_hochberg_by_family(
             pvalues[members], alpha=alpha
         )
         adjusted[members] = family_adjusted
-        thresholds[label] = family_threshold
+        name = (
+            labels.get(label.item() if hasattr(label, "item") else label, label)
+            if labels
+            else label
+        )
+        thresholds[name] = family_threshold
     return adjusted, thresholds
