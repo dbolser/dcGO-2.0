@@ -14,7 +14,8 @@ engineering cleanup: the code runs; this is about showing the results are
 | **§2 Temporal held-out benchmark (CAFA-style)** | ✅ **done (#8)** — 2021→2026 CAFA split; see results below |
 | §3 Compare to original dcGO | ✅ **done (2026-08-04)** — SSF re-keying + published-dcGO join; precision 0.54–0.63, recall uninterpretable (see §3.1) |
 | **§4 Component ablation + uncertainty** | ✅ **done (2026-08-04)** — ladder, permutation null, paired bootstrap CIs; **the result is negative for two of three components** |
-| §5 Pre-paper method decisions | ⬜ open (#11) |
+| **§5 Pre-paper method decisions** | 🟡 partly done (2026-08-05) — shrinkage removed, True Path background fixed, BH families split, `--min-support` added; minimum-support *policy* still open |
+| **Untouched evaluation axis** | ✅ **done (2026-08-05)** — mouse, matched 2021→2026 window; performance improves in all 9 cells. Nested human split (205→215→current) in progress |
 | §6 Reproducibility | ⬜ open (#12) |
 
 **Where §2 landed:** with the calibrated **p-score** predictor (default) and a
@@ -856,6 +857,23 @@ What is **not** established, and should not be claimed:
 ---
 
 ## 4. Ablation study  *(isolates the contribution)*  — **DONE (2026-08-04)**
+
+> **The True Path rung below is a pre-fix measurement and is superseded.** It
+> was run before the parental-background defect was corrected (#46, 2026-08-05).
+> At that time the filter built its background from the *unpropagated*
+> annotation map, so a parent nobody was directly annotated to had an empty
+> background, the test raised and the child was discarded untested — 54,951
+> times, leaving ~14% of associations and collapsing coverage to 0.22–0.50.
+> Throwing away 86% of predictions lowers F_max whatever the method does, so
+> "True Path is significantly worse in 12/12 cells" cannot distinguish the
+> filter's effect from the defect's.
+>
+> After the fix the same run rejects **701** untested and retains **50.8%**
+> (82,829 / 163,153). The rung is being re-measured; until then the True Path
+> row here should not be cited. The supra-domain and shrinkage rows are
+> unaffected by that defect — though the shrinkage rung describes a step that
+> has since been removed (#44), on the strength of this ablation finding it
+> moved 0/12 cells.
 
 The supra-domain + shrinkage machinery is the main methodological novelty. It
 had to be shown to help, not just to exist. It does not.

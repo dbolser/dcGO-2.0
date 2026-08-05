@@ -77,17 +77,28 @@ yet establish robust general performance, calibration, or superiority.
   `validation/ablation.py`; VALIDATION_PLAN §4. **The result is negative:**
   supra-domains 0/12 cells improved, shrinkage 0/12, True Path 12/12 *worse*.
   The best configuration on this benchmark is single domains only.
-- [ ] Establish the statistical validity of the claimed empirical-Bayes
-  shrinkage, or rename it as a heuristic. The implementation geometrically
-  interpolates observed and constituent p-values using a hand-set decay. It is
-  not presently a fitted empirical-Bayes model, and the transformed quantities
-  have not been shown to be valid p-values. BH correction of those values does
-  not therefore guarantee nominal FDR control.
-  **Still open, and now empirically confirmed (2026-08-04):** enabling it takes
-  the FDR<0.01 association count from 163,277 to 463,924 (+184%), because 56.4%
-  of supra-domain p-values are *decreased*, not increased. A shrinkage toward a
-  null prior cannot increase rejections. It also buys nothing: 0/12 ablation
-  cells move. Rename it, or replace it with a fitted hierarchical model.
+- [x] Establish the statistical validity of the claimed empirical-Bayes
+  shrinkage, or rename it as a heuristic. **Resolved by removal (2026-08-05,
+  #44)** — neither of the two options offered, because the step did not survive
+  examination well enough to be worth renaming.
+
+  What was measured: the implementation geometrically interpolated each
+  supra-domain p-value toward the geometric mean of its constituents' p-values
+  using a hand-set decay. Because a well-supported constituent has a far smaller
+  p-value than the thin combination containing it, that pulled combinations
+  *toward* significance — a 3-protein combination at p=0.01 became p=1e-24 at the
+  default strength — and enabling it took the FDR<0.01 count from 163,277 to
+  463,924 (+184%), with 56.4% of supra-domain p-values decreased. A shrinkage
+  toward a null prior cannot increase rejections.
+
+  On validity: the transformed quantities were never shown to be valid p-values,
+  so BH over them was not shown to control FDR. The stronger claim that they
+  cannot be valid under *any* null is not something this work established, and is
+  not asserted. The §4 ablation separately found the step moved 0 of 12 cells, so
+  nothing was lost by removing it. A statistically defensible version would shrink
+  the observed *rate* toward a pooled rate and recompute Fisher on the adjusted
+  counts; that is a different method and was not attempted.
+
 - [ ] Pre-specify the primary endpoint. The unfiltered result loses to the naive
   method for MF, while the headline superiority depends on IC filtering. The
   IC-filtered analysis is scientifically reasonable, but should be a
@@ -104,8 +115,10 @@ yet establish robust general performance, calibration, or superiority.
   shuffled-domain null establish signal, but not state-of-the-art utility.
   Include original dcGO output where feasible and at least one independent
   protein-function or domain-based predictor.
-- [ ] Add an external validation axis: another species, a later untouched time
-  interval, or both.
+- [x] Add an external validation axis: another species, a later untouched time
+  interval, or both. *(Mouse, matched 2021→2026 window: performance improves in
+  all 9 aspect × IC cells and clears the permutation null in all 24. Nested
+  human split 205→215→current in progress.)*
 
 ## P1: Engineering and reproducibility
 
