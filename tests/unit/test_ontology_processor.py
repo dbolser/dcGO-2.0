@@ -653,26 +653,43 @@ class TestBackgroundIndexEquivalence:
     """
 
     @staticmethod
-    def _brute_force_cells(domain, child, parent, protein_domain_map, protein_go_map):
-        """The original definition of a/b/c/d, written out longhand."""
-        background = {p for p, terms in protein_go_map.items() if parent in terms}
+    def _brute_force_cells(
+        domain, child, parent, protein_domain_map, protein_go_map, get_ancestors=None
+    ):
+        """The definition of a/b/c/d, written out longhand.
+
+        A protein *has* a term if it is annotated to that term or to any
+        descendant of it — the True Path Rule. That applies to the parent, which
+        defines the background, and equally to the child, whose carriers are
+        counted within it. Passing ``get_ancestors`` makes both explicit; without
+        it this pins the older direct-only definition.
+        """
+
+        def has(term, terms):
+            if term in terms:
+                return True
+            if get_ancestors is None:
+                return False
+            return any(term in get_ancestors(annotated) for annotated in terms)
+
+        background = {p for p, terms in protein_go_map.items() if has(parent, terms)}
         a = sum(
             1
             for p in background
             if domain in protein_domain_map.get(p, [])
-            and child in protein_go_map.get(p, set())
+            and has(child, protein_go_map.get(p, set()))
         )
         b = sum(
             1
             for p in background
-            if child in protein_go_map.get(p, set())
+            if has(child, protein_go_map.get(p, set()))
             and domain not in protein_domain_map.get(p, [])
         )
         c = sum(
             1
             for p in background
             if domain in protein_domain_map.get(p, [])
-            and child not in protein_go_map.get(p, set())
+            and not has(child, protein_go_map.get(p, set()))
         )
         return a, b, c, len(background) - (a + b + c)
 
@@ -682,7 +699,9 @@ class TestBackgroundIndexEquivalence:
         from src.ontology_processor import _BackgroundIndex
 
         protein_domain_map, protein_go_map = sample_protein_maps
-        index = _BackgroundIndex(protein_domain_map, protein_go_map)
+        index = _BackgroundIndex(
+            protein_domain_map, protein_go_map, ontology_processor.get_ancestors
+        )
 
         for domain in ("IPR001", "IPR002", "IPR_absent"):
             for child, parent in (
@@ -691,7 +710,12 @@ class TestBackgroundIndexEquivalence:
                 ("GO:0006810", "GO:0009987"),
             ):
                 expected = self._brute_force_cells(
-                    domain, child, parent, protein_domain_map, protein_go_map
+                    domain,
+                    child,
+                    parent,
+                    protein_domain_map,
+                    protein_go_map,
+                    ontology_processor.get_ancestors,
                 )
                 background = index.term_proteins.get(parent, set())
                 dom = index.domain_proteins.get(domain, set())
@@ -711,7 +735,11 @@ class TestBackgroundIndexEquivalence:
         from src.ontology_processor import _BackgroundIndex
 
         protein_domain_map, protein_go_map = sample_protein_maps
-        shared = _BackgroundIndex(protein_domain_map, protein_go_map)
+        # Built with ancestors, matching what the method constructs lazily —
+        # an unpropagated index would now legitimately disagree.
+        shared = _BackgroundIndex(
+            protein_domain_map, protein_go_map, ontology_processor.get_ancestors
+        )
         lazy = ontology_processor._test_against_parent_background(
             "IPR001", "GO:0006812", "GO:0006811", protein_domain_map, protein_go_map, 3
         )
@@ -729,13 +757,95 @@ class TestBackgroundIndexEquivalence:
     def test_small_background_still_raises(
         self, ontology_processor, sample_protein_maps
     ):
+        """The guard survives propagation.
+
+        GO:0009987 is no longer a small background — propagation puts every
+        protein annotated beneath it there — so the case is now a leaf term,
+        which has no descendants to gather.
+        """
         protein_domain_map, protein_go_map = sample_protein_maps
         with pytest.raises(ValueError, match="Insufficient background size"):
             ontology_processor._test_against_parent_background(
                 "IPR001",
                 "GO:0006812",
-                "GO:0009987",  # only P010 carries it
+                "GO:0006812",  # a leaf: only the 3 directly annotated proteins
                 protein_domain_map,
                 protein_go_map,
                 min_background_size=5,
             )
+
+
+class TestBackgroundIsPropagated:
+    """The parental background counts proteins annotated *beneath* the parent.
+
+    Indexing only direct annotations gave any parent term nobody is directly
+    annotated to an empty background, so `_test_against_parent_background`
+    raised and the caller's conservative `except` discarded the child untested —
+    54,951 times on the human t0 run, leaving ~14% of associations and
+    collapsing prediction coverage to 0.22-0.50. The §4 ablation's "True Path
+    hurts in 12/12 cells" was measured with that in place.
+    """
+
+    def test_a_parent_with_no_direct_annotation_still_has_a_background(
+        self, ontology_processor
+    ):
+        """The exact shape that used to raise.
+
+        Nobody is annotated to GO:0008150 directly; three proteins are annotated
+        beneath it. The True Path Rule says all three imply it.
+        """
+        from src.ontology_processor import _BackgroundIndex
+
+        protein_domain_map = {"P1": ["IPR1"], "P2": ["IPR1"], "P3": ["IPR2"]}
+        protein_go_map = {
+            "P1": {"GO:0006812"},  # cation transport
+            "P2": {"GO:0006811"},  # ion transport
+            "P3": {"GO:0006810"},  # transport
+        }
+
+        direct = _BackgroundIndex(protein_domain_map, protein_go_map)
+        assert direct.term_proteins.get("GO:0008150", frozenset()) == frozenset()
+
+        propagated = _BackgroundIndex(
+            protein_domain_map, protein_go_map, ontology_processor.get_ancestors
+        )
+        assert propagated.term_proteins["GO:0008150"] == {"P1", "P2", "P3"}
+
+    def test_direct_annotations_are_still_present(self, ontology_processor):
+        """Propagation adds; it must not replace."""
+        from src.ontology_processor import _BackgroundIndex
+
+        index = _BackgroundIndex(
+            {"P1": ["IPR1"]},
+            {"P1": {"GO:0006812"}},
+            ontology_processor.get_ancestors,
+        )
+        assert "P1" in index.term_proteins["GO:0006812"]
+
+    def test_domains_are_not_propagated(self, ontology_processor):
+        """Domains have no hierarchy here; only the term index changes."""
+        from src.ontology_processor import _BackgroundIndex
+
+        maps = ({"P1": ["IPR1", "IPR2"]}, {"P1": {"GO:0006812"}})
+        direct = _BackgroundIndex(*maps)
+        propagated = _BackgroundIndex(*maps, ontology_processor.get_ancestors)
+        assert direct.domain_proteins == propagated.domain_proteins
+
+    def test_the_background_test_no_longer_raises_for_such_a_parent(
+        self, ontology_processor
+    ):
+        """End of the chain: the test returns a p-value instead of being discarded."""
+        protein_domain_map = {f"P{i}": ["IPR1"] for i in range(1, 7)}
+        protein_domain_map.update({f"P{i}": ["IPR2"] for i in range(7, 13)})
+        protein_go_map = {f"P{i}": {"GO:0006812"} for i in range(1, 7)}
+        protein_go_map.update({f"P{i}": {"GO:0006810"} for i in range(7, 13)})
+
+        p_value = ontology_processor._test_against_parent_background(
+            domain="IPR1",
+            child_term="GO:0006812",
+            parent_term="GO:0008150",  # no direct annotations anywhere
+            protein_domain_map=protein_domain_map,
+            protein_go_map=protein_go_map,
+            min_background_size=3,
+        )
+        assert 0.0 <= p_value <= 1.0

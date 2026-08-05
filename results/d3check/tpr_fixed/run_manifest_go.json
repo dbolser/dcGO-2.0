@@ -1,0 +1,132 @@
+{
+  "analysis": {
+    "ontology": {
+      "annotation_inputs": [
+        "gaf"
+      ],
+      "hierarchy_inputs": [
+        "go_obo"
+      ],
+      "key": "go",
+      "label": "go",
+      "name": "Gene Ontology",
+      "ontology_id": "GO",
+      "propagation": "go_dag_with_parental_background_filter",
+      "supports_true_path": true,
+      "term_prefix": "GO:",
+      "true_path_enabled": true
+    },
+    "thresholds": {
+      "enable_supra_domains": true,
+      "evidence_filter": "manual",
+      "fdr_families": [
+        "single",
+        "supra"
+      ],
+      "fdr_method": "benjamini_hochberg",
+      "fdr_threshold": 0.01,
+      "fisher_alternative": "greater",
+      "max_supra_domain_length": 3,
+      "min_domain_length": 10,
+      "min_proteins_per_association": null,
+      "parental_background_alpha": 0.05,
+      "parental_background_min_size": 3
+    }
+  },
+  "command": [
+    "/home/danbolser/Build/dcGO-2.0/.venv/bin/python3",
+    "run_dcgo_human.py",
+    "--species",
+    "human_t0_2021",
+    "--output-dir",
+    "results/d3check/tpr_fixed",
+    "--enable-true-path",
+    "--go-ontology",
+    "data/raw/go_ontology/go-basic.obo"
+  ],
+  "git": {
+    "available": true,
+    "branch": "fix/true-path-propagated-background",
+    "commit": "97093c3f6e02d27767882af27ec9a34bce1035cc",
+    "dirty": true,
+    "untracked_files": 0
+  },
+  "inputs": [
+    {
+      "derived_from": "https://ftp.ebi.ac.uk/pub/databases/interpro/current_release/protein2ipr.dat.gz",
+      "modified_at": "2026-07-24T07:56:30.505163+00:00",
+      "path": "data/interim/protein2ipr_human_t0_2021.dat.gz",
+      "role": "domain_annotations",
+      "sha256": "a932a51500cdee203b6235c93b3ed4a26db993c45439484c19aefe804e3e8611",
+      "size_bytes": 2854559
+    },
+    {
+      "modified_at": "2026-07-09T09:44:17.040277+00:00",
+      "path": "data/raw/goa_annotations/goa_human_t0_2021.gaf.gz",
+      "release_metadata": {
+        "date_generated": "2021-04-21 13:14",
+        "gaf_version": "2.2",
+        "generated_by": "UniProt",
+        "go_version": "http://purl.obolibrary.org/obo/go/releases/2021-04-18/extensions/go-plus.owl"
+      },
+      "role": "gaf",
+      "sha256": "69ae7d90743400c6519a6bfe3a1b1578476585f151de39323bfd890cbae13d86",
+      "size_bytes": 8577421,
+      "source_url": "https://ftp.ebi.ac.uk/pub/databases/GO/goa/HUMAN_T0_2021/goa_human_t0_2021.gaf.gz"
+    },
+    {
+      "modified_at": "2026-07-07T19:03:02.551052+00:00",
+      "path": "data/raw/go_ontology/go-basic.obo",
+      "release_metadata": {
+        "data_version": "releases/2026-06-15",
+        "format_version": "1.2"
+      },
+      "role": "go_obo",
+      "sha256": "c72fc198a86983d55e43aac585d1ffdbeb6e3601475b3f18b6045acdc0a0734c",
+      "size_bytes": 32215811,
+      "source_url": "https://current.geneontology.org/ontology/go-basic.obo"
+    }
+  ],
+  "outputs": [],
+  "parameters": {
+    "batch_size": 50000,
+    "chebi_obo": "data/raw/chebi/chebi_lite.obo",
+    "doid_obo": "data/raw/disease_ontology/doid.obo",
+    "domain_key": "interpro",
+    "enable_supra_domains": true,
+    "enable_true_path": true,
+    "enzyme_dat": "data/raw/enzyme/enzyme.dat",
+    "evidence_filter": "manual",
+    "fdr_threshold": 0.01,
+    "go_ontology": "data/raw/go_ontology/go-basic.obo",
+    "keyword_list": "data/raw/uniprot_keywlist/keywlist.txt",
+    "num_cores": 8,
+    "ontology": "go",
+    "output_dir": "results/d3check/tpr_fixed",
+    "permute_annotations": null,
+    "reactome_relations": "data/raw/reactome_relations/ReactomePathwaysRelation.txt",
+    "species": "human_t0_2021",
+    "subcell": "data/raw/uniprot_subcell/subcell.txt",
+    "uniprot_dat": "data/raw/uniprot_sprot_dat/uniprot_sprot.dat.gz",
+    "xref_db": null,
+    "xref_term_from_type": false,
+    "xref_type": null
+  },
+  "schema_version": "1.0",
+  "software": {
+    "dcgo_pipeline_version": "0.1.0",
+    "dependency_lock": {
+      "available": true,
+      "path": "uv.lock",
+      "sha256": "b4a97cc76f77459f8f318bfb5c18a693d6337806c6e61ced8d89272cd72e9f87",
+      "size_bytes": 401865
+    },
+    "executable": "/home/danbolser/Build/dcGO-2.0/.venv/bin/python3",
+    "platform": "Linux-6.8.0-100-generic-x86_64-with-glibc2.39",
+    "python_implementation": "CPython",
+    "python_version": "3.12.3"
+  },
+  "started_at": "2026-08-05T01:13:46.765526+00:00",
+  "status": "running",
+  "working_directory": "/home/danbolser/Build/dcGO-2.0"
+}
