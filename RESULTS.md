@@ -17,14 +17,19 @@ single near-universal term (`protein binding`: 84.6% of experimental MF
 annotation lines, carried by 87.7% of annotated proteins, and the *only* MF
 term for 34.5% of them — see `validation/protein_binding_dominance.py`) — and dcGO overtakes it decisively the moment that noise is removed.
 
-**That MF caveat is human-specific, and mouse proves it.** Evaluated on mouse —
-an organism that influenced no method choice, over a matched 2021-04 → 2026
-window — dcGO *beats* naive on MF F_max at face value (0.471 vs 0.359), and
-takes MF AUPRC too (0.304 vs 0.256). The difference tracks annotation
-saturation, not method quality: `protein binding` is 84.6% of human experimental
-MF annotation lines but only 48.7% of mouse's. As that concentration falls,
-naive's MF F_max falls with it (0.464 → 0.359) while dcGO's rises
-(0.358 → 0.471).
+**The MF pattern does not reproduce in mouse.** Evaluated on mouse — an
+organism that influenced no method choice, over a matched 2021-04 → 2026 window
+— dcGO *beats* naive on MF F_max at face value (0.471 vs 0.359) and takes MF
+AUPRC too (0.304 vs 0.256). The two species also differ in how concentrated
+their MF annotation is: `protein binding` is 84.6% of human experimental MF
+annotation lines but only 48.7% of mouse's, and across the pair naive's MF
+F_max falls (0.464 → 0.359) as dcGO's rises (0.358 → 0.471).
+
+That is *consistent with* the saturation explanation but does not establish it.
+Two species is an association, not a demonstration of cause, and mouse differs
+from human in curation depth and practice as well as in term concentration. The
+supportable statement is narrower: the MF result is not a stable property of the
+method — it does not survive a change of organism.
 
 **This headline is about F_max only.** On AUPRC, from the same run, naive leads
 in all three aspects at IC≥0 and in CC at IC≥2 and IC≥4 as well
@@ -45,29 +50,42 @@ operating point, not as a general claim of superiority.
   **information-content (IC) floor** applied identically to truth and every method,
   to separate informative predictions from base-rate recovery of generic terms.
 
-Benchmark sizes (IC≥0): **BP 324 / MF 418 / CC 572** proteins.
+Benchmark sizes (IC≥0): **BP 324 / MF 418 / CC 572** proteins. The IC floors
+change the cohort as well as the truth — MF keeps 170 of 418 proteins at IC≥2 —
+so rows at different floors are not paired comparisons.
 
-## Protein-centric result — F_max (dcGO / naive / random)
+## Protein-centric result — F_max (dcGO / naive / permutation null)
 
-| Aspect | IC floor | dcGO | naive | random | dcGO ÷ random |
-|--------|:--------:|-----:|------:|-------:|--------------:|
-| **BP** | ≥0 | **0.248** | 0.115 | 0.158 | 1.6× |
-| BP | ≥2 | **0.170** | 0.071 | 0.053 | 3.2× |
-| BP | ≥4 | **0.115** | 0.031 | 0.019 | 6.1× |
-| BP | ≥6 | **0.077** | 0.010 | 0.003 | 24× |
-| **MF** | ≥0 | 0.360 | **0.464** | 0.262 | 1.4× |
-| MF | ≥2 | **0.365** | 0.053 | 0.088 | 4.2× |
-| MF | ≥4 | **0.337** | 0.045 | 0.072 | 4.7× |
-| MF | ≥6 | **0.217** | 0.018 | 0.009 | 25× |
-| **CC** | ≥0 | **0.380** | 0.343 | 0.291 | 1.3× |
-| CC | ≥2 | **0.239** | 0.153 | 0.072 | 3.3× |
-| CC | ≥4 | **0.134** | 0.099 | 0.031 | 4.3× |
-| CC | ≥6 | **0.124** | 0.044 | 0.015 | 8.1× |
+*Regenerated 2026-08-05 on the final code (#44–#47, #50): shrinkage removed,
+single and supra-domain BH families corrected separately, True Path background
+propagated. Every row here and in the mouse section below comes from that one
+pipeline version. The "random" column is now the mean of a **100-permutation**
+random-domain null rather than a single shuffle, so the ratios supersede the
+earlier single-draw ones — MF IC≥2 is 7.4×, not the 4.2× previously published.*
 
-*IC in bits; IC≥2 ⇒ term in ≤25% of proteins, IC≥6 ⇒ ≤1.6%. Bold = winner.*
-**Naive is a base-rate mirage:** its F_max collapses toward the random null as
+| Aspect | IC floor | dcGO | naive | permutation null (mean) | dcGO ÷ null |
+|--------|:--------:|-----:|------:|------------------------:|------------:|
+| **BP** | ≥0 | **0.251** | 0.115 | 0.156 | 1.6× |
+| BP | ≥2 | **0.172** | 0.071 | 0.054 | 3.2× |
+| BP | ≥4 | **0.115** | 0.031 | 0.017 | 6.8× |
+| BP | ≥6 | **0.077** | 0.010 | 0.006 | 13.6× |
+| **MF** | ≥0 | 0.358 | **0.464** | 0.193 | 1.9× |
+| MF | ≥2 | **0.366** | 0.053 | 0.050 | 7.4× |
+| MF | ≥4 | **0.338** | 0.045 | 0.037 | 9.1× |
+| MF | ≥6 | **0.218** | 0.018 | 0.010 | 21.3× |
+| **CC** | ≥0 | **0.382** | 0.343 | 0.279 | 1.4× |
+| CC | ≥2 | **0.242** | 0.153 | 0.069 | 3.5× |
+| CC | ≥4 | **0.138** | 0.099 | 0.030 | 4.7× |
+| CC | ≥6 | **0.124** | 0.044 | 0.019 | 6.6× |
+
+*IC in bits; IC≥2 ⇒ term in ≤25% of proteins, IC≥6 ⇒ ≤1.6%. Bold = winner
+between dcGO and naive.*
+**Naive is a base-rate mirage:** its F_max collapses toward the null as
 informative terms are required (BP 0.115→0.010, MF 0.464→0.018, CC 0.343→0.044
 over IC 0→6). dcGO degrades gracefully because its predictions are specific.
+Note that at IC≥0 in BP the null itself (0.156) *exceeds* naive (0.115) — a
+shuffle carrying no domain information at all outscores the standard baseline,
+purely by reproducing each term's marginal frequency.
 
 > **Four corrections from the §4 uncertainty work (2026-08-04).** Read them
 > before citing this table. Detail in `VALIDATION_PLAN.md` §2 (permutation null)
@@ -135,8 +153,14 @@ mouse 205, which is dated 2023-09.
 
 **Performance does not degrade off the tuned split — it improves in all nine
 cells**, and clears the 100-permutation random-domain null in all 24 aspect ×
-IC × metric cells at the attainable floor 1/(n+1). This is what the "separate
-model selection from final evaluation" P0 asked for.
+IC × metric cells at the attainable floor 1/(n+1).
+
+This closes the review's **external validation axis** item ("another species, a
+later untouched time interval, or both"). It does **not** close the separate
+model-selection P0, which asks for choices to be frozen on a development
+interval and evaluated once on an untouched one. Mouse was never tuned on, but
+the choices applied to it were still selected using human 2021→2026. The nested
+human split (205 → 215 → current) is what addresses that, and is in progress.
 
 **It is not a claim of general superiority.** Mouse is a different organism with
 shallower curation (9,136 proteins with experimental MF terms against human's
@@ -145,7 +169,9 @@ is the narrow one: the method does not depend on having been tuned on its
 evaluation data.
 
 Metrics: `validation/mouse/temporal_benchmark_metrics.tsv`,
-`validation/mouse/temporal_benchmark_permutation_null.tsv`.
+`validation/mouse/temporal_benchmark_permutation_null.tsv`. Full provenance —
+the exact releases, the release-matching trap, the commands and the code version
+— in `validation/mouse/PROVENANCE.md`.
 
 ## What each restored method piece contributes
 
