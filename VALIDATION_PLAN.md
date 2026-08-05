@@ -422,10 +422,18 @@ F_max, 100 permutations, seeds 0–99, `--transfer pscore`:
   "1.4–22× against the null mean, with the low end at IC≥0 and the high end at
   IC≥6"; the individual per-cell ratios in that table are single draws and the
   table above supersedes them.**
-- The null is **not** trivially weak. At IC≥0 it scores 0.155–0.276 F_max —
-  comparable to, and for BP and CC *above*, the naive baseline — because it
-  preserves term base rates. dcGO's margin over it grows with the IC floor
-  exactly as the specificity argument predicts.
+- The null is **not** trivially weak. At IC≥0 it scores 0.155–0.276 F_max,
+  because it preserves each term's marginal frequency even though it destroys
+  every domain→term pairing. In **BP** it is *above* the naive baseline (0.155
+  vs 0.115); in MF and CC naive is still ahead (0.201 vs 0.464, 0.276 vs
+  0.343). dcGO's margin over the null grows with the IC floor exactly as the
+  specificity argument predicts.
+
+  That BP row is worth stating plainly, because it is the sharpest available
+  measurement of what a CAFA-style F_max actually rewards: a shuffle carrying
+  **no domain information whatsoever** outscores the standard baseline, purely
+  by reproducing how often each term is annotated. Any method evaluated this
+  way is being graded substantially on base-rate recovery.
 
 ### Implementation sketch (concrete next steps)
 
