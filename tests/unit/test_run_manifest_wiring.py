@@ -45,8 +45,6 @@ def make_args(tmp_path, **overrides):
         fdr_threshold=0.01,
         enable_true_path=False,
         enable_supra_domains=True,
-        enable_shrinkage=False,
-        shrinkage_strength=0.5,
         num_cores=4,
         batch_size=50000,
         output_dir=tmp_path / "out",
@@ -155,15 +153,13 @@ def test_every_registered_ontology_can_be_recorded(tmp_path, fake_inputs):
 
 
 def test_thresholds_are_recorded(tmp_path, fake_inputs):
-    _, data = run_manifest_json(
-        tmp_path, fake_inputs, fdr_threshold=0.05, enable_shrinkage=True
-    )
+    _, data = run_manifest_json(tmp_path, fake_inputs, fdr_threshold=0.05)
 
     thresholds = data["analysis"]["thresholds"]
     assert thresholds["fdr_threshold"] == 0.05
     assert thresholds["evidence_filter"] == "manual"
-    assert thresholds["enable_shrinkage"] is True
-    assert thresholds["shrinkage_strength"] == 0.5
+    # Single domains and supra-domains are corrected as separate families.
+    assert thresholds["fdr_families"] == ["single", "supra"]
     assert thresholds["max_supra_domain_length"] == 3
     assert thresholds["fisher_alternative"] == "greater"
     # Every parameter of the invocation is preserved verbatim as well.

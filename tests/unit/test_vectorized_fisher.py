@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from src.vectorized_fisher import (
+    benjamini_hochberg_by_family,
     fisher_exact_vectorized_batch,
     fisher_exact_parallel,
     build_contingency_table,
@@ -466,3 +467,72 @@ class TestBenjaminiHochbergVectorizationEquivalence:
         adjusted, _ = benjamini_hochberg_correction(pvalues, alpha=0.05)
         in_p_order = adjusted[np.argsort(pvalues)]
         assert np.all(np.diff(in_p_order) >= 0)
+
+
+class TestBenjaminiHochbergByFamily:
+    """Single domains and supra-domains are corrected as separate families.
+
+    A supra-domain is not an exchangeable sibling of its own constituents, and
+    pooling them let the 5.3x larger supra space tighten the threshold for
+    single-domain hypotheses that gain nothing from it.
+    """
+
+    def test_each_family_matches_correcting_it_alone(self) -> None:
+        """The whole contract: a family's result must not depend on the other."""
+        rng = np.random.default_rng(0)
+        single_p = rng.random(400) ** 3
+        supra_p = rng.random(1600) ** 2
+        pvalues = np.concatenate([single_p, supra_p])
+        family = np.array(["single"] * 400 + ["supra"] * 1600)
+
+        adjusted, thresholds = benjamini_hochberg_by_family(pvalues, family, alpha=0.01)
+
+        single_alone, single_threshold = benjamini_hochberg_correction(
+            single_p, alpha=0.01
+        )
+        supra_alone, supra_threshold = benjamini_hochberg_correction(
+            supra_p, alpha=0.01
+        )
+
+        assert np.array_equal(adjusted[:400], single_alone)
+        assert np.array_equal(adjusted[400:], supra_alone)
+        assert thresholds["single"] == single_threshold
+        assert thresholds["supra"] == supra_threshold
+
+    def test_a_large_second_family_no_longer_penalises_the_first(self) -> None:
+        """The reason for the change, stated as a test.
+
+        Pooling makes every single-domain q-value depend on how many
+        supra-domain hypotheses happen to be in the run. Splitting removes that.
+        """
+        rng = np.random.default_rng(1)
+        single_p = rng.random(200) ** 3
+
+        small = np.concatenate([single_p, rng.random(200)])
+        large = np.concatenate([single_p, rng.random(20000)])
+        family_small = np.array(["single"] * 200 + ["supra"] * 200)
+        family_large = np.array(["single"] * 200 + ["supra"] * 20000)
+
+        adj_small, _ = benjamini_hochberg_by_family(small, family_small, alpha=0.01)
+        adj_large, _ = benjamini_hochberg_by_family(large, family_large, alpha=0.01)
+        assert np.array_equal(adj_small[:200], adj_large[:200])
+
+        # Pooled, the same single-domain p-values would have been penalised.
+        pooled_small, _ = benjamini_hochberg_correction(small, alpha=0.01)
+        pooled_large, _ = benjamini_hochberg_correction(large, alpha=0.01)
+        assert not np.array_equal(pooled_small[:200], pooled_large[:200])
+
+    def test_single_family_reduces_to_plain_bh(self) -> None:
+        rng = np.random.default_rng(2)
+        pvalues = rng.random(500)
+        family = np.array(["single"] * 500)
+        adjusted, thresholds = benjamini_hochberg_by_family(pvalues, family, alpha=0.05)
+        want, want_threshold = benjamini_hochberg_correction(pvalues, alpha=0.05)
+        assert np.array_equal(adjusted, want)
+        assert thresholds == {"single": want_threshold}
+
+    def test_mismatched_lengths_raise(self) -> None:
+        with pytest.raises(ValueError, match="same length"):
+            benjamini_hochberg_by_family(
+                np.array([0.1, 0.2]), np.array(["single"]), alpha=0.05
+            )

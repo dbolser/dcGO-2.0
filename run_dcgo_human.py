@@ -82,7 +82,6 @@ from scipy.stats import hypergeom
 
 from src.annotation_source import restrict_to_universe
 from src.domain_annotation_parser import DOMAIN_KEYS, DomainAnnotationParser
-from src.hierarchical_inference import HierarchicalInferenceEngine
 from src.hierarchy import propagate_via_ancestors
 from src.ontology_processor import OntologyProcessor
 from src.ontology_registry import (
@@ -94,10 +93,14 @@ from src.ontology_registry import (
 )
 from src.run_manifest import RunManifest, describe_file, manifest_filename
 from src.sparse_fisher import (
+    DomainType,
     build_sparse_matrices,
     compute_contingency_tables_sparse,
 )
-from src.vectorized_fisher import benjamini_hochberg_correction, fisher_exact_parallel
+from src.vectorized_fisher import (
+    benjamini_hochberg_by_family,
+    fisher_exact_parallel,
+)
 
 logger.remove()
 logger.add(sys.stderr, level="INFO")
@@ -109,7 +112,6 @@ logger.add(sys.stderr, level="INFO")
 MAX_SUPRA_DOMAIN_LENGTH = 3  # longest contiguous domain combination tested
 MIN_DOMAIN_LENGTH = 10  # residues; shorter InterPro matches are discarded
 FISHER_ALTERNATIVE = "greater"  # one-sided: enrichment only
-SHRINKAGE_MIN_OBSERVATIONS = 3  # supra-domain occurrences before shrinking
 PARENTAL_MIN_BACKGROUND_SIZE = 3  # GO parental-background (optimal-level) test
 PARENTAL_ALPHA_THRESHOLD = 0.05  # raw-p cutoff for that parent/child test
 
@@ -282,7 +284,6 @@ def validate_arguments(
     """Reject nonsensical parameters before the expensive stages start.
 
     argparse checks types, not ranges. Without this an ``--fdr-threshold 5``
-    accepts every test as significant, a ``--shrinkage-strength 2`` extrapolates
     past the prior instead of interpolating toward it, and a non-positive
     ``--batch-size`` makes the progress callback divide by zero — each of them an
     hour into a run, or worse, silently. ``parser.error`` exits 2 with usage,
@@ -297,12 +298,6 @@ def validate_arguments(
         parser.error(f"--batch-size must be positive, got {args.batch_size}")
     if args.num_cores <= 0:
         parser.error(f"--num-cores must be positive, got {args.num_cores}")
-    if not 0.0 <= args.shrinkage_strength <= 1.0:
-        parser.error(
-            f"--shrinkage-strength must be in [0, 1], got "
-            f"{args.shrinkage_strength}. Outside that range the p-value is "
-            "extrapolated past the prior rather than interpolated toward it."
-        )
     if not args.species or "/" in args.species:
         parser.error(
             f"--species must be a bare name used in the input filenames, got "
@@ -403,6 +398,10 @@ def start_run_manifest(
                 "evidence_filter": args.evidence_filter,
                 "fdr_threshold": args.fdr_threshold,
                 "fdr_method": "benjamini_hochberg",
+                # Single domains and supra-domains are corrected as
+                # separate families; each controls FDR at fdr_threshold
+                # within itself.
+                "fdr_families": ["single", "supra"],
                 "fisher_alternative": FISHER_ALTERNATIVE,
                 # No minimum-support filter is applied: an association is kept
                 # on FDR significance alone. Recorded as null so the manifest
@@ -411,9 +410,6 @@ def start_run_manifest(
                 "min_domain_length": MIN_DOMAIN_LENGTH,
                 "max_supra_domain_length": MAX_SUPRA_DOMAIN_LENGTH,
                 "enable_supra_domains": bool(args.enable_supra_domains),
-                "enable_shrinkage": bool(args.enable_shrinkage),
-                "shrinkage_strength": args.shrinkage_strength,
-                "shrinkage_min_observations": SHRINKAGE_MIN_OBSERVATIONS,
                 "parental_background_min_size": PARENTAL_MIN_BACKGROUND_SIZE,
                 "parental_background_alpha": PARENTAL_ALPHA_THRESHOLD,
             },
@@ -590,17 +586,6 @@ def main():
         action="store_false",
         help="Disable supra-domain analysis (single domains only)",
     )
-    parser.add_argument(
-        "--enable-shrinkage",
-        action="store_true",
-        help="Enable hierarchical shrinkage for supra-domains (empirical Bayes regularization)",
-    )
-    parser.add_argument(
-        "--shrinkage-strength",
-        type=float,
-        default=0.5,
-        help="Shrinkage strength factor 0-1 (default: 0.5). Higher = more regularization",
-    )
 
     args = parser.parse_args()
 
@@ -640,10 +625,6 @@ def main():
     logger.info(
         f"  Supra-domains: {'ENABLED' if args.enable_supra_domains else 'DISABLED'}"
     )
-    if args.enable_supra_domains and args.enable_shrinkage:
-        logger.info(
-            f"  Hierarchical shrinkage: ENABLED (strength={args.shrinkage_strength})"
-        )
     logger.info(f"  Output directory: {args.output_dir}")
 
     # Everything the chosen ontology might need, resolved in one place. The
@@ -873,55 +854,36 @@ def main():
     )
     logger.info(f"  Rate: {len(pvalues) / test_time:,.0f} tests/second")
 
-    # STAGE 4.5: Hierarchical Shrinkage (Optional)
-    if args.enable_supra_domains and args.enable_shrinkage:
-        logger.info("")
-        logger.info("STAGE 4.5: Hierarchical Shrinkage")
-        logger.info("─" * 70)
-        start_time = time.time()
-
-        # Initialize shrinkage engine
-        shrinkage_engine = HierarchicalInferenceEngine(
-            shrinkage_strength=args.shrinkage_strength,
-            min_observations=SHRINKAGE_MIN_OBSERVATIONS,
-        )
-
-        # Apply shrinkage to p-values
-        original_pvalues = pvalues.copy()
-        pvalues = shrinkage_engine.shrink_pvalues(
-            pvalues, domain_list, go_list, domain_metadata
-        )
-
-        # Report shrinkage statistics
-        stats = shrinkage_engine.get_shrinkage_statistics(
-            original_pvalues,
-            pvalues,
-            domain_list,
-            domain_metadata,
-            significance_threshold=args.fdr_threshold,
-        )
-
-        shrinkage_time = time.time() - start_time
-        logger.info(f"✓ Hierarchical shrinkage completed in {shrinkage_time:.2f}s")
-        logger.info(f"  Supra-domain tests affected: {stats['n_supra_tests']:,}")
-        logger.info(
-            f"  P-values increased (regularized): {stats['n_pvalues_increased']:,} ({stats['pct_pvalues_increased']:.1f}%)"
-        )
-        logger.info(f"  Median p-value ratio: {stats['median_pvalue_ratio']:.3f}")
-
     # Apply FDR correction
     logger.info("")
     logger.info("STAGE 5: FDR Correction")
     logger.info("─" * 70)
     start_time = time.time()
 
-    adjusted_pvalues, threshold = benjamini_hochberg_correction(
-        pvalues, alpha=args.fdr_threshold
+    # Single domains and supra-domains are corrected as separate hypothesis
+    # families. A supra-domain is not an exchangeable sibling of its own
+    # constituents, and pooling them made the 5.3x larger supra space tighten
+    # the threshold for single-domain hypotheses that gain nothing from it.
+    # Each family controls FDR at --fdr-threshold within itself.
+    is_supra = np.fromiter(
+        (
+            domain_metadata[domain_id].domain_type is not DomainType.SINGLE
+            for domain_id in domain_list
+        ),
+        dtype=bool,
+        count=len(domain_list),
     )
+    family = np.where(is_supra, "supra", "single").repeat(len(go_list))
+
+    adjusted_pvalues, thresholds = benjamini_hochberg_by_family(
+        pvalues, family, alpha=args.fdr_threshold
+    )
+    del family, is_supra
 
     fdr_time = time.time() - start_time
     logger.info(f"✓ FDR correction completed in {fdr_time:.2f}s")
-    logger.info(f"  Threshold p-value: {threshold:.2e}")
+    for label in sorted(thresholds):
+        logger.info(f"  Threshold p-value ({label}): {thresholds[label]:.2e}")
 
     # Count significant associations
     significant = adjusted_pvalues <= args.fdr_threshold
@@ -1190,7 +1152,8 @@ def main():
             "terms": len(go_list),
             "tests": int(len(pvalues)),
             "significant_associations": n_significant,
-            "bh_threshold_pvalue": float(threshold),
+            # One cutoff per hypothesis family, not one overall.
+            "bh_threshold_pvalue": {k: float(v) for k, v in thresholds.items()},
             "propagated_annotations": len(propagated_annotations),
             "runtime_seconds": round(total_time, 2),
         },

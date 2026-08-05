@@ -28,7 +28,7 @@ Fisher's exact tests with FDR correction and hypergeometric association scoring.
    (vectorized via the Cython `fisher` package), with **Benjamini–Hochberg FDR**
    correction and a **hypergeometric association score (1–100)**.
 4. **Generates supra-domains** (contiguous domain combinations up to triplets)
-   with optional empirical-Bayes shrinkage toward their constituent domains.
+   (contiguous combinations up to triplets).
 5. *(optional)* **Applies the True Path Rule** to propagate associations up the
    GO DAG, when run with `--enable-true-path`.
 
@@ -297,7 +297,6 @@ writing `data/interim/protein2ipr_<species>.dat.gz` so subsequent runs are fast.
 | `--num-cores` | `8` | CPU cores for parallel Fisher tests |
 | `--batch-size` | `50000` | Fisher test batch size |
 | `--enable-supra-domains` / `--disable-supra-domains` | enabled | Test contiguous domain combinations |
-| `--enable-shrinkage` | off | Empirical-Bayes shrinkage for supra-domains |
 | `--enable-true-path` | off | Propagate associations up the term hierarchy (fails if the ontology has none) |
 | `--go-ontology` | `data/raw/go_ontology/go-basic.obo` | GO OBO file (GO only; required for `--ontology go --enable-true-path`) |
 | `--output-dir` | `results/` | Output directory |
@@ -403,7 +402,6 @@ dcGO-2.0/
 │   ├── domain_annotation_parser.py  # Parse protein2ipr domain mappings
 │   ├── vectorized_fisher.py     # Vectorized Fisher's exact test + BH-FDR
 │   ├── sparse_fisher.py         # Sparse contingency-table construction
-│   ├── hierarchical_inference.py    # Supra-domains + shrinkage
 │   └── ontology_processor.py    # True Path Rule / GO DAG propagation
 ├── config/settings.py           # Dataset URLs + configuration
 ├── tests/                       # unit / integration tests
