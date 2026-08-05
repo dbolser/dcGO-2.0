@@ -30,6 +30,7 @@ def _args(**overrides) -> argparse.Namespace:
         batch_size=50000,
         num_cores=8,
         species="human",
+        min_support=0,
     )
     defaults.update(overrides)
     return argparse.Namespace(**defaults)
@@ -61,6 +62,7 @@ class TestRejectsInvalidArguments:
             ({"fdr_threshold": -0.1}, "--fdr-threshold"),
             ({"batch_size": 0}, "--batch-size"),
             ({"batch_size": -1}, "--batch-size"),
+            ({"min_support": -1}, "--min-support"),
             ({"num_cores": 0}, "--num-cores"),
             ({"num_cores": -4}, "--num-cores"),
             ({"species": ""}, "--species"),

@@ -296,6 +296,8 @@ def validate_arguments(
         )
     if args.batch_size <= 0:
         parser.error(f"--batch-size must be positive, got {args.batch_size}")
+    if args.min_support < 0:
+        parser.error(f"--min-support must be >= 0, got {args.min_support}")
     if args.num_cores <= 0:
         parser.error(f"--num-cores must be positive, got {args.num_cores}")
     if not args.species or "/" in args.species:
@@ -403,10 +405,10 @@ def start_run_manifest(
                 # within itself.
                 "fdr_families": ["single", "supra"],
                 "fisher_alternative": FISHER_ALTERNATIVE,
-                # No minimum-support filter is applied: an association is kept
-                # on FDR significance alone. Recorded as null so the manifest
-                # states that explicitly rather than by omission.
-                "min_proteins_per_association": None,
+                # 0 means no minimum-support filter: an association is kept on
+                # FDR significance alone. Recorded explicitly rather than by
+                # omission, either way.
+                "min_proteins_per_association": args.min_support or None,
                 "min_domain_length": MIN_DOMAIN_LENGTH,
                 "max_supra_domain_length": MAX_SUPRA_DOMAIN_LENGTH,
                 "enable_supra_domains": bool(args.enable_supra_domains),
@@ -446,6 +448,16 @@ def main():
         type=float,
         default=0.01,
         help="FDR significance threshold (default: 0.01)",
+    )
+    parser.add_argument(
+        "--min-support",
+        type=int,
+        default=0,
+        help="Discard associations supported by fewer than N proteins carrying "
+        "both the domain and the term. Applied AFTER the FDR correction, so it "
+        "never alters the hypothesis family. Default 0 (no filter): the emergent "
+        "domain combinations this method exists to find sit at n = 2-8 proteins, "
+        "so a non-zero default would delete them",
     )
     parser.add_argument(
         "--num-cores",
@@ -887,6 +899,27 @@ def main():
 
     # Count significant associations
     significant = adjusted_pvalues <= args.fdr_threshold
+
+    # Minimum-support filter, applied HERE: after the BH correction, and before
+    # anything consumes the significant set.
+    #
+    # After BH because support is the observed success count that produced the
+    # p-value — filtering on it first would shrink the hypothesis family by
+    # outcome and leave the q-values anti-conservative, the same mistake fixed
+    # in the surprise score in #26. Filtering afterwards only narrows what is
+    # reported and changes no q-value.
+    #
+    # Before the True Path stage because otherwise propagation would run over
+    # associations the export then drops, and the propagated file would assert
+    # annotations the association file does not support.
+    if args.min_support > 0:
+        dropped = int((significant & (tables[:, 0, 0] < args.min_support)).sum())
+        significant &= tables[:, 0, 0] >= args.min_support
+        logger.info(
+            f"  Minimum support (n_both >= {args.min_support}, applied after BH): "
+            f"{int(significant.sum()):,} kept, {dropped:,} dropped"
+        )
+
     n_significant = int(significant.sum())
 
     # STAGE 5.5: True Path Rule (Optional)
