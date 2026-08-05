@@ -105,6 +105,10 @@ data/interim/human_proteins.txt
 # `_top100` summaries are small and are tracked, so a reader can see what a run
 # produced without the repository carrying the whole table.
 results*/domain_*_associations_significant.tsv
+# Run manifests belong with the results they describe. A run whose outputs are
+# not tracked should not leave its manifest behind either — one slipped in from
+# a scratch directory in #46.
+results*/run_manifest_*.json
 results*/domain_*_annotations_propagated.tsv
 results*/domain_*_surprising.tsv
 
