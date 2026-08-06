@@ -181,6 +181,18 @@ def main() -> int:  # pragma: no cover - I/O wiring
         default=Path("data/raw/uniprot_keywlist/keywlist.txt"),
     )
     parser.add_argument(
+        "--doid-obo",
+        type=Path,
+        default=Path("data/raw/disease_ontology/doid.obo"),
+        help="Disease Ontology, for --ontologies doid|orphanet_doid",
+    )
+    parser.add_argument(
+        "--enzyme-dat",
+        type=Path,
+        default=Path("data/raw/enzyme/enzyme.dat"),
+        help="Expasy ENZYME, for --ontologies ec",
+    )
+    parser.add_argument(
         "--supra-only",
         action="store_true",
         help="Score only supra-domain associations (the emergent claim), "
@@ -232,8 +244,34 @@ def main() -> int:  # pragma: no cover - I/O wiring
         "chebi_obo": args.chebi_obo,
         "reactome_relations": args.reactome_relations,
         "keywlist": args.keyword_list,
+        "doid_obo": args.doid_obo,
+        "enzyme_dat": args.enzyme_dat,
     }
     paths_t1 = dict(paths_t0, uniprot_dat=args.t1_uniprot, gaf=args.t1_gaf)
+
+    # This dict is a second copy of the one in run_dcgo_human.build_ontology_paths,
+    # and a registry entry added after it was written will not be in it. That is
+    # not hypothetical: adding `doid` to --ontologies crashed a two-hour run with
+    # KeyError('doid_obo') at the first parse, after the expensive architecture
+    # pass. Check every requested ontology up front instead.
+    unresolvable = {
+        ontology: sorted(
+            (
+                set(get_ontology(ontology).needs)
+                | set(get_ontology(ontology).hierarchy_needs)
+            )
+            - set(paths_t0)
+        )
+        for ontology in args.ontologies
+    }
+    unresolvable = {k: v for k, v in unresolvable.items() if v}
+    if unresolvable:
+        for ontology, missing in unresolvable.items():
+            logger.error(
+                f"--ontologies {ontology} needs input(s) {missing}, which this "
+                "script does not resolve. Add them to paths_t0 above."
+            )
+        return 1
 
     results: List[StratumResult] = []
     for ontology in args.ontologies:
