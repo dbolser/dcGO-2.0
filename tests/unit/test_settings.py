@@ -2,7 +2,12 @@
 
 import pytest
 
-from config.settings import ConfigurationError, DataSource, config
+from config.settings import (
+    ALL_SPECIES_ALIASES,
+    ConfigurationError,
+    DataSource,
+    config,
+)
 
 
 class TestGoaUrlFor:
@@ -28,6 +33,21 @@ class TestGoaUrlFor:
     def test_empty_species_rejected(self):
         with pytest.raises(ConfigurationError):
             config.goa_url_for("  ")
+
+    @pytest.mark.parametrize("alias", sorted(ALL_SPECIES_ALIASES))
+    def test_all_species_resolves_to_the_cross_organism_release(self, alias):
+        # The multi-species background is not an organism: EBI publishes it as
+        # one cross-organism file, not under an ALLSPECIES/ directory. The
+        # per-species pattern would compose a plausible URL that 404s, and the
+        # run manifest would then record it as the input's origin.
+        assert (
+            config.goa_url_for(alias)
+            == f"{config.goa_base_url}/UNIPROT/goa_uniprot_all.gaf.gz"
+        )
+
+    def test_all_species_aliases_do_not_shadow_an_organism(self):
+        # Guard against an alias later colliding with a real GOA species dir.
+        assert not ALL_SPECIES_ALIASES & {"human", "mouse", "rat", "zebrafish"}
 
 
 def _source(**kwargs) -> DataSource:

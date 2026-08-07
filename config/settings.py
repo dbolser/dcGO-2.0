@@ -227,6 +227,12 @@ class ComputeResources:
             )
 
 
+#: Species names that mean "the multi-species background", not an organism.
+#: These resolve to EBI's single cross-organism GOA release rather than to a
+#: per-species directory — see ``Config.goa_url_for``.
+ALL_SPECIES_ALIASES = frozenset({"allspecies", "all_species", "uniprot_all"})
+
+
 @dataclass
 class Config:
     """
@@ -593,10 +599,19 @@ class Config:
         EBI publishes per-species GOA under ``<base>/<SPECIES_UPPER>/`` with a
         ``goa_<species>.gaf.gz`` filename, e.g. ``MOUSE/goa_mouse.gaf.gz``. For
         ``human`` this reproduces the URL pinned in ``data_sources``.
+
+        ``allspecies`` is not an organism but the multi-species background
+        universe, whose upstream is the single cross-organism release
+        ``UNIPROT/goa_uniprot_all.gaf.gz``. Without this case the per-species
+        pattern would compose a plausible-looking ``ALLSPECIES/`` URL that does
+        not exist, and every run manifest for that universe would record it as
+        the input's origin.
         """
         species = species.strip().lower()
         if not species:
             raise ConfigurationError("Species must be a non-empty string")
+        if species in ALL_SPECIES_ALIASES:
+            return f"{self.goa_base_url}/UNIPROT/goa_uniprot_all.gaf.gz"
         return f"{self.goa_base_url}/{species.upper()}/goa_{species}.gaf.gz"
 
     def get_data_source_url(self, source_name: str) -> str:
