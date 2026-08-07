@@ -1,0 +1,79 @@
+metric	value	note
+published_domains_sf	1561	
+published_domains_fa	2794	unreachable via InterPro
+published_domains_reachable_fraction	0.3584	InterPro integrates SUPERFAMILY at superfamily level only
+our_domains_ssf	903	
+shared_domains	897	
+our_domains_absent_from_theirs	6	57262 (Leech antihemostatic proteins); 69036 (Bcr-Abl oncoprotein oligomerization domain); 69761 (GTP cyclohydrolase I feedback regulatory protein, GFRP); 101160 (Dimerisation domain of CENP-B); 109732 (HBS1-like domain); 158548 (FLJ32549 domain-like)
+published_go_terms	18666	
+our_go_terms	11370	
+shared_go_terms	7956	
+published_go_terms_absent_from_current_obo	0	gone entirely since their 2016 snapshot
+published_go_terms_now_obsolete	1795	confound 1 (vintage): terms they scored that GO has since retired
+our_go_terms_absent_from_their_table	3414	terms they never associated with any superfamily — no comparison possible
+their_scored_pairs_sf	404288	
+their_pairs_below_their_fdr	134665	all_score < 0.001
+their_published_direct_sf	108612	
+their_published_inherited_sf	85683	
+their_direct_rows_below_their_fdr	108611	their direct set is a strict SUBSET of the FDR-significant set
+their_significant_but_unpublished	26054	significant by FDR yet not shipped — their release applies further filtering (most-specific-level selection / the relative test)
+their_inherited_rows_below_their_fdr	0	0 expected: inherited rows are pure true-path propagation to ancestors, not separately significant
+their_scored_rows_at_column_default_1.0	80826	the DEFAULT of all_score is 1 — these are indistinguishable from 'never actually tested', which caps how much the rank correlation below can be trusted
+testable_space_pairs	7136532	
+their_pairs_tested_in_shared_space	140467	
+their_table_coverage_of_testable_space	0.0197	their GO_mapping is sparse — absence ≠ tested-and-rejected
+our_significant_single_domain_pairs_total	3452	
+our_pairs_outside_the_shared_space	465	domain or term absent from their table; not comparable either way
+ours_significant_pairs	2987	
+their_significant_pairs	39448	definition: published_direct
+shared_significant_pairs	1686	
+precision_ours_in_theirs	0.5644	HEADLINE — see confound 2
+recall_theirs_in_ours	0.0427	depressed by species scope; not quality
+jaccard	0.0414	
+variant__ours_fdr<0.01__theirs_published_direct	precision=0.5644 recall=0.0427 jaccard=0.0414	ours=2,987 theirs=39,448 shared=1,686
+variant__ours_fdr<0.001__theirs_published_direct	precision=0.5963 recall=0.0302 jaccard=0.0296	ours=1,999 theirs=39,448 shared=1,192
+variant__ours_fdr<0.01__theirs_published_all	precision=0.6056 recall=0.0288 jaccard=0.0283	ours=2,987 theirs=62,770 shared=1,809
+variant__ours_fdr<0.001__theirs_published_all	precision=0.6368 recall=0.0203 jaccard=0.0200	ours=1,999 theirs=62,770 shared=1,273
+variant__ours_fdr<0.01__theirs_fdr_lt_0.001	precision=0.6157 recall=0.0379 jaccard=0.0370	ours=2,987 theirs=48,576 shared=1,839
+variant__ours_fdr<0.001__theirs_fdr_lt_0.001	precision=0.6388 recall=0.0263 jaccard=0.0259	ours=1,999 theirs=48,576 shared=1,277
+our_bh_raw_p_cutoff	3.312e-06	
+missed_pairs	37762	
+missed_zero_human_cooccurrence	28043	no human protein carries both — unreachable, confound 2, not a method miss
+missed_zero_human_cooccurrence_fraction	0.7426	
+missed_supported_p_below_0.05	6760	signal present in human, just under our FDR bar
+missed_supported_p_above_0.05	2959	some human co-occurrence, but no enrichment we can see
+missed_supported_median_our_p	1.280e-02	
+extra_pairs	1301	
+extra_not_in_their_table	329	they never scored this pair — untested, not rejected
+extra_they_scored_but_did_not_publish_as_direct	972	
+extra_they_published_as_inherited	123	same association, assigned to a different level of the GO DAG — agreement in substance, disagreement in placement
+extra_their_fdr_between_0.001_and_0.05	263	they nearly called it too
+extra_their_fdr_below_their_threshold	153	they scored it significant but did not ship it (post-FDR filtering)
+extra_their_fdr_above_0.5	271	
+extra_median_their_fdr	1.028e-01	
+spearman_our_logp_vs_their_logfdr_all_tested	0.0667	
+spearman_p	5.008e-138	
+pairs_with_human_cooccurrence	31797	
+spearman_restricted_to_supported_pairs	0.4772	removes the a=0 mass that is a species-scope artefact
+pairs_supported_and_not_at_their_default	26899	
+spearman_supported_and_genuinely_scored	0.3995	cleanest calibration comparison
+pairs_with_their_hscore	62770	
+spearman_our_logp_vs_their_hscore	0.0246	all_hscore_max is populated only on their published rows and is a max over the GO subtree, so it is not the same quantity as our p
+spearman_our_logp_vs_their_hscore_supported	0.2588	
+recomputation_max_relative_deviation	4.68e-07	vs the pipeline's own p-values; >1e-5 would invalidate the diagnostics
+our_supra_architectures_observed	2545	
+our_supra_architectures_with_associations	0	
+their_supra_architectures	7163	
+shared_supra_architectures_exact_order	1311	
+supra_architecture_precision_ours_in_theirs	0.5151	
+shared_supra_architectures_order_insensitive	1250	
+supra_architecture_precision_order_insensitive	0.5485	
+supra_architectures_compared	0	
+our_supra_associations_compared	0	
+their_supra_associations_compared	0	
+shared_supra_associations	0	
+supra_precision_ours_in_theirs		
+supra_recall_theirs_in_ours		
+supra_jaccard		
+supra_precision_vs_their_direct_plus_inherited		
+supra_recall_vs_their_direct_plus_inherited		

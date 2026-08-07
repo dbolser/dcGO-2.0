@@ -72,6 +72,36 @@ This file is just loose notes.
 
 ## Queued
 
+- ~~**Expand the background dimension: a multi-species universe.**~~ **Run
+  2026-08-06 — see `MULTISPECIES_BACKGROUND.md`.** Universe went 18,908 → 
+  1,464,355 proteins over 9,074 taxa, single-domain only. Scored against the
+  criteria below: **held-out enrichment does not fall, it rises** (all-species
+  wins 8/9 F_max and 9/9 AUPRC cells on the same human 2021→2026 evaluation
+  set); the permutation null is empty (0 of 1.13 B tests); non-independence is
+  measured at 2.44× with 18.5% of associations on a single UniRef50 cluster;
+  recall vs published dcGO rises 0.074 → 0.261 but **precision falls to 0.298**,
+  so that criterion fails on its precision clause. Two traps came out worse than
+  this entry assumed: the universe is **75.8% projected** annotation and **55.2%
+  of the projected non-human annotation cites a human protein**, and "all
+  species" is really 19 taxa carrying half the annotations.
+
+  Three follow-ups, in priority order:
+  1. **The emergent-combination criterion is still untested** — supra-domains
+     need 13.1 B tests / ~389 GB at this universe size. Fixing that means making
+     the Fisher stage enumerate only co-occurring pairs instead of the dense
+     domain × term product. That is valid and lossless here (`FISHER_ALTERNATIVE`
+     is `greater`, so every a=0 pair has p=1) provided BH keeps the full test
+     count as its denominator.
+  2. **Re-run the held-out arm under `--evidence-filter experimental`.** The
+     held-out win is the one result circularity cannot fake, but its *size* was
+     measured on a 75.8%-projected background.
+  3. **The held-out all-species arm carries a 31.9% universe loss** (vs 1.9% for
+     human) because the t0 runs reuse today's `protein2ipr` for a 2021 protein
+     set. It won anyway, so the win is conservative — but closing this needs an
+     archived 2021 `protein2ipr`.
+
+  Original entry follows.
+
 - **Expand the background dimension: a multi-species universe.** (Proposed
   2026-08-06.) Every run so far is human-only — `goa_human.gaf.gz` is 826,052
   lines, all `taxon:9606`, and `protein2ipr_human.dat.gz` is extracted by
