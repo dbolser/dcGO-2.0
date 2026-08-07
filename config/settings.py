@@ -8,6 +8,7 @@ including data sources, processing parameters, and file paths using Python 3.12 
 import hashlib
 import logging
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Self, Union
@@ -231,6 +232,12 @@ class ComputeResources:
 #: These resolve to EBI's single cross-organism GOA release rather than to a
 #: per-species directory — see ``Config.goa_url_for``.
 ALL_SPECIES_ALIASES = frozenset({"allspecies", "all_species", "uniprot_all"})
+
+#: Species names of the form ``<base>_t0_2021`` / ``<base>_t1_2023``: local
+#: snapshots pinned to a numbered GOA archive release for the temporal
+#: benchmark. The release number is not recoverable from the name, so no
+#: upstream URL can be composed for them — see ``Config.goa_url_for``.
+DERIVED_SNAPSHOT_SPECIES = re.compile(r"_t[01]_\d{4}$")
 
 
 @dataclass
@@ -600,16 +607,33 @@ class Config:
         ``goa_<species>.gaf.gz`` filename, e.g. ``MOUSE/goa_mouse.gaf.gz``. For
         ``human`` this reproduces the URL pinned in ``data_sources``.
 
-        ``allspecies`` is not an organism but the multi-species background
-        universe, whose upstream is the single cross-organism release
-        ``UNIPROT/goa_uniprot_all.gaf.gz``. Without this case the per-species
-        pattern would compose a plausible-looking ``ALLSPECIES/`` URL that does
-        not exist, and every run manifest for that universe would record it as
-        the input's origin.
+        Two kinds of name are not organisms and must not be run through that
+        pattern, because it would compose a plausible-looking URL that 404s and
+        every run manifest would then record it as the input's origin:
+
+        * the multi-species background (``allspecies`` and friends), whose
+          upstream is the single cross-organism release
+          ``UNIPROT/goa_uniprot_all.gaf.gz``;
+        * temporal snapshots such as ``human_t0_2021`` or
+          ``allspecies_t0_2021``, which are local files pinned to a *numbered*
+          archive release (``goa_human.gaf.205.gz``). The release number is not
+          recoverable from the species name, so there is no URL to give and
+          this raises rather than invent one.
+
+        Raises:
+            ConfigurationError: if the species is empty, or is a temporal
+                snapshot with no composable upstream URL.
         """
         species = species.strip().lower()
         if not species:
             raise ConfigurationError("Species must be a non-empty string")
+        if DERIVED_SNAPSHOT_SPECIES.search(species):
+            raise ConfigurationError(
+                f"{species!r} is a temporal snapshot pinned to a numbered GOA "
+                f"archive release, not a species directory; its upstream URL "
+                f"cannot be composed from the name. Fetch it with "
+                f"--goa-archive and record the release explicitly."
+            )
         if species in ALL_SPECIES_ALIASES:
             return f"{self.goa_base_url}/UNIPROT/goa_uniprot_all.gaf.gz"
         return f"{self.goa_base_url}/{species.upper()}/goa_{species}.gaf.gz"

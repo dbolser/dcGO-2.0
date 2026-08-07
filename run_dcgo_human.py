@@ -155,7 +155,14 @@ def input_source_urls(species: str) -> dict:
         if name in config.data_sources
     }
     # data_sources pins the *human* GAF; every other species has its own URL.
-    urls["gaf"] = config.goa_url_for(species)
+    # Temporal snapshots (human_t0_2021, allspecies_t0_2021) have none that can
+    # be composed from the name, and they say so by raising. Leaving the key out
+    # makes the manifest omit source_url for the GAF, which is the truthful
+    # outcome — the file's SHA-256 is still its identity.
+    try:
+        urls["gaf"] = config.goa_url_for(species)
+    except Exception as exc:
+        logger.debug(f"No upstream URL for the {species!r} GAF: {exc}")
     return urls
 
 

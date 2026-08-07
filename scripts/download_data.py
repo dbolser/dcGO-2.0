@@ -61,7 +61,7 @@ import requests
 # Make ``config`` importable when run as a plain script from the repo root.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from config.settings import Config  # noqa: E402
+from config.settings import ConfigurationError, Config  # noqa: E402
 
 # The datasets a standard human run actually needs.
 DEFAULT_DATASETS = ["goa_annotations", "go_ontology", "interpro_mappings"]
@@ -337,7 +337,16 @@ def main() -> int:
         # organism so a fresh checkout can go download → extract → run for e.g.
         # mouse without editing settings.py.
         if name == "goa_annotations" and species != "human":
-            url = config.goa_url_for(species)
+            try:
+                url = config.goa_url_for(species)
+            except ConfigurationError as exc:
+                # Temporal snapshots have no URL composable from the name; say
+                # so and point at the flag that does fetch them, rather than
+                # tracebacking or downloading a 404.
+                print(f"[{name}] ✘ {exc}")
+                failures.append(name)
+                print()
+                continue
             dest = raw_dir / name / _filename_for(url, name)
             description = f"Gene Ontology Annotation (GOA) database for {species}"
 

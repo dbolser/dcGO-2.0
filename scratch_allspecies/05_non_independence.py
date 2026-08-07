@@ -136,6 +136,20 @@ def main() -> int:
                 }
             )
 
+    # An empty result is a real outcome, not a crash: it means the association
+    # file and the universe disagree — usually a --domain-key or --species that
+    # does not match the run being audited. Say that, rather than dying on
+    # rows[0] with an IndexError that points nowhere near the cause.
+    if not rows:
+        logger.error(
+            f"No association in {args.associations} has any supporting protein "
+            f"in the {args.species}/{args.domain_key} universe "
+            f"({unmapped_associations:,} had support but no UniRef50 mapping). "
+            "Check that --species and --domain-key match the run that produced "
+            "the association file."
+        )
+        return 1
+
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with args.out.open("w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(rows[0]), delimiter="\t")

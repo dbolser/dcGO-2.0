@@ -49,6 +49,25 @@ class TestGoaUrlFor:
         # Guard against an alias later colliding with a real GOA species dir.
         assert not ALL_SPECIES_ALIASES & {"human", "mouse", "rat", "zebrafish"}
 
+    @pytest.mark.parametrize(
+        "species",
+        ["human_t0_2021", "human_t1_2023", "mouse_t0_2021", "allspecies_t0_2021"],
+    )
+    def test_temporal_snapshots_refuse_to_invent_a_url(self, species):
+        # These are local files pinned to a NUMBERED archive release
+        # (goa_human.gaf.205.gz); the number is not recoverable from the name.
+        # Composing a per-species URL would give a 404 that run manifests then
+        # record as the input's origin — the same defect the all-species case
+        # fixes, and one the t0 runs hit first.
+        with pytest.raises(ConfigurationError, match="temporal snapshot"):
+            config.goa_url_for(species)
+
+    def test_snapshot_suffix_does_not_catch_ordinary_species(self):
+        # The pattern is anchored, so an organism whose name merely contains a
+        # digit run or a 't0' substring still resolves normally.
+        assert config.goa_url_for("dicty").endswith("DICTY/goa_dicty.gaf.gz")
+        assert config.goa_url_for("t0_human").endswith("T0_HUMAN/goa_t0_human.gaf.gz")
+
 
 def _source(**kwargs) -> DataSource:
     return DataSource(name="t", url="https://example.org/f", description="d", **kwargs)

@@ -308,9 +308,11 @@ against *future* annotation rather than against another method's opinion.
 The design isolates the background: **only the training universe changes.** One
 arm trains on human 2021, the other on all-species 2021 (release 205, the same
 release the human t0 file comes from). Both are scored on the identical human
-t0 (2021) → t1 (2026) split from `VALIDATION_PLAN.md` §2 — the naive baseline
-comes out byte-identical in both runs, which is the check that the evaluation
-really is held fixed.
+t0 (2021) → t1 (2026) split from `VALIDATION_PLAN.md` §2. The check that the
+evaluation really is held fixed is that the naive baseline reproduces across the
+two runs: `f_max`, `auprc` and `n_eval_proteins` are identical in all nine
+cells, and `s_min` agrees to ~1e-14 relative (float summation order) in the six
+cells where it differs at all.
 
 The criterion was that held-out enrichment must not **fall**. It does not fall;
 it rises almost everywhere.
@@ -401,7 +403,8 @@ configuration.
 **The widening is established as an improvement in predictive power**, on the
 strongest evidence available in this project: a held-out split, scored against
 annotation that did not exist when the model was trained, with the evaluation
-set held byte-identical and only the training universe varied. 8/9 and 9/9 is
+set reproducing to floating-point noise and only the training universe varied.
+8/9 and 9/9 is
 not a marginal result, and the losing arm had a 16× lighter handicap.
 
 Three things keep that from being the whole story:
