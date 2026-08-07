@@ -11,24 +11,29 @@ what that buys and what it costs.
 The short version:
 
 * **It predicts human function better.** On the held-out 2021 → 2026 split, with
-  the evaluation set held fixed and only the training universe changed, the
-  all-species background wins **8 of 9 F_max cells and 9 of 9 AUPRC cells** (§5).
-  This is the criterion that matters most, it is scored against future
-  annotation rather than another method's opinion, and the all-species arm won
-  it while carrying a handicap.
+  the evaluation identical and only the training universe changed, the
+  all-species background wins **8/9 F_max and 9/9 AUPRC** cells (§5). This is
+  the criterion that matters most — scored against future annotation rather than
+  another method's opinion — and the all-species arm won it carrying a handicap.
+* **The win is not circularity.** Three quarters of the annotation the wider
+  background adds is inferred rather than observed, and over half of *that* was
+  inferred from human (§2). Excluding projected annotation from training makes
+  the advantage **larger**, not smaller: **9/9 and 9/9**, bigger in 12 of 18
+  cells, reversing in none (§5). A human-only universe leans on projected
+  annotation because it has nothing else; a multi-species one has real
+  experimental evidence elsewhere to fall back on.
 * **It fixes the defect that motivated the work.** Agreement with the published
   (all-species) dcGO improves 2.3–3.0×, because 566 SCOP superfamilies that
   human data cannot test become testable (§4).
-* **But it is not free, and it is not clean.** Three quarters of the annotation
-  it adds is inferred rather than observed, and over half of *that* was inferred
-  from human (§2) — so the `manual` universe is substantially human function
-  copied outward. Support is inflated ~2.44× by orthology, with half the
-  associations standing on three or fewer ortholog groups. Precision against the
-  published reference falls out of the band the acceptance criteria required.
+* **It is still not free.** Support is inflated ~2.44× by orthology, with half
+  the associations standing on three or fewer ortholog groups (§2), and
+  precision against the published reference falls out of the band the acceptance
+  criteria required (§4). Both of those bear on the *significant count* and the
+  published-dcGO comparison, not on the held-out result.
 * **The one thing it was most wanted for is untested.** The emergent n = 2–8
   domain combinations cannot be evaluated at this universe size (§1).
 
-Scored strictly against `TODO.md`'s criteria: two met, one met decisively, one
+Scored strictly against `TODO.md`'s criteria: three met (one decisively), one
 half met, one unreachable.
 
 ---
@@ -342,6 +347,49 @@ the human arm's 1.9%. It won anyway.
 Both arms clear the random-domain permutation null in all 18 cells at the
 attainable p-floor (p = 0.048 with 20 permutations).
 
+### The win is not an artefact of circularity — it is larger without it
+
+The obvious objection to the table above is §2: the background is 75.8%
+projected annotation, over half of which cites a human protein. The held-out
+design already blocks the direct form of that objection — future human
+annotation cannot be in 2021 training data under any evidence code — but it
+leaves open whether the *size* of the win is inflated by copied human function.
+
+So the whole thing was repeated with projected annotation excluded from
+training. Only the training runs change; `temporal_benchmark.py` fixes the
+evaluation internally (t0 parsed `manual` for IC and the naive baseline, t1
+`experimental` as the gold standard) independent of what the predictions were
+trained on, so this is the *same* evaluation, not merely a comparable one. The
+naive rows come out identical in all cells, which `12_compare_heldout.py` now
+asserts before reporting any delta.
+
+Training universes: human 18,382 → **15,295** proteins, all-species 889,473 →
+**104,255**.
+
+| | F_max | AUPRC |
+|---|---|---|
+| all-species better, `manual` training | 8 / 9 | 9 / 9 |
+| all-species better, `experimental` training | **9 / 9** | **9 / 9** |
+
+The advantage is **larger** without projected annotation in **12 of 18 cells**,
+smaller in 6, and reverses sign in none. The single cell the `manual` arm lost
+(MF IC≥2 F_max, −0.014) becomes +0.074. The largest gains are in molecular
+function, where AUPRC deltas roughly triple: MF IC≥2 goes from +0.043 to
+**+0.155**, MF IC≥4 from +0.036 to **+0.146**.
+
+The mechanism is visible in the baselines. Excluding projected annotation hurts
+the **human-trained** arm badly — MF IC≥0 F_max falls 0.3668 → 0.2837 — while
+the all-species arm barely moves, 0.4486 → 0.4218. A human-only universe leans
+heavily on projected annotation because it has nothing else; a multi-species
+universe has genuine experimental evidence in other organisms to fall back on.
+**That is the argument for a wider background stated as a measurement**, and it
+is the strongest result in this document.
+
+One correction it forces: the "beats naive in 6/9 AUPRC cells" figure below is
+for `manual` training. Under `experimental` training all-species beats naive in
+**5/9** (it loses CC IC≥2, which the manual arm won), against the human arm's
+3/9.
+
 ### It partly closes a documented limitation
 
 `CLAUDE.md` records that dcGO "**loses to naive on AUPRC at IC≥0 in all
@@ -391,7 +439,7 @@ arithmetic. Scored honestly:
 
 | criterion | verdict |
 |---|---|
-| held-out enrichment does not fall vs human-only, on the same human evaluation set | **met, decisively** — all-species wins 8/9 F_max and 9/9 AUPRC cells (§5), and does so despite a handicap (caveat above) |
+| held-out enrichment does not fall vs human-only, on the same human evaluation set | **met, decisively** — all-species wins 8/9 F_max and 9/9 AUPRC under `manual` training and **9/9 and 9/9 under `experimental`** (§5), despite a handicap (caveat above) |
 | emergent-combination support shifts up, no more redundant signatures | **cannot be evaluated** — supra-domains do not fit in memory at this universe size (§1) |
 | recall vs published dcGO rises materially from 0.069 **while precision holds at 0.54–0.63** | **half met** — recall 0.074 → 0.261; precision 0.526 → 0.298, criterion fails |
 | non-independence measured, pooled vs collapsed side by side | **met** — 2.44× overall, 18.5% single-cluster (§2) |
@@ -404,16 +452,11 @@ configuration.
 strongest evidence available in this project: a held-out split, scored against
 annotation that did not exist when the model was trained, with the evaluation
 set reproducing to floating-point noise and only the training universe varied.
-8/9 and 9/9 is
-not a marginal result, and the losing arm had a 16× lighter handicap.
+8/9 and 9/9 under `manual` training, **9/9 and 9/9 under `experimental`**, is
+not a marginal result — and the losing arm had a 16× lighter handicap.
 
-Three things keep that from being the whole story:
+Two things keep that from being the whole story:
 
-* **The `manual` universe is partly circular** (§2). The held-out test is the
-  one result circularity cannot fake — future human annotation is not in the
-  2021 training data under any evidence code — but the *size* of the win is
-  still measured on a background that is 75.8% projected. The
-  experimental-evidence held-out arm was not run and is the obvious next step.
 * **Support is inflated ~2.44× by orthology**, with half the associations
   standing on three or fewer ortholog groups (§2). This does not touch the
   held-out result, which never uses the p-values as probabilities, but it does

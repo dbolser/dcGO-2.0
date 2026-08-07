@@ -12,12 +12,15 @@ established that this method's effects are cell-dependent and an average hides
 sign flips.
 """
 
+import argparse
 import csv
 import sys
 from pathlib import Path
 
-BASE = Path("validation/heldout_human_single/temporal_benchmark_metrics.tsv")
-WIDE = Path("validation/heldout_allspecies_single/temporal_benchmark_metrics.tsv")
+DEFAULT_BASE = Path("validation/heldout_human_single/temporal_benchmark_metrics.tsv")
+DEFAULT_WIDE = Path(
+    "validation/heldout_allspecies_single/temporal_benchmark_metrics.tsv"
+)
 
 
 def load(path: Path) -> dict:
@@ -29,10 +32,38 @@ def load(path: Path) -> dict:
 
 
 def main() -> int:
-    if not WIDE.exists():
-        print(f"missing {WIDE} - run the all-species held-out benchmark first")
-        return 1
-    base, wide = load(BASE), load(WIDE)
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--base", type=Path, default=DEFAULT_BASE)
+    ap.add_argument("--wide", type=Path, default=DEFAULT_WIDE)
+    args = ap.parse_args()
+
+    for path in (args.base, args.wide):
+        if not path.exists():
+            print(f"missing {path} - run that held-out benchmark first")
+            return 1
+    base, wide = load(args.base), load(args.wide)
+
+    # The evaluation is fixed inside temporal_benchmark.py (t0 parsed 'manual'
+    # for IC and the naive baseline, t1 'experimental' as the gold standard) and
+    # does not depend on what the predictions were trained on. So the naive rows
+    # must reproduce across any two arms; if they do not, the two runs are not
+    # scored on the same evaluation and no cell-by-cell delta below is valid.
+    drift = [
+        (k, c)
+        for k in base
+        if k[2] == "naive" and k in wide
+        for c in ("f_max", "auprc", "n_eval_proteins")
+        if base[k][c] != wide[k][c]
+    ]
+    if drift:
+        print(
+            f"WARNING: evaluation differs between the two runs in {len(drift)} "
+            f"naive cells - the comparison below is not like-for-like"
+        )
+        for k, c in drift[:5]:
+            print(f"  {k[0]} IC>={k[1]} {c}: {base[k][c]} vs {wide[k][c]}")
+    else:
+        print("evaluation held fixed: naive f_max/auprc/n_eval identical in all cells")
 
     for metric in ("f_max", "auprc"):
         print(f"\n=== {metric} (dcGO), human-trained vs all-species-trained ===")
