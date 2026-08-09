@@ -183,9 +183,11 @@ organisms.
 ## 3. What the wider background produces
 
 All runs single-domain, InterPro-keyed, FDR < 0.01. The significant count is
-reported next to the size of the hypothesis space that produced it, because a
-77× universe grows the count arithmetically and the raw number is not evidence
-of anything on its own.
+reported next to the size of the hypothesis space that produced it. A 77×
+universe changes every cell of every contingency table and the BH threshold
+along with them, so the significant count does not scale in any simple way with
+the universe — which is exactly why the raw number is not evidence on its own,
+and why the rate and the permutation null below are what carry the argument.
 
 | universe | evidence | proteins | domains | terms | tests | significant | per 1e6 tests |
 |---|---|---|---|---|---|---|---|

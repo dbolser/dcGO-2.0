@@ -61,7 +61,7 @@ import requests
 # Make ``config`` importable when run as a plain script from the repo root.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from config.settings import ConfigurationError, Config  # noqa: E402
+from config.settings import ALL_SPECIES_ALIASES, ConfigurationError, Config  # noqa: E402
 
 # The datasets a standard human run actually needs.
 DEFAULT_DATASETS = ["goa_annotations", "go_ontology", "interpro_mappings"]
@@ -347,8 +347,22 @@ def main() -> int:
                 failures.append(name)
                 print()
                 continue
-            dest = raw_dir / name / _filename_for(url, name)
+            # Name the destination after the REQUESTED species, not after the
+            # URL. For every organism the two agree (MOUSE/goa_mouse.gaf.gz),
+            # but the all-species background is served from one cross-organism
+            # file — goa_uniprot_all.gaf.gz — while the pipeline looks for
+            # goa_allspecies.gaf.gz. Deriving the filename from the URL there
+            # would download the right bytes to a path no later step reads.
+            dest = raw_dir / name / f"goa_{species}.gaf.gz"
             description = f"Gene Ontology Annotation (GOA) database for {species}"
+            if species in ALL_SPECIES_ALIASES:
+                print(
+                    f"[{name}] note: this is the full cross-organism release "
+                    "(~11.7 GB, ~97% IEA). run_dcgo_human.py applies its own "
+                    "evidence filter, so it is usable as-is, but every run then "
+                    "re-parses all of it. scratch_allspecies/01_build_gaf.sh "
+                    "pre-filters it to non-IEA once (~258 MB)."
+                )
 
         print(f"[{name}] {description}")
         try:

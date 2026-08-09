@@ -11,7 +11,15 @@
 # predictions are transferred onto for scoring, and the evaluation set is human.
 set -euo pipefail
 
-until grep -q "T0 ALL-SPECIES RUN COMPLETE" scratch_allspecies/11_build_t0.log 2>/dev/null; do
+# Wait on the artefact 11_build_t0.sh actually produces, not on a log of it.
+# That script prints its completion line to stdout; 11_build_t0.log only exists
+# if the caller happened to redirect there, so running the numbered scripts as
+# documented would have left this waiting forever. The manifest gains its
+# "summary" key only when the run finishes, so it is a true completion signal.
+PREDICTIONS=results_allspecies_t0_2021/domain_go_associations_significant.tsv
+until [ -f results_allspecies_t0_2021/run_manifest_go.json ] \
+      && grep -q '"summary"' results_allspecies_t0_2021/run_manifest_go.json \
+      && [ -s "$PREDICTIONS" ]; do
     sleep 60
 done
 
