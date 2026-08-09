@@ -316,3 +316,128 @@ def compute_contingency_tables_sparse(
     logger.info(f"✓ Built {n_tests:,} contingency tables")
 
     return tables
+
+
+def compute_cooccurring_contingency_tables(
+    protein_domain_matrix: sparse.csr_matrix,
+    protein_go_matrix: sparse.csr_matrix,
+    domain_block: int = 4096,
+) -> Tuple[np.ndarray, np.ndarray, int]:
+    """Contingency tables for the domain-term pairs that actually co-occur.
+
+    ``compute_contingency_tables_sparse`` materialises the **dense** domain x
+    term product: one int32 2x2 table per pair whether or not the pair is ever
+    seen together. That is what puts supra-domains out of reach on a large
+    universe — an all-species run is 464,490 x 28,112 = 13.1e9 tables, ~389 GB
+    of tables alone before the p-values and the BH sort.
+
+    Nearly all of those tables have ``a = 0``, and dcGO's Fisher test is
+    one-sided in the ``greater`` direction (``FISHER_ALTERNATIVE``). For a=0 the
+    one-sided p-value is ``P(X >= 0) = 1`` **exactly**, at any marginals. So the
+    a=0 tables are not approximated or discarded here: their p-value is known in
+    closed form, and enumerating only the co-occurring pairs is exact rather
+    than a heuristic.
+
+    Two things are needed to keep it exact, and both are the caller's job:
+
+    * **BH must still divide by the full hypothesis count.** The returned
+      ``n_hypotheses`` is ``n_domains * n_terms``; pass it to
+      ``benjamini_hochberg_correction`` as ``n_hypotheses``. Correcting against
+      the enumerated subset instead would inflate every rejection.
+    * **This is only valid for ``alternative='greater'``.** A two-sided or
+      ``less`` test gives a=0 pairs p < 1, and dropping them would change the
+      answer. Callers using another alternative must use the dense path.
+
+    The product is computed in blocks of ``domain_block`` columns rather than in
+    one matmul: SciPy's sparse-sparse product allocates its full result up
+    front, and on the all-species supra design that single allocation is the
+    thing most likely to kill the run.
+
+    Args:
+        protein_domain_matrix: Binary (n_proteins, n_domains) CSR.
+        protein_go_matrix: Binary (n_proteins, n_terms) CSR.
+        domain_block: Domain columns per block. Trades peak memory for overhead.
+
+    Returns:
+        ``(tables, pair_index, n_hypotheses)``. ``tables`` has shape (k, 2, 2)
+        for the k co-occurring pairs. ``pair_index`` is int64 and holds each
+        pair's index in the **dense** domain-major layout
+        (``domain_idx * n_terms + term_idx``), so callers decompose it exactly
+        as they did the dense index. ``n_hypotheses`` is the dense test count.
+    """
+    n_proteins, n_domains = protein_domain_matrix.shape
+    n_terms = protein_go_matrix.shape[1]
+    n_hypotheses = n_domains * n_terms
+
+    logger.info(
+        f"Enumerating co-occurring pairs from {n_domains:,} x {n_terms:,} = "
+        f"{n_hypotheses:,} hypotheses (a=0 pairs have p=1 exactly under a "
+        f"one-sided 'greater' test and are not enumerated)"
+    )
+
+    # int8 accumulates to 127 and overflows; a common domain/term pair
+    # co-occurs in far more proteins than that. Upcast BEFORE any product.
+    domain_i32 = protein_domain_matrix.astype(np.int32)
+    go_i32 = protein_go_matrix.astype(np.int32)
+
+    domain_counts = np.asarray(domain_i32.sum(axis=0)).ravel().astype(np.int64)
+    go_counts = np.asarray(go_i32.sum(axis=0)).ravel().astype(np.int64)
+
+    domain_csc = domain_i32.tocsc()
+
+    table_blocks: List[np.ndarray] = []
+    index_blocks: List[np.ndarray] = []
+    n_pairs = 0
+
+    for start in range(0, n_domains, domain_block):
+        stop = min(start + domain_block, n_domains)
+        # (block_domains, n_terms), sparse: only co-occurring pairs are stored.
+        overlap = (domain_csc[:, start:stop].T @ go_i32).tocoo()
+        if overlap.nnz == 0:
+            continue
+
+        a = overlap.data.astype(np.int64, copy=False)
+        rows = overlap.row.astype(np.int64, copy=False) + start
+        cols = overlap.col.astype(np.int64, copy=False)
+
+        block = np.empty((overlap.nnz, 2, 2), dtype=np.int32)
+        block[:, 0, 0] = a
+        block[:, 0, 1] = domain_counts[rows] - a
+        block[:, 1, 0] = go_counts[cols] - a
+        block[:, 1, 1] = n_proteins - domain_counts[rows] - go_counts[cols] + a
+
+        table_blocks.append(block)
+        index_blocks.append(rows * n_terms + cols)
+        n_pairs += overlap.nnz
+
+        if (start // domain_block) % 20 == 0:
+            logger.info(
+                f"  domains {stop:,}/{n_domains:,} — {n_pairs:,} co-occurring "
+                f"pairs so far"
+            )
+
+    if not table_blocks:
+        return (
+            np.empty((0, 2, 2), dtype=np.int32),
+            np.empty(0, dtype=np.int64),
+            n_hypotheses,
+        )
+
+    tables = np.concatenate(table_blocks)
+    pair_index = np.concatenate(index_blocks)
+    del table_blocks, index_blocks
+
+    # COO from a CSC-major product is already domain-major, but the block loop
+    # only guarantees ordering *between* blocks. Sorting makes pair_index
+    # ascending overall, so downstream decomposition and any grouping by domain
+    # sees the same order the dense path produced.
+    order = np.argsort(pair_index, kind="stable")
+    tables = tables[order]
+    pair_index = pair_index[order]
+
+    logger.info(
+        f"✓ Built {n_pairs:,} contingency tables for co-occurring pairs "
+        f"({n_pairs / n_hypotheses:.4%} of the hypothesis space); the remaining "
+        f"{n_hypotheses - n_pairs:,} have p=1 by construction"
+    )
+    return tables, pair_index, n_hypotheses

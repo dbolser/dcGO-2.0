@@ -123,7 +123,7 @@ def build_contingency_table(
 
 
 def benjamini_hochberg_correction(
-    pvalues: np.ndarray, alpha: float = 0.05
+    pvalues: np.ndarray, alpha: float = 0.05, n_hypotheses: "int | None" = None
 ) -> Tuple[np.ndarray, float]:
     """
     Apply Benjamini-Hochberg FDR correction to p-values.
@@ -141,15 +141,43 @@ def benjamini_hochberg_correction(
     are 13 GB, so the intermediates are computed in place and released as soon
     as they are dead rather than chained into one expression.
 
+    ``n_hypotheses`` exists for the sparse enumeration in
+    ``compute_cooccurring_contingency_tables``: it tests only the domain-term
+    pairs that co-occur, because every other pair has p=1 exactly under a
+    one-sided ``greater`` test. BH must still divide by the size of the **whole**
+    family, so the caller passes it here.
+
+    Omitting the p=1 tail changes nothing else. Those entries occupy the last
+    ranks, their scaled values ``1.0 * n / j`` for ``j > k`` bottom out at 1.0 at
+    ``j = n``, and the reverse running minimum therefore contributes exactly 1.0
+    — which cannot lower any adjusted value that is already at most 1. Passing
+    ``n_hypotheses`` reproduces the dense result on the enumerated subset
+    exactly, not approximately; leaving it at ``None`` on a subset would divide
+    by the wrong denominator and inflate every rejection.
+
     Args:
         pvalues: Array of p-values
         alpha: FDR threshold (e.g., 0.01 for 1% FDR)
+        n_hypotheses: Size of the hypothesis family, when ``pvalues`` is a
+            subset whose omitted members are all exactly 1. Defaults to
+            ``len(pvalues)``, the dense case.
 
     Returns:
         Tuple of (adjusted_pvalues, threshold) where threshold is the p-value cutoff
+
+    Raises:
+        ValueError: if ``n_hypotheses`` is smaller than the number of p-values,
+            which would mean the caller mis-stated the family and silently
+            deflated its own q-values.
     """
-    n = len(pvalues)
-    if n == 0:
+    k = len(pvalues)
+    n = k if n_hypotheses is None else int(n_hypotheses)
+    if n < k:
+        raise ValueError(
+            f"n_hypotheses ({n}) is smaller than the number of p-values "
+            f"({k}); the family cannot be smaller than the tests in it"
+        )
+    if k == 0:
         return np.zeros(0, dtype=np.float64), 0.0
 
     order = np.argsort(pvalues)
@@ -158,15 +186,18 @@ def benjamini_hochberg_correction(
     scaled = pvalues[order].astype(np.float64, copy=False)
     if scaled is pvalues:  # already float64 and unsorted-copy elided
         scaled = scaled.copy()
+    # Scale by the FAMILY size n, but rank within the k tests actually present.
+    # When the omitted tail is all p=1 these ranks are the true ones: p=1 sorts
+    # last, so every enumerated test keeps the rank it would have had densely.
     scaled *= n
-    scaled /= np.arange(1, n + 1, dtype=np.float64)
+    scaled /= np.arange(1, k + 1, dtype=np.float64)
 
     # Monotonicity: each adjusted value is the smallest scaled value at or above
     # its rank. A reversed accumulate gives that in one pass.
     scaled = np.minimum.accumulate(scaled[::-1])[::-1]
     np.clip(scaled, None, 1.0, out=scaled)
 
-    adjusted = np.empty(n, dtype=np.float64)
+    adjusted = np.empty(k, dtype=np.float64)
     adjusted[order] = scaled
     del scaled, order
 
@@ -185,6 +216,7 @@ def benjamini_hochberg_by_family(
     family: np.ndarray,
     alpha: float = 0.05,
     labels: "dict | None" = None,
+    family_sizes: "dict | None" = None,
 ) -> Tuple[np.ndarray, dict]:
     """Apply BH separately within each hypothesis family.
 
@@ -216,6 +248,13 @@ def benjamini_hochberg_by_family(
         labels: Optional map from a ``family`` value to the name it should carry
             in the returned ``thresholds``. Values absent from the map keep
             their raw form.
+        family_sizes: Optional map from a ``family`` value to that family's full
+            hypothesis count, for the sparse enumeration where ``pvalues`` holds
+            only the co-occurring pairs and every omitted pair has p=1. Each
+            family is then corrected against its own dense size — for dcGO that
+            is ``(domains in the family) * n_terms``, which differs between the
+            single and supra families and so cannot be inferred here. Absent
+            entries fall back to the number of p-values in that family.
 
     Returns:
         ``(adjusted, thresholds)`` where ``thresholds`` maps each family label
@@ -230,8 +269,11 @@ def benjamini_hochberg_by_family(
     thresholds: dict = {}
     for label in np.unique(family):
         members = np.flatnonzero(family == label)
+        key = label.item() if hasattr(label, "item") else label
         family_adjusted, family_threshold = benjamini_hochberg_correction(
-            pvalues[members], alpha=alpha
+            pvalues[members],
+            alpha=alpha,
+            n_hypotheses=(family_sizes or {}).get(key),
         )
         adjusted[members] = family_adjusted
         name = (
