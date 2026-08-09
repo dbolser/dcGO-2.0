@@ -30,11 +30,17 @@ The short version:
   precision against the published reference falls out of the band the acceptance
   criteria required (§4). Both of those bear on the *significant count* and the
   published-dcGO comparison, not on the held-out result.
-* **The one thing it was most wanted for is untested.** The emergent n = 2–8
-  domain combinations cannot be evaluated at this universe size (§1).
+* **The emergent domain combinations gain the evidence they were missing.**
+  Of the supra-domain associations human data already supports, **97.3% gain
+  support all-species (median 14.5×) and 6 lose it**; 82.2% of the thin n = 2–8
+  band clears 8 proteins, and the redundant-signature rate *falls* 3.0% → 1.5%
+  (§6). Reaching this needed the Fisher stage to stop building the dense
+  domain × term product — 13.1 B tables, ~389 GB — and enumerate only the
+  co-occurring pairs, which is exact under a one-sided test (§1).
 
-Scored strictly against `TODO.md`'s criteria: three met (one decisively), one
-half met, one unreachable.
+Scored strictly against `TODO.md`'s criteria: **four met, one half met**. The
+half is precision against the published dcGO, which falls out of its required
+band while recall triples (§4).
 
 ---
 
@@ -73,23 +79,37 @@ plausible-looking `.../ALLSPECIES/goa_allspecies.gaf.gz` into every run manifest
 as the input's origin. That URL does not exist. It now resolves the all-species
 aliases to EBI's actual cross-organism release.
 
-### Supra-domains are out of reach at this scale
+### Supra-domains were out of reach, and are not any more
 
-The Fisher engine tests the **dense** domain × term product and materialises one
-int32 2×2 table per test. Measured by `scratch_allspecies/07_probe_scale.py`:
+The Fisher engine used to test the **dense** domain × term product, one int32
+2×2 table per pair whether or not the pair was ever observed:
 
-| configuration | domains | tests | peak memory |
+| configuration | domains | hypotheses | dense peak memory |
 |---|---|---|---|
 | all-species, single domains | 40,141 | 1.13 B | ~34 GB |
 | all-species, single + supra | 464,490 | **13.1 B** | **~389 GB** |
 
-389 GB is not impossible on this machine (754 GB) but the Benjamini–Hochberg
-sort needs a further ~104 GB of index on top, and this is a shared machine.
-**Every all-species run below is single-domain only**, and the human baselines
-were re-run single-domain to match. That is not a free choice: the emergent
-domain combinations in `SURPRISE_SCORE.md` are exactly the n = 2–8 cases that a
-wider background was supposed to rescue, so the acceptance criterion about the
-emergent-combination support distribution **cannot be evaluated from this run**.
+389 GB plus a further ~104 GB for the Benjamini–Hochberg sort, on a shared
+machine, is why the first pass of this work ran single-domain only and had to
+record the emergent-combination criterion as unevaluable.
+
+It is not a scale problem, it is a wasted-work problem. dcGO's test is one-sided
+in the `greater` direction, and a pair that never co-occurs has a = 0, whose
+one-sided p-value is **exactly 1** at any marginals. Those tables carry no
+information and need not be built. `compute_cooccurring_contingency_tables`
+enumerates only the co-occurring pairs and BH divides by the full hypothesis
+count, which is exact rather than approximate — verified by reproducing both
+committed human runs **byte-identically**, including both family thresholds to
+the last significant figure.
+
+| run | hypotheses | evaluated | dense | sparse |
+|---|---|---|---|---|
+| human, single | 318,749,661 | 655,659 (0.21%) | 322.8 s | **1.6 s** |
+| human, supra | 1,690,803,963 | 3,008,670 (0.18%) | 2123.2 s | **5.4 s** |
+| all-species, supra | 13,057,742,880 | 9,505,808 (**0.073%**) | ~389 GB, not run | **268 s** |
+
+The all-species supra run is 152 MB of tables instead of 389 GB, and finishes in
+four and a half minutes. See §6 for what it says.
 
 ---
 
@@ -434,7 +454,73 @@ a re-run.
 
 ---
 
-## 6. Against the acceptance criteria
+## 6. The emergent domain combinations
+
+This is the criterion the first pass could not reach, and the case a wider
+background was most wanted for: the emergent supra-domain associations in
+`SURPRISE_SCORE.md` sit at n = 2–8 proteins, which is the difference between an
+untestable hypothesis and a result.
+
+All-species with supra-domains: 1,464,355 proteins, **464,490 domain features**,
+28,112 terms, 13,057,742,880 hypotheses, **2,911,662 significant** associations
+(535,133 single + 2,376,529 supra).
+
+A consistency check first, since the two families are corrected separately:
+adding 424,349 supra hypotheses leaves the single family's BH threshold at
+4.741937060752021e-06 — bit-identical to the single-only run, and its
+significant count identical at 535,133. The families really are independent.
+
+### Clause 1 — does the support distribution shift upward?
+
+Marginally, yes: median supra support goes 4 → 6, p90 11 → 48, p99 44 → 295, and
+the share with more than 8 supporting proteins goes 14.9% → 38.8%.
+
+But the criterion is about *the same* combinations gaining evidence, so the
+paired comparison is the one that counts. Of the 121,234 supra associations the
+human-only run calls, **97.3% (117,941) are also called all-species**:
+
+| paired change on the 117,941 shared combinations | |
+|---|---|
+| gained evidence | **114,727 (97.3%)** |
+| unchanged | 3,208 (2.7%) |
+| **lost** evidence | **6 (0.005%)** |
+| median support ratio | **14.5×** (p25 4.0×, p90 52.7×) |
+
+And restricted to the 100,396 shared combinations that were in the thin n = 2–8
+band — the ones the whole exercise was for — **96.9% gained evidence and 82.2%
+now rest on more than 8 proteins**. Six associations lost support in total.
+
+### Clause 2 — does the redundant-signature rate rise?
+
+No. It falls. Scoring both runs with `scripts/rank_surprising_associations.py`
+and taking region overlap ≥ 0.5 as the artefact — several signatures describing
+one region rather than a real combination:
+
+| | human-only | all-species |
+|---|---|---|
+| evaluated | 21,897 | 435,122 |
+| **redundant-signature rate** | 3.0% | **1.5%** |
+| overlap ≥ 0.9 | 0 | 0 |
+| novel vs InterPro2GO | 46.4% | 54.3% |
+
+**Both clauses are met**, so this criterion passes.
+
+### A side effect worth recording: the surprise score becomes a usable ranking
+
+`CLAUDE.md` notes that the surprise score "is **not a total order**: on the GO
+run 9,923 of 10,136 evaluated associations score exactly 0.000, so any comparison
+reaching deeper than its ~213 scored associations is comparing an arbitrary
+tie-break."
+
+That is a power problem, and the wider background is exactly what it needed. The
+proportion of ties barely improves (97.7% → 83.4%), but the *number of
+associations that actually receive a non-zero score* goes from **493 to 72,019 —
+146×**. The tie bucket is still the bulk of the distribution and the caveat
+should stay, but the score now ranks a set large enough to be worth ranking.
+
+---
+
+## 7. Against the acceptance criteria
 
 `TODO.md` deliberately set criteria that a bigger universe cannot satisfy by
 arithmetic. Scored honestly:
@@ -442,12 +528,12 @@ arithmetic. Scored honestly:
 | criterion | verdict |
 |---|---|
 | held-out enrichment does not fall vs human-only, on the same human evaluation set | **met, decisively** — all-species wins 8/9 F_max and 9/9 AUPRC under `manual` training and **9/9 and 9/9 under `experimental`** (§5), despite a handicap (caveat above) |
-| emergent-combination support shifts up, no more redundant signatures | **cannot be evaluated** — supra-domains do not fit in memory at this universe size (§1) |
+| emergent-combination support shifts up, no more redundant signatures | **met** — 97.3% of shared combinations gain evidence (median 14.5×, 6 lose), 82.2% of the thin n=2–8 band clears 8 proteins, and the redundant-signature rate *falls* 3.0% → 1.5% (§6) |
 | recall vs published dcGO rises materially from 0.069 **while precision holds at 0.54–0.63** | **half met** — recall 0.074 → 0.261; precision 0.526 → 0.298, criterion fails |
 | non-independence measured, pooled vs collapsed side by side | **met** — 2.44× overall, 18.5% single-cluster (§2) |
 | permutation null re-run on the wider universe | **met** — 0 significant of 1.13 B tests (§3) |
 
-Three criteria met (one decisively), one half met, one unreachable from this
+Four criteria met, one half met. Nothing is now unreachable from this
 configuration.
 
 **The widening is established as an improvement in predictive power**, on the
@@ -457,18 +543,19 @@ set reproducing to floating-point noise and only the training universe varied.
 8/9 and 9/9 under `manual` training, **9/9 and 9/9 under `experimental`**, is
 not a marginal result — and the losing arm had a 16× lighter handicap.
 
-Two things keep that from being the whole story:
+One thing keeps that from being the whole story:
 
 * **Support is inflated ~2.44× by orthology**, with half the associations
   standing on three or fewer ortholog groups (§2). This does not touch the
   held-out result, which never uses the p-values as probabilities, but it does
-  mean the 535,133 count and its FDR should not be quoted unqualified.
-* **The emergent domain combinations remain untested** (§1) — the case a wider
-  background was most wanted for.
+  mean the 535,133 count — and the 2,911,662 of the supra run — should not be
+  quoted with their FDR unqualified. It is also the obvious next thing to fix:
+  the same paired machinery that measured it could correct it, by testing at
+  the ortholog-group level rather than the protein level.
 
 ---
 
-## 7. Reproducing
+## 8. Reproducing
 
 Build scripts are in `scratch_allspecies/`, numbered in run order. The heavy
 steps are the two streaming scans (the 11.7 GB GAF and the 13 GB

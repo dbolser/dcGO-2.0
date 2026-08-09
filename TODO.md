@@ -74,8 +74,9 @@ This file is just loose notes.
 
 - ~~**Expand the background dimension: a multi-species universe.**~~ **Run
   2026-08-06 — see `MULTISPECIES_BACKGROUND.md`.** Universe went 18,908 → 
-  1,464,355 proteins over 9,074 taxa, single-domain only. Scored against the
-  criteria below: **held-out enrichment does not fall, it rises** (all-species
+  1,464,355 proteins over 9,074 taxa, single domains and supra-domains. Scored
+  against the criteria below — **four met, one half met**.
+  **Held-out enrichment does not fall, it rises** (all-species
   wins 8/9 F_max and 9/9 AUPRC cells on the same human 2021→2026 evaluation
   set); the permutation null is empty (0 of 1.13 B tests); non-independence is
   measured at 2.44× with 18.5% of associations on a single UniRef50 cluster;
@@ -85,20 +86,28 @@ This file is just loose notes.
   of the projected non-human annotation cites a human protein**, and "all
   species" is really 19 taxa carrying half the annotations.
 
-  Three follow-ups, in priority order:
-  1. **The emergent-combination criterion is still untested** — supra-domains
-     need 13.1 B tests / ~389 GB at this universe size. Fixing that means making
-     the Fisher stage enumerate only co-occurring pairs instead of the dense
-     domain × term product. That is valid and lossless here (`FISHER_ALTERNATIVE`
-     is `greater`, so every a=0 pair has p=1) provided BH keeps the full test
-     count as its denominator.
-  2. **Re-run the held-out arm under `--evidence-filter experimental`.** The
-     held-out win is the one result circularity cannot fake, but its *size* was
-     measured on a 75.8%-projected background.
-  3. **The held-out all-species arm carries a 31.9% universe loss** (vs 1.9% for
+  Follow-ups:
+  1. ~~The emergent-combination criterion is untested.~~ **Done.** The Fisher
+     stage now enumerates only co-occurring pairs, which is exact under the
+     one-sided test provided BH keeps the full hypothesis count as its
+     denominator; it reproduces both committed human runs byte-identically and
+     takes the all-species supra run from ~389 GB/not-runnable to 268 s. The
+     criterion **passes**: 97.3% of shared supra combinations gain evidence
+     (median 14.5×, 6 lose), 82.2% of the thin n=2-8 band clears 8 proteins, and
+     the redundant-signature rate falls 3.0% -> 1.5%.
+  2. ~~Re-run the held-out arm under `--evidence-filter experimental`.~~
+     **Done** — the advantage grows rather than shrinks: 9/9 and 9/9, larger in
+     12 of 18 cells.
+  3. **Phylogenetic non-independence is measured but not corrected.** Support is
+     inflated 2.44x and half the associations rest on <=3 UniRef50 clusters.
+     Now the largest open issue, and the natural fix is to test at the
+     ortholog-group level rather than the protein level.
+  4. **The held-out all-species arm carries a 31.9% universe loss** (vs 1.9% for
      human) because the t0 runs reuse today's `protein2ipr` for a 2021 protein
      set. It won anyway, so the win is conservative — but closing this needs an
      archived 2021 `protein2ipr`.
+  5. **Precision against the published dcGO** is the one criterion still not
+     met (0.526 -> 0.298 under `manual`, 0.564 -> 0.438 under `experimental`).
 
   Original entry follows.
 
