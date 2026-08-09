@@ -116,6 +116,80 @@ def evaluate_ontology(
     return pool(ontology, outcomes, bootstrap, seed)
 
 
+def snapshot_problems(
+    ontologies: List[str],
+    paths_t0: Dict[str, Path],
+    paths_t1: Dict[str, Path],
+    check_hierarchy: bool = True,
+) -> List[str]:
+    """Reasons the requested ontologies cannot be scored, cheapest checks first.
+
+    Every one of these used to surface only *after* the architecture pass, which
+    is the expensive part of the run and has nothing to do with any of them.
+
+    Three distinct failures, in increasing subtlety:
+
+    1. An input this script cannot resolve at all. ``paths_t0`` duplicates
+       ``run_dcgo_human.build_ontology_paths``, so a registry entry added later
+       is simply absent — ``doid`` once crashed a two-hour run with
+       ``KeyError('doid_obo')``.
+    2. An input named but not present on disk. Checking dict keys alone let a
+       missing ``--doid-obo`` or ``--enzyme-dat`` reach ``parse()``.
+    3. **Annotation inputs identical across the two snapshots.** This is a
+       temporal benchmark: it counts terms a protein gains between t0 and t1, so
+       at least one annotation input has to differ. ``ec`` is the live case —
+       EC annotations come from ``enzyme_dat`` alone, so with one ENZYME release
+       ``t0_raw == t1_raw`` and every hit count is zero *by construction*. That
+       is indistinguishable in the output from "this layer has no predictive
+       signal", which is why it has to be refused rather than reported.
+
+       Hierarchy inputs are deliberately excluded from check 3: propagating both
+       snapshots up today's hierarchy is a known approximation, not an empty
+       comparison.
+
+    Returns:
+        Human-readable problems; empty means every ontology can be scored.
+    """
+    from src.ontology_registry import get_ontology, missing_inputs
+
+    problems: List[str] = []
+    for ontology in ontologies:
+        entry = get_ontology(ontology)
+
+        unresolvable = sorted(
+            (set(entry.needs) | set(entry.hierarchy_needs)) - set(paths_t0)
+        )
+        if unresolvable:
+            problems.append(
+                f"--ontologies {ontology} needs input(s) {unresolvable}, which "
+                "this script does not resolve. Add them to paths_t0."
+            )
+            continue
+
+        absent = False
+        for label, paths in (("t0", paths_t0), ("t1", paths_t1)):
+            missing = missing_inputs(entry, paths, for_hierarchy=check_hierarchy)
+            if missing:
+                problems.append(
+                    f"--ontologies {ontology} is missing {label} input(s): "
+                    + "; ".join(missing)
+                )
+                absent = True
+        if absent:
+            continue
+
+        if entry.needs and all(paths_t0[k] == paths_t1[k] for k in entry.needs):
+            shared = ", ".join(f"{k}={paths_t0[k]}" for k in entry.needs)
+            problems.append(
+                f"--ontologies {ontology} would compare a snapshot against "
+                f"itself: every annotation input is the same file for t0 and t1 "
+                f"({shared}). The result would be a guaranteed zero that looks "
+                "like a negative finding. Supply a distinct t0 release (for ec: "
+                "--t0-enzyme-dat) or drop this ontology."
+            )
+    return problems
+
+
 def main() -> int:  # pragma: no cover - I/O wiring
     import argparse
 
@@ -190,7 +264,16 @@ def main() -> int:  # pragma: no cover - I/O wiring
         "--enzyme-dat",
         type=Path,
         default=Path("data/raw/enzyme/enzyme.dat"),
-        help="Expasy ENZYME, for --ontologies ec",
+        help="Expasy ENZYME (the t1 snapshot), for --ontologies ec",
+    )
+    parser.add_argument(
+        "--t0-enzyme-dat",
+        type=Path,
+        default=None,
+        help="Archived Expasy ENZYME for the t0 snapshot. EC annotations come "
+        "from this file alone, so without a t0 release distinct from "
+        "--enzyme-dat the two snapshots are the same bytes and the benchmark "
+        "can only report zero (see the guard in main)",
     )
     parser.add_argument(
         "--supra-only",
@@ -223,6 +306,32 @@ def main() -> int:  # pragma: no cover - I/O wiring
             logger.error(f"Missing required input: {path}")
             return 1
 
+    paths_t0 = {
+        "gaf": args.t0_gaf,
+        "go_obo": args.go_ontology,
+        "uniprot_dat": args.t0_uniprot,
+        "subcell": args.subcell,
+        "chebi_obo": args.chebi_obo,
+        "reactome_relations": args.reactome_relations,
+        "keywlist": args.keyword_list,
+        "doid_obo": args.doid_obo,
+        "enzyme_dat": args.t0_enzyme_dat or args.enzyme_dat,
+    }
+    paths_t1 = dict(
+        paths_t0,
+        uniprot_dat=args.t1_uniprot,
+        gaf=args.t1_gaf,
+        enzyme_dat=args.enzyme_dat,
+    )
+
+    # Before the architecture pass: every one of these checks is cheap, and
+    # every one of them used to fail only after that pass had spent its time.
+    problems = snapshot_problems(args.ontologies, paths_t0, paths_t1, args.propagate)
+    if problems:
+        for problem in problems:
+            logger.error(problem)
+        return 1
+
     logger.info("Parsing domain architectures...")
     architectures = DomainAnnotationParser(
         max_supra_domain_length=3, min_domain_length=10
@@ -235,43 +344,6 @@ def main() -> int:  # pragma: no cover - I/O wiring
         f"  Universe: {len(universe):,} proteins with domains and a 2021 entry "
         f"(of {len(architectures):,} with domains)"
     )
-
-    paths_t0 = {
-        "gaf": args.t0_gaf,
-        "go_obo": args.go_ontology,
-        "uniprot_dat": args.t0_uniprot,
-        "subcell": args.subcell,
-        "chebi_obo": args.chebi_obo,
-        "reactome_relations": args.reactome_relations,
-        "keywlist": args.keyword_list,
-        "doid_obo": args.doid_obo,
-        "enzyme_dat": args.enzyme_dat,
-    }
-    paths_t1 = dict(paths_t0, uniprot_dat=args.t1_uniprot, gaf=args.t1_gaf)
-
-    # This dict is a second copy of the one in run_dcgo_human.build_ontology_paths,
-    # and a registry entry added after it was written will not be in it. That is
-    # not hypothetical: adding `doid` to --ontologies crashed a two-hour run with
-    # KeyError('doid_obo') at the first parse, after the expensive architecture
-    # pass. Check every requested ontology up front instead.
-    unresolvable = {
-        ontology: sorted(
-            (
-                set(get_ontology(ontology).needs)
-                | set(get_ontology(ontology).hierarchy_needs)
-            )
-            - set(paths_t0)
-        )
-        for ontology in args.ontologies
-    }
-    unresolvable = {k: v for k, v in unresolvable.items() if v}
-    if unresolvable:
-        for ontology, missing in unresolvable.items():
-            logger.error(
-                f"--ontologies {ontology} needs input(s) {missing}, which this "
-                "script does not resolve. Add them to paths_t0 above."
-            )
-        return 1
 
     results: List[StratumResult] = []
     for ontology in args.ontologies:
