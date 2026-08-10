@@ -95,7 +95,7 @@ from src.run_manifest import RunManifest, describe_file, manifest_filename
 from src.sparse_fisher import (
     DomainType,
     build_sparse_matrices,
-    compute_contingency_tables_sparse,
+    compute_cooccurring_contingency_tables,
 )
 from src.vectorized_fisher import (
     benjamini_hochberg_by_family,
@@ -155,7 +155,14 @@ def input_source_urls(species: str) -> dict:
         if name in config.data_sources
     }
     # data_sources pins the *human* GAF; every other species has its own URL.
-    urls["gaf"] = config.goa_url_for(species)
+    # Temporal snapshots (human_t0_2021, allspecies_t0_2021) have none that can
+    # be composed from the name, and they say so by raising. Leaving the key out
+    # makes the manifest omit source_url for the GAF, which is the truthful
+    # outcome — the file's SHA-256 is still its identity.
+    try:
+        urls["gaf"] = config.goa_url_for(species)
+    except Exception as exc:
+        logger.debug(f"No upstream URL for the {species!r} GAF: {exc}")
     return urls
 
 
@@ -828,7 +835,22 @@ def main():
     logger.info("─" * 70)
     start_time = time.time()
 
-    tables = compute_contingency_tables_sparse(protein_domain_matrix, protein_go_matrix)
+    # Enumerate only the domain-term pairs that co-occur. Under a one-sided
+    # 'greater' test every other pair has p=1 exactly, so this is the same
+    # answer as the dense product, not an approximation of it — provided BH
+    # divides by the full hypothesis count, which is what n_hypotheses carries
+    # below. The dense path materialises one int32 2x2 table per pair whether or
+    # not it is ever observed, which is what put supra-domains out of reach on a
+    # multi-species universe (13.1e9 tables, ~389 GB).
+    if FISHER_ALTERNATIVE != "greater":
+        raise RuntimeError(
+            f"The co-occurrence enumeration assumes a one-sided 'greater' test "
+            f"(a=0 implies p=1); FISHER_ALTERNATIVE is {FISHER_ALTERNATIVE!r}. "
+            "Use compute_contingency_tables_sparse for other alternatives."
+        )
+    tables, pair_index, n_hypotheses = compute_cooccurring_contingency_tables(
+        protein_domain_matrix, protein_go_matrix
+    )
 
     table_time = time.time() - start_time
     logger.info(
@@ -885,17 +907,34 @@ def main():
         dtype=bool,
         count=len(domain_list),
     )
-    # A bool, not a string array. `is_supra` is per *domain*; the flattened test
-    # index is domain-major, so repeating it by the term count gives the
-    # per-test assignment. At 1.69e9 tests a <U6 array of "single"/"supra"
-    # would be 40.6 GB against 1.69 GB for this.
-    family = np.repeat(is_supra, len(go_list))
+    # A bool, not a string array. `is_supra` is per *domain*; pair_index holds
+    # each enumerated test's position in the dense domain-major layout, so
+    # dividing by the term count recovers its domain. At 1.69e9 tests a <U6
+    # array of "single"/"supra" would be 40.6 GB against 1.69 GB for this.
+    #
+    # Chunked because the intermediate domain index is int64: materialising it
+    # whole for a multi-billion-pair run would cost 8x the bool it produces.
+    family = np.empty(len(pair_index), dtype=bool)
+    for start in range(0, len(pair_index), 1 << 26):
+        stop = min(start + (1 << 26), len(pair_index))
+        family[start:stop] = is_supra[pair_index[start:stop] // len(go_list)]
+
+    # Each family is corrected against its own DENSE size, not the number of
+    # co-occurring pairs it happens to contribute: the omitted pairs are real
+    # hypotheses whose p-value is 1. The two families have different domain
+    # counts, so this cannot be inferred inside the BH helper.
+    n_supra_domains = int(is_supra.sum())
+    family_sizes = {
+        False: (len(domain_list) - n_supra_domains) * len(go_list),
+        True: n_supra_domains * len(go_list),
+    }
 
     adjusted_pvalues, thresholds = benjamini_hochberg_by_family(
         pvalues,
         family,
         alpha=args.fdr_threshold,
         labels={False: "single", True: "supra"},
+        family_sizes=family_sizes,
     )
     del family, is_supra
 
@@ -944,8 +983,8 @@ def main():
         significant_indices = np.where(significant)[0]
 
         for idx in significant_indices:
-            domain_idx = idx // len(go_list)
-            go_idx = idx % len(go_list)
+            domain_idx = pair_index[idx] // len(go_list)
+            go_idx = pair_index[idx] % len(go_list)
             table = tables[idx]
             a, b = int(table[0, 0]), int(table[0, 1])
             c, d = int(table[1, 0]), int(table[1, 1])
@@ -1070,8 +1109,8 @@ def main():
             f"{xref_header}\n"
         )
         for idx in significant_indices:
-            domain_idx = idx // len(go_list)
-            go_idx = idx % len(go_list)
+            domain_idx = pair_index[idx] // len(go_list)
+            go_idx = pair_index[idx] % len(go_list)
             domain_id = domain_list[domain_idx]
 
             # Get contingency table values for hypergeometric score
@@ -1113,8 +1152,8 @@ def main():
             f"domain_type\tconstituent_domains\tn_observations{xref_header}\n"
         )
         for rank, idx in enumerate(top_indices, 1):
-            domain_idx = idx // len(go_list)
-            go_idx = idx % len(go_list)
+            domain_idx = pair_index[idx] // len(go_list)
+            go_idx = pair_index[idx] % len(go_list)
             domain_id = domain_list[domain_idx]
 
             # Get contingency table values for hypergeometric score
@@ -1166,9 +1205,16 @@ def main():
     logger.info("PIPELINE COMPLETE!")
     logger.info("=" * 70)
     logger.info("Results Summary:")
-    logger.info(f"  Total domain-{ontology_label.upper()} tests: {len(pvalues):,}")
+    # The denominator is the hypothesis count, not the number of tables built.
+    # The pairs that never co-occur are real hypotheses that were tested and
+    # returned p=1; quoting the enumerated subset instead would overstate the
+    # hit rate by the compression factor (~100x on a multi-species supra run).
     logger.info(
-        f"  Significant associations (FDR < {args.fdr_threshold}): {n_significant:,} ({n_significant / len(pvalues) * 100:.2f}%)"
+        f"  Total domain-{ontology_label.upper()} tests: {n_hypotheses:,} "
+        f"({len(pvalues):,} co-occurring pairs evaluated; the rest are p=1)"
+    )
+    logger.info(
+        f"  Significant associations (FDR < {args.fdr_threshold}): {n_significant:,} ({n_significant / n_hypotheses * 100:.4f}%)"
     )
     if propagated_annotations:
         direct_count = sum(
@@ -1194,7 +1240,11 @@ def main():
             "proteins": len(proteins_with_both),
             "domains": len(domain_list),
             "terms": len(go_list),
-            "tests": int(len(pvalues)),
+            "tests": int(n_hypotheses),
+            # Tables actually built and passed to Fisher. Everything else in the
+            # hypothesis space has a=0 and therefore p=1 exactly under the
+            # one-sided 'greater' test, so it is corrected for but not computed.
+            "tests_evaluated": int(len(pvalues)),
             "significant_associations": n_significant,
             # One cutoff per hypothesis family, not one overall.
             "bh_threshold_pvalue": {k: float(v) for k, v in thresholds.items()},

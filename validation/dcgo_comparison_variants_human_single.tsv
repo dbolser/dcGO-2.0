@@ -1,0 +1,7 @@
+our_threshold	their_definition	ours	theirs	shared	precision_ours_in_theirs	recall_theirs_in_ours	jaccard
+fdr<0.01	published_direct	6633	47189	3488	0.5259	0.0739	0.0693
+fdr<0.001	published_direct	4860	47189	2718	0.5593	0.0576	0.0551
+fdr<0.01	published_all	6633	77652	3870	0.5834	0.0498	0.0481
+fdr<0.001	published_all	4860	77652	3008	0.6189	0.0387	0.0378
+fdr<0.01	fdr_lt_0.001	6633	58529	3845	0.5797	0.0657	0.0627
+fdr<0.001	fdr_lt_0.001	4860	58529	2934	0.6037	0.0501	0.0485

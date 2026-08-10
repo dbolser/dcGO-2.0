@@ -1,0 +1,4 @@
+aspect	ours_significant	theirs_significant	shared	precision_ours_in_theirs	recall_theirs_in_ours	jaccard
+molecular_function	1217	7694	664	0.5456	0.0863	0.0805
+biological_process	1184	25280	639	0.5397	0.0253	0.0247
+cellular_component	586	6474	383	0.6536	0.0592	0.0574

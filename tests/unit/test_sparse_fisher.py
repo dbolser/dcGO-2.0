@@ -8,7 +8,15 @@ import pytest
 import numpy as np
 from scipy import sparse
 
-from src.sparse_fisher import build_sparse_matrices, compute_contingency_tables_sparse
+from src.sparse_fisher import (
+    build_sparse_matrices,
+    compute_contingency_tables_sparse,
+    compute_cooccurring_contingency_tables,
+)
+from src.vectorized_fisher import (
+    benjamini_hochberg_correction,
+    fisher_exact_parallel,
+)
 
 
 class TestBuildSparseMatrices:
@@ -402,3 +410,99 @@ class TestIntegration:
         assert tables.shape == (len(all_domains) * len(all_go_terms), 2, 2)
         assert np.all(tables >= 0)
         assert np.all(tables.sum(axis=(1, 2)) == 100)
+
+
+class TestCooccurringEnumerationMatchesDense:
+    """The sparse enumeration must be exact, not merely close.
+
+    Its whole justification is that a=0 pairs have a one-sided 'greater'
+    p-value of exactly 1, so skipping them changes nothing provided BH still
+    divides by the full hypothesis count. These tests hold it to that: identical
+    p-values on the pairs it keeps, and identical *rejections* end to end.
+    """
+
+    @staticmethod
+    def _matrices(seed: int, n_proteins: int, n_domains: int, n_terms: int):
+        rng = np.random.default_rng(seed)
+        # Sparse enough that most domain-term pairs never co-occur, which is the
+        # regime the enumeration exists for.
+        d = (rng.random((n_proteins, n_domains)) < 0.06).astype(np.int8)
+        g = (rng.random((n_proteins, n_terms)) < 0.08).astype(np.int8)
+        # Give every protein at least one of each, so the universe is the
+        # intersection rather than a mix of annotated and unannotated rows.
+        d[np.arange(n_proteins), rng.integers(0, n_domains, n_proteins)] = 1
+        g[np.arange(n_proteins), rng.integers(0, n_terms, n_proteins)] = 1
+        return sparse.csr_matrix(d), sparse.csr_matrix(g)
+
+    @pytest.mark.parametrize("seed", [0, 1, 2])
+    def test_tables_match_the_dense_path_on_cooccurring_pairs(self, seed):
+        dm, gm = self._matrices(seed, 60, 12, 9)
+        dense = compute_contingency_tables_sparse(dm, gm)
+        sparse_tables, pair_index, n_hypotheses = (
+            compute_cooccurring_contingency_tables(dm, gm, domain_block=5)
+        )
+
+        assert n_hypotheses == dm.shape[1] * gm.shape[1] == len(dense)
+        # Every enumerated pair reproduces its dense table exactly.
+        np.testing.assert_array_equal(sparse_tables, dense[pair_index])
+        # And every pair NOT enumerated is exactly the a=0 case it claims to be.
+        omitted = np.setdiff1d(np.arange(n_hypotheses), pair_index)
+        assert np.all(dense[omitted][:, 0, 0] == 0)
+        assert len(omitted) > 0, "fixture is too dense to exercise the skip"
+
+    def test_pair_index_is_ascending_and_unique(self):
+        dm, gm = self._matrices(3, 40, 10, 7)
+        _, pair_index, _ = compute_cooccurring_contingency_tables(
+            dm, gm, domain_block=3
+        )
+        assert np.all(np.diff(pair_index) > 0)
+
+    @pytest.mark.parametrize("block", [1, 3, 1000])
+    def test_block_size_does_not_change_the_result(self, block):
+        dm, gm = self._matrices(4, 50, 11, 8)
+        ref_t, ref_i, _ = compute_cooccurring_contingency_tables(dm, gm, 1000)
+        got_t, got_i, _ = compute_cooccurring_contingency_tables(dm, gm, block)
+        np.testing.assert_array_equal(got_i, ref_i)
+        np.testing.assert_array_equal(got_t, ref_t)
+
+    @pytest.mark.parametrize("seed", [0, 5])
+    def test_end_to_end_rejections_are_identical(self, seed):
+        """The claim that actually matters: same significant set, same q-values."""
+        dm, gm = self._matrices(seed, 80, 14, 10)
+
+        dense = compute_contingency_tables_sparse(dm, gm)
+        _, dense_p = fisher_exact_parallel(dense, alternative="greater")
+        dense_q, _ = benjamini_hochberg_correction(dense_p, alpha=0.05)
+
+        tables, pair_index, n_hypotheses = compute_cooccurring_contingency_tables(
+            dm, gm, domain_block=4
+        )
+        _, sparse_p = fisher_exact_parallel(tables, alternative="greater")
+        sparse_q, _ = benjamini_hochberg_correction(
+            sparse_p, alpha=0.05, n_hypotheses=n_hypotheses
+        )
+
+        # a=0 really does give p=1 under this alternative.
+        np.testing.assert_allclose(
+            dense_p[np.setdiff1d(np.arange(n_hypotheses), pair_index)], 1.0
+        )
+        np.testing.assert_allclose(sparse_p, dense_p[pair_index], rtol=0, atol=0)
+        np.testing.assert_allclose(sparse_q, dense_q[pair_index], rtol=1e-12)
+
+        dense_hits = set(np.flatnonzero(dense_q <= 0.05).tolist())
+        sparse_hits = set(pair_index[sparse_q <= 0.05].tolist())
+        assert sparse_hits == dense_hits
+
+    def test_forgetting_n_hypotheses_would_inflate_rejections(self):
+        """Guards the one mistake that makes this silently wrong."""
+        dm, gm = self._matrices(7, 80, 14, 10)
+        tables, _, n_hypotheses = compute_cooccurring_contingency_tables(dm, gm)
+        _, p = fisher_exact_parallel(tables, alternative="greater")
+        correct, _ = benjamini_hochberg_correction(p, 0.05, n_hypotheses=n_hypotheses)
+        naive, _ = benjamini_hochberg_correction(p, 0.05)
+        assert (naive <= 0.05).sum() >= (correct <= 0.05).sum()
+        assert np.all(naive <= correct + 1e-12)
+
+    def test_family_size_smaller_than_its_tests_is_rejected(self):
+        with pytest.raises(ValueError, match="smaller than the number of p-values"):
+            benjamini_hochberg_correction(np.array([0.1, 0.2]), n_hypotheses=1)

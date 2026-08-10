@@ -49,9 +49,13 @@ This file is just loose notes.
   side by side, in `SURPRISE_SCORE.md`.
 - ~~**Predictive power across the breadth**~~ — `validation/temporal_breadth.py`.
   One archived Swiss-Prot release (2021_02) gives t0 for every UniProt-native
-  layer. **Corrected 2026-08-04** after `restrict_to_universe` (#26): GO 11.5×,
-  reactome 11.4×, subcellular 3.7×, cofactor 3.5×, keyword 3.4×; complex has no
-  demonstrated signal (CI includes zero), disease undefined, ligand untestable.
+  layer. **Corrected 2026-08-04** after `restrict_to_universe` (#26), and
+  regenerated 2026-08-06 on the final code: GO 11.4×, reactome 11.5×,
+  subcellular 3.7×, cofactor 3.6×, keyword 3.4×; complex has no demonstrated
+  signal (CI includes zero), disease undefined, ligand untestable. `doid` was
+  added to the breadth set and scores **0 hits on 160 predictions**, the same as
+  raw `disease` — the Disease-Ontology re-keying (#35) does not rescue this
+  layer here either, exactly as that PR predicted.
   The contamination was suppressing the signal — every layer went *up*, keyword
   doubling. See `VALIDATION_PLAN.md` §2 breadth subsection.
 
@@ -67,6 +71,116 @@ This file is just loose notes.
 - §4 ablation (#10), §3 original-dcGO domain re-keying SSF/PF (#9), §5–§6.
 
 ## Queued
+
+- ~~**Expand the background dimension: a multi-species universe.**~~ **Run
+  2026-08-06 — see `MULTISPECIES_BACKGROUND.md`.** Universe went 18,908 → 
+  1,464,355 proteins over 9,074 taxa, single domains and supra-domains. Scored
+  against the criteria below — **four met, one half met**.
+  **Held-out enrichment does not fall, it rises** (all-species
+  wins 8/9 F_max and 9/9 AUPRC cells on the same human 2021→2026 evaluation
+  set); the permutation null is empty (0 of 1.13 B tests); non-independence is
+  measured at 2.44× with 18.5% of associations on a single UniRef50 cluster;
+  recall vs published dcGO rises 0.074 → 0.261 but **precision falls to 0.298**,
+  so that criterion fails on its precision clause. Two traps came out worse than
+  this entry assumed: the universe is **75.8% projected** annotation and **55.2%
+  of the projected non-human annotation cites a human protein**, and "all
+  species" is really 19 taxa carrying half the annotations.
+
+  Follow-ups:
+  1. ~~The emergent-combination criterion is untested.~~ **Done.** The Fisher
+     stage now enumerates only co-occurring pairs, which is exact under the
+     one-sided test provided BH keeps the full hypothesis count as its
+     denominator; it reproduces both committed human runs byte-identically and
+     takes the all-species supra run from ~389 GB/not-runnable to 268 s. The
+     criterion **passes**: 97.3% of shared supra combinations gain evidence
+     (median 14.5×, 6 lose), 82.2% of the thin n=2-8 band clears 8 proteins, and
+     the redundant-signature rate falls 3.0% -> 1.5%.
+  2. ~~Re-run the held-out arm under `--evidence-filter experimental`.~~
+     **Done** — the advantage grows rather than shrinks: 9/9 and 9/9, larger in
+     12 of 18 cells.
+  3. **Phylogenetic non-independence is measured but not corrected.** Support is
+     inflated 2.44x and half the associations rest on <=3 UniRef50 clusters.
+     Now the largest open issue, and the natural fix is to test at the
+     ortholog-group level rather than the protein level.
+  4. **The held-out all-species arm carries a 31.9% universe loss** (vs 1.9% for
+     human) because the t0 runs reuse today's `protein2ipr` for a 2021 protein
+     set. It won anyway, so the win is conservative — but closing this needs an
+     archived 2021 `protein2ipr`.
+  5. **Precision against the published dcGO** is the one criterion still not
+     met (0.526 -> 0.298 under `manual`, 0.564 -> 0.438 under `experimental`).
+
+  Original entry follows.
+
+- **Expand the background dimension: a multi-species universe.** (Proposed
+  2026-08-06.) Every run so far is human-only — `goa_human.gaf.gz` is 826,052
+  lines, all `taxon:9606`, and `protein2ipr_human.dat.gz` is extracted by
+  matching those accessions, so the Fisher universe is 18,909 human proteins.
+  The original method used ~2,414 genomes plus all of UniProt. Widening the
+  *background* is the most promising remaining axis, and the `AnnotationSource`
+  seam plus the species-parameterised path already make it mechanically cheap —
+  mouse runs end to end today.
+
+  **Why it is worth doing.**
+  - *Power where we most lack it.* The emergent domain combinations that carry
+    the headline sit at n = 2-8 proteins. A combination seen in three human
+    proteins may be seen in fifty across vertebrates, which is the difference
+    between an untestable hypothesis and a result.
+  - *It closes the one uninterpretable number in §3.* Against published dcGO we
+    report precision 0.54-0.63 but recall 0.069, and **69.4% of the pairs they
+    call that we miss have zero co-occurring human proteins** — unreachable at
+    any threshold, purely because we look at one species.
+  - *Conservation is evidence.* A domain-function association that holds across
+    a phylogenetic range is a stronger claim than one seen once.
+
+  **Three traps, in the order they will bite.**
+
+  1. **Phylogenetic non-independence — the statistical problem, and it is
+     serious.** Fisher's exact test assumes independent observations. Fifty
+     mammalian orthologs of one protein are close to *one* observation, not
+     fifty. Pooling them naively inflates every count in the contingency table
+     and would manufacture significance on a scale that dwarfs the all-species
+     contamination bug fixed in #26. Any design has to say what the independent
+     unit is — an ortholog group, a species-weighted count, a phylogenetically
+     balanced sample — before it says anything about results.
+
+  2. **Annotation-transfer circularity.** Most non-human GO annotation is
+     projected rather than observed, and much of it is projected *from human*.
+     Predicting human function from annotations that were themselves derived
+     from human function is circular. Note this already partly applies to the
+     current human runs: the default `--evidence-filter manual` admits ten
+     projection-based codes (`IBA IBD IGC IKR IRD ISA ISM ISO ISS RCA`), and
+     IBA (68,062) plus ISS (34,462) are ~16% of the 651,010 accepted human
+     annotations. Adding species compounds it. A multi-species run probably has
+     to train on `experimental` only, and must at minimum measure how much of
+     the added signal is projected.
+
+  3. **Which species, and weighted how.** All of Swiss-Prot is 575,503 entries
+     but wildly unbalanced by clade and by annotation depth. A handful of
+     well-curated model organisms is a different experiment from a broad sweep.
+     The choice changes the claim, so it should be made and stated first.
+
+  **Design sketch.** The seam does not need changing: `parse_goa` is already
+  species-agnostic and `extract_human_interpro.py --species X` already works.
+  What is needed is (a) a way to build one universe from several species'
+  inputs, (b) a decision on the independent unit, and (c) an evidence policy.
+  The cheapest informative first cut is human + mouse, where we already have
+  both sides and can measure the non-independence directly by comparing pooled
+  counts against ortholog-collapsed ones.
+
+  **Acceptance criteria — deliberately not "more associations".** The universe
+  grows, so the significant count grows arithmetically; that is not evidence of
+  anything. Require instead:
+  - the held-out enrichment (as in `temporal_breadth.py`) does not *fall*
+    against the human-only baseline on the same human evaluation set;
+  - the emergent-combination support distribution shifts upward (the n = 2-8
+    cases gain evidence) without the redundant-signature rate rising;
+  - recall against published dcGO rises materially from 0.069 while precision
+    holds in the 0.54-0.63 band;
+  - a stated, measured treatment of non-independence — at minimum, pooled versus
+    ortholog-collapsed counts reported side by side so a reader can see the
+    inflation;
+  - the permutation null is re-run, since a multi-species universe changes what
+    "random" means.
 
 - **Surprise score v2: weigh emergence against testability.** The held-out test
   exposed a structural tension — emergence requires that a combination's carriers

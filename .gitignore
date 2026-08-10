@@ -134,3 +134,11 @@ logs/
 # domain x GO association table (~17 MB); the metrics derived from them are
 # committed instead (validation/ablation_*.tsv).
 results/ablation/
+
+# Multi-species background build (MULTISPECIES_BACKGROUND.md). The numbered
+# scripts in scratch_allspecies/ ARE the reproduction recipe and are committed;
+# what they emit is not. The per-association non-independence tables are the
+# largest of these (26 MB for the InterPro run) and are regenerable in ~2 min
+# from a completed run, so the summary statistics go in the write-up instead.
+scratch_allspecies/out/
+scratch_allspecies/*.log

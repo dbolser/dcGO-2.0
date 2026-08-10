@@ -1,0 +1,23 @@
+metric	value
+our_architectures_observed	5070
+their_architectures	7163
+shared_architectures_exact_order	1820
+shared_architectures_order_insensitive	1704
+architecture_precision_exact_order	0.3590
+architecture_recall_exact_order	0.2541
+architecture_jaccard_exact_order	0.1748
+architecture_precision_order_insensitive	0.3841
+architecture_recall_order_insensitive	0.3079
+architecture_jaccard_order_insensitive	0.2061
+architectures_compared	0
+our_associations_compared	0
+their_associations_compared	0
+shared_associations	0
+precision_ours_in_theirs	
+recall_theirs_in_ours	
+jaccard	
+their_associations_compared_incl_inherited	0
+shared_associations_incl_inherited	0
+precision_vs_direct_plus_inherited	
+recall_vs_direct_plus_inherited	
+jaccard_vs_direct_plus_inherited	
