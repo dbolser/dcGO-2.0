@@ -554,59 +554,14 @@ class OntologyProcessor:
             logger.warning("No direct associations provided for propagation")
             return []
 
-        propagated_annotations = []
-        processed_pairs = set()  # Track domain-GO pairs to avoid duplicates
+        # Import lazily to avoid the hierarchy module importing Annotation while
+        # this module is still initialising.
+        from src.hierarchy import propagate_via_ancestors
 
-        for i, assoc in enumerate(direct_associations):
-            if i % 1000 == 0:
-                logger.info(
-                    f"Propagating annotation {i + 1}/{len(direct_associations)}"
-                )
-
-            try:
-                # Add direct annotation
-                direct_key = (assoc.domain, assoc.go_term)
-                if direct_key not in processed_pairs:
-                    propagated_annotations.append(
-                        Annotation(
-                            domain=assoc.domain,
-                            go_term=assoc.go_term,
-                            q_value=assoc.q_value,
-                            association_score=assoc.hyper_score,
-                            annotation_type="direct",
-                            direct_source_term=assoc.go_term,
-                        )
-                    )
-                    processed_pairs.add(direct_key)
-
-                # Propagate to ancestors
-                if assoc.go_term in self.go_graph:
-                    ancestors = self.get_ancestors(assoc.go_term)
-
-                    for ancestor in ancestors:
-                        ancestor_key = (assoc.domain, ancestor)
-                        if ancestor_key not in processed_pairs:
-                            propagated_annotations.append(
-                                Annotation(
-                                    domain=assoc.domain,
-                                    go_term=ancestor,
-                                    q_value=assoc.q_value,
-                                    association_score=assoc.hyper_score,
-                                    annotation_type="propagated",
-                                    direct_source_term=assoc.go_term,
-                                )
-                            )
-                            processed_pairs.add(ancestor_key)
-                else:
-                    logger.debug(
-                        f"GO term {assoc.go_term} not found in ontology for propagation"
-                    )
-
-            except Exception as e:
-                logger.warning(
-                    f"Error propagating annotation for {assoc.domain}-{assoc.go_term}: {e}"
-                )
-                continue
+        propagated_annotations = propagate_via_ancestors(
+            direct_associations,
+            lambda term: self.get_ancestors(term) if term in self.go_graph else (),
+        )
 
         # Count direct vs propagated
         direct_count = sum(

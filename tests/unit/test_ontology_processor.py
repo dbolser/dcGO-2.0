@@ -505,6 +505,27 @@ class TestAnnotationPropagation:
         pairs = [(ann.domain, ann.go_term) for ann in propagated]
         assert len(pairs) == len(set(pairs))  # No duplicates
 
+    @pytest.mark.parametrize("reverse", [False, True])
+    def test_direct_parent_wins_over_propagated_child(
+        self, ontology_processor, reverse
+    ):
+        associations = [
+            MockAssociation("IPR001", "GO:0006812", 1e-10, 1e-8, 95.0),
+            MockAssociation("IPR001", "GO:0006811", 1e-4, 1e-3, 70.0),
+        ]
+        if reverse:
+            associations.reverse()
+
+        propagated = ontology_processor.propagate_annotations(associations)
+        parent = next(ann for ann in propagated if ann.go_term == "GO:0006811")
+
+        assert parent.annotation_type == "direct"
+        assert parent.direct_source_term == "GO:0006811"
+        # The direct parent keeps provenance; the stronger child contributes
+        # the aggregate evidence values.
+        assert parent.q_value == 1e-8
+        assert parent.association_score == 95.0
+
     def test_propagate_empty_input(self, ontology_processor):
         """Test that empty input returns empty output."""
         propagated = ontology_processor.propagate_annotations([])

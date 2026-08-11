@@ -66,6 +66,58 @@ class TestPropagateViaAncestors:
         assert len(shared) == 1
         assert shared[0].direct_source_term == "b"  # from the more significant chain
 
+    @pytest.mark.parametrize("reverse", [False, True])
+    def test_direct_evidence_wins_over_stronger_propagated_evidence(self, reverse):
+        anc = closure_ancestors({"child": {"parent"}})
+        associations = [
+            _assoc("D1", "child", 0.001, 90.0),
+            _assoc("D1", "parent", 0.05, 40.0),
+        ]
+        if reverse:
+            associations.reverse()
+
+        anns = propagate_via_ancestors(associations, anc)
+        parent = next(a for a in anns if a.go_term == "parent")
+
+        assert parent.annotation_type == "direct"
+        assert parent.direct_source_term == "parent"
+        # Provenance is direct, while evidence strength includes the child.
+        assert parent.q_value == 0.001
+        assert parent.association_score == 90.0
+
+    def test_shared_ancestor_is_independent_of_input_order(self):
+        anc = closure_ancestors({"left": {"root"}, "right": {"root"}})
+        associations = [
+            _assoc("D1", "left", 0.02),
+            _assoc("D1", "right", 0.001),
+        ]
+
+        forward = propagate_via_ancestors(associations, anc)
+        reverse = propagate_via_ancestors(reversed(associations), anc)
+
+        def root_source(annotations):
+            return next(
+                a.direct_source_term for a in annotations if a.go_term == "root"
+            )
+
+        assert root_source(forward) == root_source(reverse) == "right"
+
+    def test_q_and_score_aggregate_independently(self):
+        anc = closure_ancestors({"low_q": {"root"}, "high_score": {"root"}})
+        anns = propagate_via_ancestors(
+            [
+                _assoc("D1", "low_q", 0.001, 40.0),
+                _assoc("D1", "high_score", 0.02, 99.0),
+            ],
+            anc,
+        )
+
+        root = next(a for a in anns if a.go_term == "root")
+        assert root.annotation_type == "propagated"
+        assert root.direct_source_term == "low_q"
+        assert root.q_value == 0.001
+        assert root.association_score == 99.0
+
 
 class TestDottedAncestors:
     def test_tcdb_number_truncates_one_level_at_a_time(self):
