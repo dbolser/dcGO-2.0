@@ -18,26 +18,24 @@ from scipy.stats import fisher_exact
 import gzip
 
 
+class InsufficientBackgroundError(ValueError):
+    """The parental statistical universe is smaller than the configured minimum."""
+
+
+class InvalidContingencyTableError(ValueError):
+    """The parental-background counts cannot form a valid contingency table."""
+
+
 class _BackgroundIndex:
-    """Inverted term->proteins / domain->proteins index for the parental-background test.
+    """Indexed backgrounds for the parental enrichment test.
 
-    The term index is **propagated**: a protein annotated to a child term is
-    counted under every ancestor of that term. That is the True Path Rule, and
-    it is what "the proteins annotated to the parent" has to mean for this test
-    to be answerable. Indexing only direct annotations gave any parent term that
-    nobody is annotated to *directly* an empty background, so the test raised
-    and the conservative ``except`` in the caller discarded the child untested —
-    54,951 times on the human t0 run, leaving only ~14% of associations and
-    collapsing prediction coverage to 0.22-0.50. The §4 ablation's "True Path
-    hurts in 12/12 cells" was measured with that defect in place.
+    Term membership includes ancestor propagation, as required by the True Path
+    Rule; domain membership is direct. The inverted indexes are built once per
+    filtering run so every parent test uses the same protein universe without
+    repeatedly scanning the proteome.
 
-    The domain index needs no such treatment: domains have no hierarchy here.
-
-    Inverting the maps is also what makes the stage finish at all. Computed
-    straight from the maps, each cell is a pass over the whole proteome *per
-    parent test* — with ~165k significant associations and ~2 parents each that
-    is ~10^10 Python-level membership checks, and the stage never completes on a
-    real human run (measured: hours).
+    See ``docs/design/ontology-processing.md`` for the regression history behind
+    these invariants.
     """
 
     __slots__ = ("term_proteins", "domain_proteins")
@@ -128,9 +126,14 @@ class OntologyProcessor:
         Args:
             obo_file: Path to GO ontology file (.obo format, can be gzipped)
 
+        Graph preparation and metric calculation are part of initialization.
+        Unexpected graph-analysis failures abort construction; a partially
+        initialized processor must not be used.
+
         Raises:
-            FileNotFoundError: If the ontology file doesn't exist
-            ValueError: If the ontology file cannot be parsed
+            FileNotFoundError: If the ontology file doesn't exist.
+            ValueError: If the ontology file cannot be parsed.
+            nx.NetworkXException: If graph preparation or metrics fail.
         """
         self.obo_file = Path(obo_file)
         if not self.obo_file.exists():
@@ -146,7 +149,9 @@ class OntologyProcessor:
             else:
                 self.go_graph = obonet.read_obo(str(self.obo_file))
         except Exception as e:
-            raise ValueError(f"Failed to parse ontology file {obo_file}: {e}")
+            # obonet exposes several parser/IO exception types. Translate this
+            # external-library boundary while retaining the original cause.
+            raise ValueError(f"Failed to parse ontology file {obo_file}: {e}") from e
 
         self._prepare_graph()
         self._compute_graph_metrics()
@@ -200,39 +205,28 @@ class OntologyProcessor:
 
     def _compute_graph_metrics(self) -> None:
         """Compute and log basic graph metrics."""
-        try:
-            # Count terms by aspect
-            aspects = {}
-            for term, data in self.go_graph.nodes(data=True):
-                namespace = data.get("namespace", "unknown")
-                aspects[namespace] = aspects.get(namespace, 0) + 1
+        aspects = {}
+        for _, data in self.go_graph.nodes(data=True):
+            namespace = data.get("namespace", "unknown")
+            aspects[namespace] = aspects.get(namespace, 0) + 1
 
-            logger.info("GO term distribution by namespace:")
-            for namespace, count in aspects.items():
-                logger.info(f"  {namespace}: {count} terms")
+        logger.info("GO term distribution by namespace:")
+        for namespace, count in aspects.items():
+            logger.info(f"  {namespace}: {count} terms")
 
-            # Compute depth statistics
-            root_nodes = [
-                n for n in self.go_graph.nodes() if self.go_graph.in_degree(n) == 0
-            ]
-            if root_nodes:
-                depths = []
-                for root in root_nodes:
-                    try:
-                        paths = nx.single_source_shortest_path_length(
-                            self.go_graph, root
-                        )
-                        depths.extend(paths.values())
-                    except Exception:
-                        continue
+        root_nodes = [
+            node for node in self.go_graph.nodes() if self.go_graph.in_degree(node) == 0
+        ]
+        depths = []
+        for root in root_nodes:
+            paths = nx.single_source_shortest_path_length(self.go_graph, root)
+            depths.extend(paths.values())
 
-                if depths:
-                    logger.info(
-                        f"Graph depth statistics: max={max(depths)}, avg={sum(depths) / len(depths):.1f}"
-                    )
-
-        except Exception as e:
-            logger.warning(f"Failed to compute graph metrics: {e}")
+        if depths:
+            logger.info(
+                f"Graph depth statistics: max={max(depths)}, "
+                f"avg={sum(depths) / len(depths):.1f}"
+            )
 
     def get_ancestors(self, go_term: str) -> Set[str]:
         """
@@ -332,22 +326,16 @@ class OntologyProcessor:
             if i % 10000 == 0:
                 logger.info(f"Processing association {i + 1}/{total_associations}")
 
-            try:
-                if self._passes_optimal_level_test(
-                    assoc.domain,
-                    assoc.go_term,
-                    protein_domain_map,
-                    protein_go_map,
-                    min_background_size,
-                    alpha_threshold,
-                    index=index,
-                ):
-                    filtered_associations.append(assoc)
-            except Exception as e:
-                logger.warning(
-                    f"Error testing association {assoc.domain}-{assoc.go_term}: {e}"
-                )
-                continue
+            if self._passes_optimal_level_test(
+                assoc.domain,
+                assoc.go_term,
+                protein_domain_map,
+                protein_go_map,
+                min_background_size,
+                alpha_threshold,
+                index=index,
+            ):
+                filtered_associations.append(assoc)
 
         logger.info(
             f"Optimal level filter: {len(filtered_associations)}/{total_associations} associations retained"
@@ -426,19 +414,12 @@ class OntologyProcessor:
                     )
                     return False
 
-            except Exception as e:
-                # Conservative: if we can't test, reject the association.
-                #
-                # This branch used to dominate, because the background was built
-                # from the *unpropagated* annotation map: any parent term with no
-                # direct annotation had an empty background, so the test raised
-                # and every child of it was discarded untested (54,951 times on
-                # the human t0 run, leaving ~14% of associations). _BackgroundIndex
-                # now propagates, so a parent's background includes everything
-                # annotated beneath it and the branch should be rare. It is still
-                # counted rather than logged per occurrence — at 110k occurrences
-                # that produced a 19 MB log — and the caller reports the total, so
-                # a regression here is visible rather than silent.
+            except (
+                InsufficientBackgroundError,
+                InvalidContingencyTableError,
+            ) as e:
+                # Expected data rejections are counted by category.
+                # Programming errors must remain visible.
                 self._filter_rejections[type(e).__name__] = (
                     self._filter_rejections.get(type(e).__name__, 0) + 1
                 )
@@ -476,7 +457,8 @@ class OntologyProcessor:
             P-value from Fisher's exact test
 
         Raises:
-            ValueError: If background is too small or data is invalid
+            InsufficientBackgroundError: If the parent background is too small.
+            InvalidContingencyTableError: If the derived cells are inconsistent.
         """
         # Inverted index of the same two maps. Building it here (rather than
         # requiring the caller to) keeps direct callers working; the batch entry
@@ -491,7 +473,7 @@ class OntologyProcessor:
         parent_proteins = index.term_proteins.get(parent_term, frozenset())
 
         if len(parent_proteins) < min_background_size:
-            raise ValueError(
+            raise InsufficientBackgroundError(
                 f"Insufficient background size: {len(parent_proteins)} < {min_background_size}"
             )
 
@@ -517,7 +499,9 @@ class OntologyProcessor:
             return 1.0  # No association possible
 
         if d < 0:
-            raise ValueError(f"Invalid contingency table: a={a}, b={b}, c={c}, d={d}")
+            raise InvalidContingencyTableError(
+                f"Invalid contingency table: a={a}, b={b}, c={c}, d={d}"
+            )
 
         try:
             # One-tailed Fisher's exact test for enrichment
@@ -684,17 +668,15 @@ class OntologyProcessor:
             if self.go_graph.out_degree(term) == 0:
                 stats["leaf_terms"].append(term)
 
-        # Compute depth statistics
-        try:
-            for root in stats["root_terms"]:
-                paths = nx.single_source_shortest_path_length(self.go_graph, root)
-                depths.extend(paths.values())
+        # Compute depth statistics. Unexpected graph failures are not suppressed:
+        # partial statistics would be misleading to callers.
+        for root in stats["root_terms"]:
+            paths = nx.single_source_shortest_path_length(self.go_graph, root)
+            depths.extend(paths.values())
 
-            if depths:
-                stats["max_depth"] = max(depths)
-                stats["average_depth"] = sum(depths) / len(depths)
-        except Exception as e:
-            logger.warning(f"Failed to compute depth statistics: {e}")
+        if depths:
+            stats["max_depth"] = max(depths)
+            stats["average_depth"] = sum(depths) / len(depths)
 
         stats["leaf_term_count"] = len(stats["leaf_terms"])
         stats["root_term_count"] = len(stats["root_terms"])
@@ -740,87 +722,3 @@ class OntologyProcessor:
         logger.info("Clearing ontology processor caches")
         self._ancestors_cache.clear()
         self._descendants_cache.clear()
-
-
-# Example usage and testing functions
-def create_test_processor(test_obo_content: str) -> OntologyProcessor:
-    """
-    Create a test ontology processor with minimal GO data.
-
-    Args:
-        test_obo_content: String content for test .obo file
-
-    Returns:
-        OntologyProcessor instance for testing
-    """
-    import tempfile
-
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".obo", delete=False) as f:
-        f.write(test_obo_content)
-        temp_path = Path(f.name)
-
-    try:
-        processor = OntologyProcessor(temp_path)
-        return processor
-    finally:
-        temp_path.unlink()  # Clean up temp file
-
-
-# Minimal test OBO content for testing
-TEST_OBO_CONTENT = """
-format-version: 1.2
-data-version: test
-
-[Term]
-id: GO:0008150
-name: biological_process
-namespace: biological_process
-
-[Term]
-id: GO:0009987
-name: cellular process
-namespace: biological_process
-is_a: GO:0008150 ! biological_process
-
-[Term]
-id: GO:0006810
-name: transport
-namespace: biological_process
-is_a: GO:0009987 ! cellular process
-
-[Term]
-id: GO:0003674
-name: molecular_function
-namespace: molecular_function
-
-[Term]
-id: GO:0005215
-name: transporter activity
-namespace: molecular_function
-is_a: GO:0003674 ! molecular_function
-"""
-
-
-if __name__ == "__main__":
-    """Example usage of the OntologyProcessor class."""
-
-    # Configure logging
-    logger.add("ontology_processor.log", level="INFO", rotation="10 MB")
-
-    # Create test processor
-    processor = create_test_processor(TEST_OBO_CONTENT)
-
-    # Print ontology statistics
-    stats = processor.get_ontology_statistics()
-    print("Ontology Statistics:")
-    for key, value in stats.items():
-        if not isinstance(value, (list, dict)):
-            print(f"  {key}: {value}")
-
-    # Test ancestor/descendant relationships
-    test_term = "GO:0006810"  # transport
-    ancestors = processor.get_ancestors(test_term)
-    print(f"\nAncestors of {test_term}: {ancestors}")
-
-    # Clear cache when done
-    processor.clear_cache()
