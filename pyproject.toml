@@ -35,10 +35,6 @@ dependencies = [
     "psutil>=5.9.0",
     # Logging (required)
     "loguru>=0.7.0",
-    # Parallel processing (required for Fisher's exact tests)
-    "joblib>=1.3.0",
-    # Statistical analysis (required for FDR correction)
-    "statsmodels>=0.14.5",
     # Optional: GO ontology processing (for True Path Rule)
     "obonet>=1.1.1",
     "networkx>=3.5",
@@ -117,7 +113,7 @@ extend-exclude = '''
 profile = "black"
 multi_line_output = 3
 line_length = 88
-known_first_party = ["dcgo_pipeline"]
+known_first_party = ["src", "config"]
 
 # MyPy type checking
 [tool.mypy]
@@ -193,6 +189,7 @@ exclude_lines = [
 
 [dependency-groups]
 dev = [
+    "mypy>=1.18.0",
     "pytest>=8.4.2",
     "pytest-cov>=7.0.0",
     "ruff>=0.14.0",
