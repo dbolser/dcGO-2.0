@@ -877,7 +877,6 @@ def main():
     odds_ratios, pvalues = fisher_exact_parallel(
         tables,
         alternative=FISHER_ALTERNATIVE,
-        n_jobs=args.num_cores,
         batch_size=args.batch_size,
         progress_callback=progress_callback,
     )

@@ -36,12 +36,10 @@ jobs:
       - name: Format check (ruff)
         run: uv run ruff format --check
 
-      # Start with the typed core and expand this list as the remaining parser
-      # and orchestration modules shed their legacy Any-heavy interfaces.
+      # The incremental strict-typing fence lives in pyproject.toml so this
+      # exact command is reproducible locally.
       - name: Type check (strict, incremental)
-        run: >-
-          uv run mypy src/annotation_source.py src/disease_ontology.py
-          src/ec_annotation_source.py src/hierarchy.py src/ontology_registry.py
+        run: uv run mypy
 
       - name: Test (pytest)
         run: uv run pytest

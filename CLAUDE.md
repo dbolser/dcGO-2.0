@@ -61,10 +61,9 @@ uv run ruff check src/ tests/ config/ scripts/ validation/ \
     run_dcgo_human.py extract_human_interpro.py
 uv run ruff format --check
 ```
-`mypy` is available via the dev group. CI enforces the configured strict policy
-on the clean core modules; expand that explicit module list as the remaining
-legacy annotations are fixed. `uv run mypy src/` reports the full migration
-backlog.
+`mypy` is available via the dev group. `uv run mypy` reproduces CI's configured
+strict fence from `pyproject.toml`; expand its `files` list as legacy annotations
+are fixed. `uv run mypy src/` reports the full migration backlog.
 
 ### Testing
 ```bash

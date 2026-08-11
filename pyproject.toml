@@ -48,9 +48,6 @@ dev = [
     "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
     "pytest-xdist>=3.3.0",
-    "black>=23.9.0",
-    "isort>=5.12.0",
-    "flake8>=6.1.0",
     "mypy>=1.6.0",
     "pre-commit>=3.4.0",
 ]
@@ -108,16 +105,17 @@ extend-exclude = '''
 )/
 '''
 
-# isort import sorting
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-line_length = 88
-known_first_party = ["src", "config"]
-
 # MyPy type checking
 [tool.mypy]
 python_version = "3.12"
+files = [
+    "src/annotation_source.py",
+    "src/disease_ontology.py",
+    "src/ec_annotation_source.py",
+    "src/hierarchy.py",
+    "src/ontology_registry.py",
+]
+follow_imports = "silent"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
