@@ -279,7 +279,7 @@ writing `data/interim/protein2ipr_<species>.dat.gz` so subsequent runs are fast.
 
 ---
 
-## Key options (`run_dcgo_human.py`)
+## Key options (`dcgo`)
 
 | Flag | Default | Description |
 |------|---------|-------------|
@@ -393,11 +393,12 @@ checklist. Citation metadata is in [CITATION.cff](CITATION.cff).
 
 ```
 dcGO-2.0/
-├── run_dcgo_human.py            # Main entry point: human dcGO analysis
+├── run_dcgo_human.py            # Pipeline implementation + legacy script entry
 ├── extract_human_interpro.py    # Filter protein2ipr.dat down to human proteins
 ├── scripts/
 │   └── download_data.py         # Download required datasets from source
 ├── src/
+│   ├── runner.py                # Generic request + input-resolution stage
 │   ├── goa_parser.py            # Parse GOA GAF files
 │   ├── domain_annotation_parser.py  # Parse protein2ipr domain mappings
 │   ├── vectorized_fisher.py     # Vectorized Fisher's exact test + BH-FDR

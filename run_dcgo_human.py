@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-dcGO Pipeline - Protein Domain-GO Association Analysis
+dcGO Pipeline - Protein Domain/Ontology Association Analysis
 
 This script runs the complete dcGO statistical inference pipeline for any species.
-It performs domain-GO association analysis using sparse matrix operations and parallel
-Fisher's exact tests.
+It performs domain/ontology association analysis using sparse matrix operations and
+vectorized Fisher's exact tests.
 
 Every run writes a provenance manifest, run_manifest_<ontology>.json, into the
 output directory: input/output SHA-256 hashes and release headers, the Git
@@ -87,11 +87,10 @@ from src.ontology_processor import OntologyProcessor
 from src.ontology_registry import (
     OntologyEntry,
     describe_ontologies,
-    get_ontology,
-    missing_inputs,
     ontology_keys,
 )
 from src.run_manifest import RunManifest, describe_file, manifest_filename
+from src.runner import RunRequest, resolve_inputs
 from src.sparse_fisher import (
     DomainType,
     build_sparse_matrices,
@@ -314,28 +313,9 @@ def validate_arguments(
         )
 
 
-def build_ontology_paths(args: argparse.Namespace) -> dict:
-    """Resolve every input any ontology might need, keyed as the registry names them.
-
-    One place, so the registry (``src/ontology_registry.py``) is free to say
-    which of these a given ontology actually uses for its annotations and for
-    its hierarchy. An entry whose ``needs`` names a key missing here would fail
-    at run time and, worse, be absent from the run manifest — so
-    ``tests/unit/test_run_manifest_wiring.py`` calls this function to check that
-    every registered ontology is resolvable. That guard is only meaningful while
-    the test reads the keys from *here* rather than keeping its own copy.
-    """
-    return {
-        "gaf": Path(f"data/raw/goa_annotations/goa_{args.species}.gaf.gz"),
-        "go_obo": args.go_ontology,
-        "enzyme_dat": args.enzyme_dat,
-        "uniprot_dat": args.uniprot_dat,
-        "reactome_relations": args.reactome_relations,
-        "keywlist": args.keyword_list,
-        "subcell": args.subcell,
-        "chebi_obo": args.chebi_obo,
-        "doid_obo": args.doid_obo,
-    }
+def build_ontology_paths(args: argparse.Namespace) -> dict[str, Path]:
+    """Compatibility helper backed by the generic input-resolution request."""
+    return RunRequest.from_namespace(args).ontology_paths()
 
 
 def start_run_manifest(
@@ -430,7 +410,7 @@ def start_run_manifest(
 def build_argument_parser() -> argparse.ArgumentParser:
     """Build the legacy command-line contract without executing the pipeline."""
     parser = argparse.ArgumentParser(
-        description="dcGO Pipeline - Human Protein Analysis",
+        description="dcGO Pipeline - Protein Domain/Ontology Association Analysis",
         # Raw epilog so the ontology table below keeps its line breaks; argument
         # help strings are still wrapped normally.
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -624,18 +604,12 @@ def main(argv: list[str] | None = None) -> int:
     """Run dcGO using command-line arguments from *argv* or ``sys.argv``."""
     args, parser = parse_arguments(argv)
 
-    # Validate the arbitrary-cross-reference selection and derive a short label
-    # used for logging, the term column, and output filenames. For everything
-    # except 'xref' the label is the ontology name (so 'go' stays byte-identical);
-    # for 'xref' it is the chosen DR database (e.g. 'kegg').
-    if args.ontology == "xref":
-        if not args.xref_db:
-            parser.error(
-                "--ontology xref requires --xref-db (a UniProt DR database name)"
-            )
-        ontology_label = args.xref_db.lower()
-    else:
-        ontology_label = args.ontology
+    if args.ontology == "xref" and not args.xref_db:
+        parser.error("--ontology xref requires --xref-db (a UniProt DR database name)")
+
+    request = RunRequest.from_namespace(args)
+    inputs = resolve_inputs(request)
+    ontology_label = inputs.ontology_label
 
     # Create output directory
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -660,17 +634,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     logger.info(f"  Output directory: {args.output_dir}")
 
-    # Everything the chosen ontology might need, resolved in one place. The
-    # registry (src/ontology_registry.py) says which of these it actually uses
-    # for its annotations and for its hierarchy.
-    ontology_entry = get_ontology(args.ontology)
-    ontology_paths = build_ontology_paths(args)
+    ontology_entry = inputs.ontology_entry
+    ontology_paths = inputs.ontology_paths
 
-    # True Path Rule propagation needs a term hierarchy: GO's OBO DAG, an
-    # implicit one in the term ids (EC, TCDB, MEROPS, CAZy), or a companion
-    # hierarchy file (Reactome, keywords, subcellular, ChEBI). Ontologies with
-    # no hierarchy (disease, Rhea, xref, …) cannot propagate.
-    if args.enable_true_path and not ontology_entry.supports_true_path:
+    # True Path Rule propagation requires a hierarchy supplied by the registry.
+    if inputs.true_path_unsupported:
         logger.error(
             f"True Path propagation is not available for --ontology "
             f"{args.ontology} (no term hierarchy). Re-run without "
@@ -680,9 +648,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Fail on missing inputs before the expensive stages rather than degrading
     # silently half-way through a multi-hour run.
-    missing = missing_inputs(
-        ontology_entry, ontology_paths, for_hierarchy=args.enable_true_path
-    )
+    missing = inputs.missing_inputs
     if missing:
         logger.error(
             f"--ontology {args.ontology} needs input(s) that are missing: "
