@@ -49,6 +49,7 @@ if str(project_root) not in sys.path:
 from src.domain_annotation_parser import DomainAnnotationParser  # noqa: E402
 from src.goa_parser import parse_goa_human  # noqa: E402
 from src.ontology_processor import OntologyProcessor  # noqa: E402
+from validation.association_io import load_associations  # noqa: E402
 
 
 def build_protein_domain_map(
@@ -108,7 +109,11 @@ def main() -> int:
             dom2prot[d].add(protein)
 
     logger.info(f"Loading significant associations: {args.predictions}")
-    df = pd.read_csv(args.predictions, sep="\t")
+    try:
+        df = load_associations(args.predictions, required_columns={"p_value"})
+    except (OSError, pd.errors.ParserError, ValueError) as exc:
+        logger.error(str(exc))
+        return 1
     logger.info(f"  {len(df):,} associations to test")
 
     relative_p = []
