@@ -427,7 +427,8 @@ def start_run_manifest(
     )
 
 
-def main():
+def build_argument_parser() -> argparse.ArgumentParser:
+    """Build the legacy command-line contract without executing the pipeline."""
     parser = argparse.ArgumentParser(
         description="dcGO Pipeline - Human Protein Analysis",
         # Raw epilog so the ontology table below keeps its line breaks; argument
@@ -606,9 +607,22 @@ def main():
         help="Disable supra-domain analysis (single domains only)",
     )
 
-    args = parser.parse_args()
+    return parser
 
+
+def parse_arguments(
+    argv: list[str] | None = None,
+) -> tuple[argparse.Namespace, argparse.ArgumentParser]:
+    """Parse and validate *argv*, returning the values and their parser."""
+    parser = build_argument_parser()
+    args = parser.parse_args(argv)
     validate_arguments(args, parser)
+    return args, parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Run dcGO using command-line arguments from *argv* or ``sys.argv``."""
+    args, parser = parse_arguments(argv)
 
     # Validate the arbitrary-cross-reference selection and derive a short label
     # used for logging, the term column, and output filenames. For everything
