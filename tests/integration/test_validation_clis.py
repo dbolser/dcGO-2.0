@@ -101,9 +101,7 @@ def test_apply_relative_inference_filters_nonspecific_pair_and_keeps_untestable(
     with gzip.open(interpro, "wt") as handle:
         for index in range(10):
             if index < 5:
-                handle.write(
-                    f"P{index}\tIPR_STRONG\tStrong\tPF00001\t10\t100\n"
-                )
+                handle.write(f"P{index}\tIPR_STRONG\tStrong\tPF00001\t10\t100\n")
             if index in {0, 1, 5, 6, 7}:
                 handle.write(f"P{index}\tIPR_WEAK\tWeak\tPF00002\t120\t220\n")
 

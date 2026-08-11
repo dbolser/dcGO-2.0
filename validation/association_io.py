@@ -19,8 +19,7 @@ def load_associations(
     missing = sorted(required - set(frame.columns))
     if missing:
         raise ValueError(
-            f"Association file {path} is missing required columns: "
-            f"{', '.join(missing)}"
+            f"Association file {path} is missing required columns: {', '.join(missing)}"
         )
     return frame
 
