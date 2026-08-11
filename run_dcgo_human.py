@@ -317,6 +317,7 @@ def build_ontology_paths(args: argparse.Namespace) -> dict[str, Path]:
     """Compatibility helper backed by the generic input-resolution request."""
     return RunRequest.from_namespace(args).ontology_paths()
 
+
 def start_run_manifest(
     args: argparse.Namespace,
     *,

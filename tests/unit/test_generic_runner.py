@@ -42,9 +42,7 @@ def test_run_request_captures_generic_identity_and_input_fields(tmp_path: Path) 
 def test_input_resolution_consumes_request_and_registry(tmp_path: Path) -> None:
     enzyme_dat = tmp_path / "enzyme.dat"
     enzyme_dat.write_text("//\n")
-    request = parse_run_request(
-        ["--ontology", "ec", "--enzyme-dat", str(enzyme_dat)]
-    )
+    request = parse_run_request(["--ontology", "ec", "--enzyme-dat", str(enzyme_dat)])
 
     resolved = resolve_inputs(request)
 
@@ -56,9 +54,7 @@ def test_input_resolution_consumes_request_and_registry(tmp_path: Path) -> None:
 
 
 def test_xref_identity_uses_selected_database_label() -> None:
-    request = parse_run_request(
-        ["--ontology", "xref", "--xref-db", "KEGG"]
-    )
+    request = parse_run_request(["--ontology", "xref", "--xref-db", "KEGG"])
 
     assert resolve_inputs(request).ontology_label == "kegg"
 
