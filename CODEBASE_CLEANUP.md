@@ -60,41 +60,16 @@ uv run python run_dcgo_human.py --species zebrafish --fdr-threshold 0.05
 
 ## Current Codebase Structure
 
-### Production Pipeline
-```
-run_dcgo_human.py          # Main production pipeline (multi-species support)
-extract_human_interpro.py  # Utility to extract species-specific InterPro data
-```
+For the authoritative module list see `README.md` and `CLAUDE.md` — the layout
+has moved on considerably since this cleanup. `src/data_acquisition.py` and
+`src/database_manager.py` no longer exist (downloads live in
+`scripts/download_data.py`; there is no SQLite export). The four items in the
+old "What's Next" list are all resolved: the True Path Rule is integrated behind
+`--enable-true-path`, and the suite is at 632 tests.
 
-### Core Modules (Used in Production)
-```
-src/
-├── sparse_fisher.py              # Sparse matrix operations for Fisher's tests
-├── vectorized_fisher.py          # Parallel Fisher's exact tests with FDR correction
-├── domain_annotation_parser.py   # Parse InterPro protein2ipr.dat files
-└── goa_parser.py                 # Parse GOA annotation files
-```
+## Status of this document
 
-### Utility Modules (Kept for Future Use)
-```
-src/
-├── data_acquisition.py    # Download datasets from UniProt/GOA/InterPro
-├── database_manager.py    # SQLite database for storing results
-└── ontology_processor.py  # GO ontology + True Path Rule implementation
-```
-
-## Verification
-
-✅ All imports working
-✅ Pipeline help command functional
-✅ Multi-species support operational
-✅ Dependencies minimal and focused
-
-## What's Next
-
-The codebase is now lean and focused on the production pipeline. Future enhancements could include:
-
-1. **True Path Rule Integration** - The ontology_processor.py is ready but not yet integrated
-2. **Automated Testing** - Create new tests for the sparse matrix approach
-3. **Database Export** - Use database_manager.py to store results in SQLite
-4. **Automated Downloads** - Use data_acquisition.py to fetch datasets
+This file is a historical cleanup report, not an active roadmap. The single
+authoritative queue is `TODO.md`; detailed engineering rationale lives in
+`docs/CODE_QUALITY_ROADMAP.md`. The review of PRs #54–#60 was incorporated
+there rather than creating another competing list here.

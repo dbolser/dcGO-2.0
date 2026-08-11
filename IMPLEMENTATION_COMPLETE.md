@@ -1,3 +1,5 @@
+> **Historical snapshot.** Active work is tracked in `TODO.md`; detailed code-debt rationale is in `docs/CODE_QUALITY_ROADMAP.md`.
+
 # Supra-Domain Integration: Implementation Complete ✅
 
 ## Executive Summary
