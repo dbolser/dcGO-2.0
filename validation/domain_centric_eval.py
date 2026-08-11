@@ -31,7 +31,6 @@ dated (e.g. 2021) InterPro2GO would make it a temporal domain-centric test.
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import sys
 from pathlib import Path
 
@@ -41,12 +40,11 @@ from loguru import logger
 logger.remove()
 logger.add(sys.stderr, level="INFO")
 
-# Reuse the §1 helpers (validation/ is not a package; load by path).
-_VR = Path(__file__).resolve().parent / "validate_results.py"
-_spec = importlib.util.spec_from_file_location("validate_results", _VR)
-vr = importlib.util.module_from_spec(_spec)
-sys.modules["validate_results"] = vr
-_spec.loader.exec_module(vr)
+project_root = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(project_root))
+
+from validation import validate_results as vr  # noqa: E402
+from validation.association_io import association_pairs, load_associations  # noqa: E402
 
 
 def evaluate_one(
@@ -55,8 +53,8 @@ def evaluate_one(
     get_ancestors,
 ) -> dict:
     """Domain-centric precision/recall of one association set vs InterPro2GO."""
-    df = pd.read_csv(predictions_file, sep="\t")
-    pred_pairs = set(zip(df["domain"], df["go_term"]))
+    df = load_associations(predictions_file)
+    pred_pairs = association_pairs(df)
 
     # Shared single-domain space, then propagate both sides to ancestor closure.
     shared = {d for d, _ in pred_pairs} & {d for d, _ in reference}
@@ -126,7 +124,11 @@ def main() -> int:
             logger.error(f"Predictions file not found: {p}")
             return 1
         logger.info(f"Evaluating '{label}': {p}")
-        res = evaluate_one(p, reference, get_ancestors)
+        try:
+            res = evaluate_one(p, reference, get_ancestors)
+        except (OSError, pd.errors.ParserError, ValueError) as exc:
+            logger.error(str(exc))
+            return 1
         res["config"] = label
         rows.append(res)
         logger.info(

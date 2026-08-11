@@ -28,6 +28,11 @@ from typing import Callable, Iterable
 import pandas as pd
 from loguru import logger
 
+project_root = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(project_root))
+
+from validation.association_io import association_pairs, load_associations  # noqa: E402
+
 logger.remove()
 logger.add(sys.stderr, level="INFO")
 
@@ -130,11 +135,10 @@ def parse_interpro2go(interpro2go_file: Path) -> set[Pair]:
 def load_dcgo_predictions(predictions_file: Path) -> pd.DataFrame:
     """Load dcGO predicted associations."""
     logger.info(f"Loading dcGO predictions: {predictions_file}")
-    df = pd.read_csv(predictions_file, sep="\t")
-    required = {"domain", "go_term", "p_value", "adj_p_value", "hyper_score"}
-    missing = required - set(df.columns)
-    if missing:
-        raise ValueError(f"Predictions file is missing required columns: {missing}")
+    df = load_associations(
+        predictions_file,
+        required_columns={"p_value", "adj_p_value", "hyper_score"},
+    )
     logger.info(f"✓ Loaded {len(df):,} predicted associations")
     logger.info(
         f"  Unique domains: {df['domain'].nunique():,}; "
@@ -169,7 +173,7 @@ def build_get_ancestors(obo_file: Path | None) -> Callable[[str], set[str]]:
 # Sweep                                                                        #
 # --------------------------------------------------------------------------- #
 def _pairs_from_df(df: pd.DataFrame) -> set[Pair]:
-    return set(zip(df["domain"], df["go_term"]))
+    return association_pairs(df)
 
 
 def calculate_overlap_at_thresholds(
@@ -208,7 +212,7 @@ def calculate_overlap_at_thresholds(
             else:
                 filtered = predictions[predictions[column] >= v]
                 name = f"{label}≥{v:g}"
-            pred_pairs = {p for p in _pairs_from_df(filtered) if p[0] in shared}
+            pred_pairs = {p for p in association_pairs(filtered) if p[0] in shared}
             pred_shared = propagate_pairs(pred_pairs, get_ancestors)
             results.append(compute_metrics(pred_shared, ref_fixed, name))
 
