@@ -2,9 +2,14 @@
 
 Review date: 2026-08-11
 
-This is the maintained engineering companion to `TODO.md`. The scientific
-roadmap belongs in `VALIDATION_PLAN.md`; this document tracks code structure,
-testability, consistency, and maintenance debt.
+`TODO.md` is the single authoritative project queue. The scientific designs and
+evidence live in `VALIDATION_PLAN.md`; this document is the detailed design
+record for code structure, testability, consistency, and maintenance debt. It
+does not maintain an independent priority state.
+
+`CODEBASE_CLEANUP.md`, `ENGINEERING_SCIENTIFIC_REVIEW_TODOS.md`, the sprint
+summaries, and `IMPLEMENTATION_COMPLETE.md` are historical snapshots. They must
+point here or to `TODO.md`, not accumulate new active queues.
 
 ## Current assessment
 
@@ -41,14 +46,13 @@ Acceptance criteria:
 - Competing propagated sources resolve deterministically using evidence strength.
 - Collision and input-order regression tests cover the contract.
 
-### 2. Decompose the runner and adopt a thin Typer CLI
+### 2. Decompose the runner before adopting Typer
 
-Status: in progress as a prototype.
+Status: Typer held; parser seams and stage extraction in progress.
 
-Typer is appropriate for user-facing parsing, validation, discoverable help,
-and future subcommands. It should not merely decorate the existing monolithic
-`main()`. Extract stages with typed inputs and outputs first or alongside the
-CLI migration:
+Typer may become appropriate for validation, discoverable help, and real
+subcommands, but a pass-through wrapper around argparse does not justify its
+runtime dependency tree. Extract stages with typed inputs and outputs first:
 
 1. resolve configuration and inputs;
 2. load and restrict the protein universe;
@@ -57,8 +61,8 @@ CLI migration:
 5. propagate annotations;
 6. export results and finalize provenance.
 
-Preserve existing command flags and exit behavior during migration. The
-installed `dcgo` entry point must continue to pass a wheel-install smoke test.
+Reconsider Typer when the first genuine subcommand exists. Preserve existing
+command flags and exit behavior during migration.
 
 ### 3. Test scientific command-line programs
 
@@ -67,17 +71,17 @@ Status: in progress.
 The core unit suite is strong, but expanded coverage exposes weakly tested
 manuscript-producing programs:
 
-| Module | Baseline coverage |
-| --- | ---: |
-| `run_dcgo_human.py` | 24% |
-| `scripts/download_data.py` | 19% |
-| `scripts/rank_surprising_associations.py` | 25% |
-| `validation/compare_original_dcgo.py` | 31% |
-| `validation/temporal_benchmark.py` | 52% |
-| `validation/validate_results.py` | 33% |
-| `validation/apply_relative_inference.py` | 0% |
-| `validation/domain_centric_eval.py` | 0% |
-| `validation/sprint1_validation.py` | 0% |
+| Module | Baseline | Target behavior |
+| --- | ---: | --- |
+| `run_dcgo_human.py` | 24% | Stage contracts and failure paths |
+| `scripts/download_data.py` | 19% | Resume, checksum, and download failures |
+| `scripts/rank_surprising_associations.py` | 25% | CLI schema and ranking integration |
+| `validation/compare_original_dcgo.py` | 31% | Fixture CLI and recomputation |
+| `validation/temporal_benchmark.py` | 52% | CLI outputs and provenance |
+| `validation/validate_results.py` | 33% | Plain-checkout script invocation |
+| `validation/apply_relative_inference.py` | 0% | Fixture CLI and schema failures |
+| `validation/domain_centric_eval.py` | 0% | Fixture CLI and metric contract |
+| `validation/sprint1_validation.py` | 0% | Retire or pin historical behavior |
 
 Prioritize fixture-based CLI tests that assert output schemas, counts, failure
 behavior, and provenance—not coverage percentage alone.
@@ -147,3 +151,8 @@ Use small, independently reviewable PRs. Correctness contracts and tests land
 before structural consolidation. Avoid combining numerical changes with CLI,
 packaging, or naming migrations, and demonstrate byte- or schema-equivalence
 where compatibility is promised.
+
+Any change touching propagation, filtering, scoring, or output ordering must
+report its delta on a reference run—row counts, direct/propagated split, changed
+scores/provenance, and every `VALIDATION_PLAN.md` cell it can move—or explicitly
+demonstrate that it moves none.

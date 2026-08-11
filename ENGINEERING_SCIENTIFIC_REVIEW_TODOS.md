@@ -1,3 +1,5 @@
+> **Historical snapshot.** Active work is tracked in `TODO.md`; detailed code-debt rationale is in `docs/CODE_QUALITY_ROADMAP.md`.
+
 # Engineering and Scientific Review TODOs
 
 Review date: 2026-07-15
