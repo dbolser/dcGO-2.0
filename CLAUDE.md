@@ -65,7 +65,7 @@ uv run ruff format --check
 
 ### Testing
 ```bash
-uv run pytest                          # all tests (525, ~8 s)
+uv run pytest                          # all tests (632, ~8 s)
 uv run pytest tests/unit -v            # unit tests
 uv run pytest tests/integration -v     # integration tests
 uv run pytest --cov=src --cov-report=html
@@ -144,21 +144,23 @@ than from `Config`. Key defaults:
 - `MAX_SUPRA_DOMAIN_LENGTH = 3` - Maximum contiguous domain combinations
 - `NUM_CORES = 8` - Parallel processing default
 
-## Testing Architecture
-
-- `tests/unit/` - Individual component tests (Fisher, parsers, ontology, supra-domains)
-- `tests/integration/` - Multi-component workflow tests (e.g. True Path pipeline)
-- `tests/e2e/` - Reserved for full-pipeline tests
-
 ## Performance Considerations
 
 For the human path (single machine):
-- **Extraction**: streams the ~20 GB `protein2ipr.dat.gz` once (~10 min).
-- **Inference**: ~300M Fisher tests in ~50 min on 8 cores (~100k tests/s).
-- **Bottlenecks**: (1) contingency-table construction (memory), (2) Fisher tests
-  on millions of domain–GO pairs (CPU).
+- **Extraction**: streams the ~20 GB `protein2ipr.dat.gz` once (~10 min). This is
+  now the dominant cost of a first run.
+- **Inference**: seconds, not minutes. The Fisher stage enumerates only the
+  domain–term pairs that actually co-occur; every other pair has p=1 exactly
+  under the one-sided `greater` test, so it is skipped and BH corrects against
+  the full hypothesis count. Human single-domain is 318,749,661 hypotheses of
+  which 655,659 are evaluated (**1.6 s**, was 323 s dense); human supra-domain is
+  1,690,803,963 / 3,008,670 (**5.4 s**, was 2,123 s).
+- **Bottleneck**: the sparse product and the BH sort, both proportional to the
+  *co-occurring* pair count rather than the dense product.
 
-A full multi-organism run would be substantially heavier and is not yet implemented.
+Multi-organism runs are implemented — see `MULTISPECIES_BACKGROUND.md`. The
+all-species supra design is 13.1e9 hypotheses, unrunnable densely (~389 GB of
+tables); enumerating co-occurring pairs makes it 9.5M tables and 268 s.
 
 ## Known Limitations
 
@@ -203,35 +205,17 @@ A full multi-organism run would be substantially heavier and is not yet implemen
   baseline on informative terms — but **loses to naive on AUPRC** at IC≥0 in all
   aspects. Still open: score calibration (§5), an untouched evaluation interval.
   See `VALIDATION_PLAN.md`.
+- **The background is human-only by default, and widening it helps** — see
+  `MULTISPECIES_BACKGROUND.md`. `--species allspecies` runs a 1,464,355-protein,
+  9,074-taxon universe. On the held-out 2021→2026 split, with the evaluation
+  fixed and only the training universe changed, it wins 8/9 F_max and 9/9 AUPRC
+  cells; under `--evidence-filter experimental` it wins 9/9 and 9/9. Two caveats
+  belong with any number taken from it: the `manual` universe is **75.8%
+  projected** annotation, of which 55.2% of the non-human part cites a human
+  protein, and support is **inflated ~2.44×** by orthology with half the
+  associations resting on ≤3 UniRef50 clusters. Neither touches the held-out
+  result; both bear on the significant counts and their FDR.
 
-## Package Structure
-
-```
-run_dcgo_human.py            # Main entry point
-extract_human_interpro.py    # Human subset extraction
-scripts/download_data.py     # Dataset downloader (--group dcgo-reference for §3)
-validation/compare_original_dcgo.py  # §3: dcGO-2.0 vs the published dcGO
-scripts/rank_surprising_associations.py  # Surprise score driver
-scripts/survey_uniprot_ontologies.py     # Which UniProt vocabularies are usable
-validation/
-├── temporal_benchmark.py    # §2 CAFA-style temporal benchmark + permutation null
-├── resampling.py            # Bootstrap CIs / paired differences / empirical p-values
-└── ablation.py              # §4 component ablation driver (one tidy TSV per artefact)
-src/
-├── annotation_source.py     # AnnotationSource seam (protein → ontology term)
-├── ontology_registry.py     # --ontology dispatch table (sources + hierarchies)
-├── disease_ontology.py      # OMIM/Orphanet → DOID re-keying (--ontology doid)
-├── ec_annotation_source.py  # Enzyme Commission adapter (Expasy enzyme.dat)
-├── uniprot_annotation_source.py # UniProt-native adapters (DR / KW / CC / FT layers)
-├── hierarchy.py             # Shared True Path engine (ancestors + propagation + loaders)
-├── run_manifest.py          # Run provenance manifest (see REPRODUCIBILITY.md)
-├── surprise_score.py        # Emergent supra-domain ranking (see SURPRISE_SCORE.md)
-├── goa_parser.py            # GOA GAF parsing
-├── domain_annotation_parser.py  # protein2ipr parsing
-├── sparse_fisher.py         # Sparse contingency tables
-├── vectorized_fisher.py     # Fisher's exact tests + BH-FDR
-└── ontology_processor.py    # True Path Rule
-config/settings.py           # Dataset URLs + configuration
-```
+## Conventions
 
 The codebase targets Python 3.12 and uses dataclasses, type hints, pathlib, and context managers throughout.

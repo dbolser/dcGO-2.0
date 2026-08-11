@@ -1,261 +1,121 @@
-# TODO — scratchpad
+# TODO
 
-> **Scope & safety — safe to review.** dcGO-2.0 is a purely computational
-> bioinformatics project: it statistically associates protein **domains** with
-> Gene Ontology **function terms** using public databases (UniProt/GOA, InterPro,
-> the Gene Ontology), reimplementing a published academic method (Fang & Gough
-> 2013). No dual-use content — no sequence/organism design, no pathogen or toxin
-> work, no wet-lab or synthesis protocols; just statistics (Fisher's exact tests,
-> FDR) over existing public data.
+Last reviewed against `main` (`5d3ef91`) on 2026-08-11. This is the short,
+prioritized project queue. Detailed experiment designs and results live in
+[VALIDATION_PLAN.md](VALIDATION_PLAN.md), [MULTISPECIES_BACKGROUND.md](MULTISPECIES_BACKGROUND.md),
+and [REPRODUCIBILITY.md](REPRODUCIBILITY.md); longer-term ontology expansion
+lives in [FUTURE_WORK.md](FUTURE_WORK.md).
 
-The structured roadmap lives in **[VALIDATION_PLAN.md](VALIDATION_PLAN.md)**
-(validation/benchmarking, §1–§6, tracked as issues #8–#12) and
-**[FUTURE_WORK.md](FUTURE_WORK.md)** (expanding beyond GO to other ontologies).
-This file is just loose notes.
+The core human pipeline is operational, packaged, tested, and validated. The
+remaining blockers are chiefly publication design, statistical independence,
+and reproducibility rather than basic implementation.
 
-## Done
-- ~~Switch to pre-computed InterPro download~~ — `scripts/download_data.py`.
-- ~~Download the InterPro→GO mapping~~ — `interpro2go` data source.
-- ~~Validate results against InterPro2GO~~ — §1 (coverage reframe), ~65% at FDR<0.01.
-- ~~Fix pipeline correctness~~ — contingency-table + True Path Rule bugs (#15, #17).
-- ~~§2 temporal/CAFA benchmark~~ (#8) — 2021→2026 no-knowledge split.
-  `validation/temporal_benchmark.py`. On **informative** terms (IC floor) dcGO
-  beats both baselines in every aspect: 4–26× the random-domain null and above
-  naive. Naive's raw-F_max lead was base-rate recovery of near-universal terms
-  (`protein binding` = 85% of experimental MF). Dated GOA via
-  `download_data.py --goa-archive`; IC sweep via `--min-ic`.
+## P0 — publication blockers
 
-## Done — 2026-07-28 session (PR #26)
-- ~~**Surprise score**~~ — `src/surprise_score.py`,
-  `scripts/rank_surprising_associations.py`, `SURPRISE_SCORE.md`. Ranks emergent
-  supra-domain associations by `-log10(q_emergence) × distinctness × novelty`:
-  a binomial test against a parts-only expectation (noisy-OR over constituents,
-  floored by the best sub-combination and by the term's background rate), times a
-  redundant-InterPro-signature penalty from matched-region overlap, times an
-  InterPro2GO novelty discount. Top of the GO ranking is textbook architectures
-  (SH2+kinase, PH+EF-hand, BTB/POZ+C2H2, kinase+SAM).
-- ~~**13 new ontologies behind a registry**~~ — `src/ontology_registry.py` is now
-  the single `--ontology` dispatch table (19 keys). New: orphanet, tcdb, merops,
-  cazy, unipathway, complex, drugbank, pharos, condensate, plus the layers
-  curated in the entry body rather than `DR` lines — subcellular (CC → `SL-`),
-  ligand (FT `/ligand_id` ChEBI), cofactor, rhea. Survey of all ~150 DR databases
-  in `docs/uniprot_ontology_survey.md` + `docs/dr_survey.tsv`.
-- ~~**Held-out validation of the surprise score**~~ — `validation/temporal_surprise.py`.
-  The *associations* predict future curation (12.5×); the *ranking* is not
-  demonstrably better than the dcGO q-value, and at matched prediction budgets
-  the comparison is not resolvable at all — 9,923 of 10,136 associations score
-  exactly 0.000, so most of a budget slice is an arbitrary tie-break. Verdict,
-  the bootstrap diagnosis behind it, and the percentile/basic/BCa intervals
-  side by side, in `SURPRISE_SCORE.md`.
-- ~~**Predictive power across the breadth**~~ — `validation/temporal_breadth.py`.
-  One archived Swiss-Prot release (2021_02) gives t0 for every UniProt-native
-  layer. **Corrected 2026-08-04** after `restrict_to_universe` (#26), and
-  regenerated 2026-08-06 on the final code: GO 11.4×, reactome 11.5×,
-  subcellular 3.7×, cofactor 3.6×, keyword 3.4×; complex has no demonstrated
-  signal (CI includes zero), disease undefined, ligand untestable. `doid` was
-  added to the breadth set and scores **0 hits on 160 predictions**, the same as
-  raw `disease` — the Disease-Ontology re-keying (#35) does not rescue this
-  layer here either, exactly as that PR predicted.
-  The contamination was suppressing the signal — every layer went *up*, keyword
-  doubling. See `VALIDATION_PLAN.md` §2 breadth subsection.
+- [ ] **Freeze and run a genuinely untouched final evaluation.** Model choices
+  (p-score transfer, IC floors, minimum support, True Path policy, and feature
+  family) were inspected on the headline 2021→2026 split. Use the nested human
+  interval for development, pre-specify the primary endpoint and cohort, then
+  evaluate once on a later untouched interval or other untouched dataset.
+- [ ] **Remove temporal look-ahead from domain architectures.** The temporal
+  benchmarks train on dated GOA but reuse current `protein2ipr`. Obtain an
+  archived t0 InterPro/protein2ipr snapshot, or explicitly limit every claim to
+  an annotation-temporal benchmark. This also closes the 31.9% universe loss in
+  the all-species held-out arm.
+- [ ] **Correct phylogenetic non-independence in the multi-species analysis.**
+  Protein-level pooling inflates support by about 2.44× and half of associations
+  rest on at most three UniRef50 clusters. Test at an ortholog/cluster level (or
+  justify a weighting scheme), report pooled and corrected counts side by side,
+  and repeat held-out and permutation analyses after correction.
+- [ ] **Complete paper-parity inference end to end.** Integrate the relative
+  parental-background test into `run_dcgo_human.py`, combine overall and
+  relative evidence with the paper's multiple-testing policy, and make the
+  calibrated p-score protein-prediction path reproducible without post-hoc
+  scripts.
+- [ ] **Choose and justify the primary method configuration.** Current ablation
+  finds no protein-centric gain from supra-domains and a loss from True Path
+  propagation, although supra-domains remain central to the emergent-association
+  claim. Pre-specify whether the primary predictor is single-domain/no-TPR and
+  treat supra-domain discovery as a separate analysis if so. Set and justify a
+  minimum-support/effect-size policy rather than merely exposing
+  `--min-support` and confidence intervals.
+- [ ] **Add a stronger external comparator.** Original dcGO coverage is now
+  measured, but the predictive benchmark still needs at least one independent
+  domain- or protein-function predictor. Treat InterPro2GO strictly as an
+  incomplete positive reference, not a precision benchmark.
+- [ ] **Independently verify the evaluator.** Check F_max and AUPRC against a
+  standard CAFA implementation; document threshold sampling, interpolation,
+  coverage handling, and the changing cohorts induced by IC filtering.
 
-## Next (see VALIDATION_PLAN.md "Next steps")
-- ~~Method-vs-paper audit~~ done — their validation is protein-centric CAFA
-  PR-RC; restored the two missing pieces (relative inference + p-score) and added
-  a domain-centric eval.
-- **Temporal domain-centric test** — fetch a dated 2021 `interpro2go`, pass as
-  `--reference` to `domain_centric_eval.py`.
-- **Fold method into the pipeline** — wire the relative (parental-background)
-  test into `run_dcgo_human.py` (combine + FDR<1e-3, per paper) and expose the
-  p-score predictor as the standard path.
-- §4 ablation (#10), §3 original-dcGO domain re-keying SSF/PF (#9), §5–§6.
+## P1 — reproducibility and release
 
-## Queued
+- [ ] **Pin every reported input to an immutable release.** Current manifests
+  record hashes but several production URLs still point at mutable releases.
+  Pin the exact t1 GOA and GO ontology as well as GOA, InterPro, UniProt, and all
+  ontology inputs; verify expected hashes during download.
+- [ ] **Add manifests to downstream analyses.** Cover the temporal benchmarks,
+  ablation, breadth, comparison, and surprise-score tools, including random
+  seeds and the hashes of upstream association files.
+- [ ] **Provide one-command clean-checkout reproduction.** Download and verify
+  inputs, run inference, regenerate manuscript tables/figures, and document
+  runtime, RAM, disk, and supported platforms. Archive exact snapshots and
+  outputs with a DOI.
+- [ ] **Create one generated source of truth for reported metrics.** README,
+  `VALIDATION_PLAN.md`, the manuscript, and committed TSVs currently drift.
+  Generate prose tables from committed metrics and retain provenance for
+  `bench_A`–`bench_D` and their logs.
+- [ ] **Finish release essentials.** Add a changelog, semantic-versioning and
+  support policy, archived release/DOI, and resource estimates. `CITATION.cff`,
+  wheel/sdist builds, installed-CLI smoke tests, and CI are already present.
 
-- ~~**Expand the background dimension: a multi-species universe.**~~ **Run
-  2026-08-06 — see `MULTISPECIES_BACKGROUND.md`.** Universe went 18,908 → 
-  1,464,355 proteins over 9,074 taxa, single domains and supra-domains. Scored
-  against the criteria below — **four met, one half met**.
-  **Held-out enrichment does not fall, it rises** (all-species
-  wins 8/9 F_max and 9/9 AUPRC cells on the same human 2021→2026 evaluation
-  set); the permutation null is empty (0 of 1.13 B tests); non-independence is
-  measured at 2.44× with 18.5% of associations on a single UniRef50 cluster;
-  recall vs published dcGO rises 0.074 → 0.261 but **precision falls to 0.298**,
-  so that criterion fails on its precision clause. Two traps came out worse than
-  this entry assumed: the universe is **75.8% projected** annotation and **55.2%
-  of the projected non-human annotation cites a human protein**, and "all
-  species" is really 19 taxa carrying half the annotations.
+## P2 — focused follow-up analyses
 
-  Follow-ups:
-  1. ~~The emergent-combination criterion is untested.~~ **Done.** The Fisher
-     stage now enumerates only co-occurring pairs, which is exact under the
-     one-sided test provided BH keeps the full hypothesis count as its
-     denominator; it reproduces both committed human runs byte-identically and
-     takes the all-species supra run from ~389 GB/not-runnable to 268 s. The
-     criterion **passes**: 97.3% of shared supra combinations gain evidence
-     (median 14.5×, 6 lose), 82.2% of the thin n=2-8 band clears 8 proteins, and
-     the redundant-signature rate falls 3.0% -> 1.5%.
-  2. ~~Re-run the held-out arm under `--evidence-filter experimental`.~~
-     **Done** — the advantage grows rather than shrinks: 9/9 and 9/9, larger in
-     12 of 18 cells.
-  3. **Phylogenetic non-independence is measured but not corrected.** Support is
-     inflated 2.44x and half the associations rest on <=3 UniRef50 clusters.
-     Now the largest open issue, and the natural fix is to test at the
-     ortholog-group level rather than the protein level.
-  4. **The held-out all-species arm carries a 31.9% universe loss** (vs 1.9% for
-     human) because the t0 runs reuse today's `protein2ipr` for a 2021 protein
-     set. It won anyway, so the win is conservative — but closing this needs an
-     archived 2021 `protein2ipr`.
-  5. **Precision against the published dcGO** is the one criterion still not
-     met (0.526 -> 0.298 under `manual`, 0.564 -> 0.438 under `experimental`).
+- [ ] Run the temporal domain-centric evaluation against a dated t0
+  `interpro2go`, not the current mapping.
+- [ ] Extend the published-dcGO comparison to `--domain-key pfam` and the
+  non-GO Domain2EC/Domain2KW/Domain2DO tables.
+- [ ] Re-test ligand and cofactor at a 2023 t0, when structured ChEBI ligand
+  identifiers are available; report the shorter window separately.
+- [ ] Repeat the breadth benchmark with `--supra-only` to test whether emergent
+  combinations generalize beyond GO.
+- [ ] Redesign the surprise score to balance emergence with testability. The
+  current score predicts future curation in aggregate but has no demonstrated
+  ranking advantage over q-value and leaves 9,923/10,136 associations tied at
+  zero.
+- [ ] Test MONDO re-keying as a broader alternative to DOID for sparse disease
+  annotations. The 2021 DOID breadth run is complete and produced 0/160 hits.
+- [ ] Quantify sensitivity to evidence policy, FDR, minimum support, effect-size
+  floor, supra-domain length, GO release, and transfer rule; include qualitative
+  error analysis of representative successes and failures.
+- [ ] Investigate dependence-aware or hierarchical multiple testing across GO
+  terms, domains, and nested supra-domain hypotheses.
 
-  Original entry follows.
+## Documentation and maintenance
 
-- **Expand the background dimension: a multi-species universe.** (Proposed
-  2026-08-06.) Every run so far is human-only — `goa_human.gaf.gz` is 826,052
-  lines, all `taxon:9606`, and `protein2ipr_human.dat.gz` is extracted by
-  matching those accessions, so the Fisher universe is 18,909 human proteins.
-  The original method used ~2,414 genomes plus all of UniProt. Widening the
-  *background* is the most promising remaining axis, and the `AnnotationSource`
-  seam plus the species-parameterised path already make it mechanically cheap —
-  mouse runs end to end today.
+- [ ] Reconcile stale status text. In particular, README still says §3/§4 and
+  score calibration are open and reports 525 tests, while the current suite has
+  632 passing tests; `VALIDATION_PLAN.md` still has a 2026-07-09 “next steps”
+  section and marks completed work as pending; and
+  `ENGINEERING_SCIENTIFIC_REVIEW_TODOS.md` retains resolved launch blockers.
+- [ ] Add InterPro names, gene names, and ontology labels to result TSVs (or a
+  deterministic annotation companion table) for usable downstream output.
+- [ ] Remove or formalize `scratch_allspecies/` scripts after the multi-species
+  workflow is captured by supported, tested commands.
 
-  **Why it is worth doing.**
-  - *Power where we most lack it.* The emergent domain combinations that carry
-    the headline sit at n = 2-8 proteins. A combination seen in three human
-    proteins may be seen in fifty across vertebrates, which is the difference
-    between an untestable hypothesis and a result.
-  - *It closes the one uninterpretable number in §3.* Against published dcGO we
-    report precision 0.54-0.63 but recall 0.069, and **69.4% of the pairs they
-    call that we miss have zero co-occurring human proteins** — unreachable at
-    any threshold, purely because we look at one species.
-  - *Conservation is evidence.* A domain-function association that holds across
-    a phylogenetic range is a stronger claim than one seen once.
+## Recently completed
 
-  **Three traps, in the order they will bite.**
-
-  1. **Phylogenetic non-independence — the statistical problem, and it is
-     serious.** Fisher's exact test assumes independent observations. Fifty
-     mammalian orthologs of one protein are close to *one* observation, not
-     fifty. Pooling them naively inflates every count in the contingency table
-     and would manufacture significance on a scale that dwarfs the all-species
-     contamination bug fixed in #26. Any design has to say what the independent
-     unit is — an ortholog group, a species-weighted count, a phylogenetically
-     balanced sample — before it says anything about results.
-
-  2. **Annotation-transfer circularity.** Most non-human GO annotation is
-     projected rather than observed, and much of it is projected *from human*.
-     Predicting human function from annotations that were themselves derived
-     from human function is circular. Note this already partly applies to the
-     current human runs: the default `--evidence-filter manual` admits ten
-     projection-based codes (`IBA IBD IGC IKR IRD ISA ISM ISO ISS RCA`), and
-     IBA (68,062) plus ISS (34,462) are ~16% of the 651,010 accepted human
-     annotations. Adding species compounds it. A multi-species run probably has
-     to train on `experimental` only, and must at minimum measure how much of
-     the added signal is projected.
-
-  3. **Which species, and weighted how.** All of Swiss-Prot is 575,503 entries
-     but wildly unbalanced by clade and by annotation depth. A handful of
-     well-curated model organisms is a different experiment from a broad sweep.
-     The choice changes the claim, so it should be made and stated first.
-
-  **Design sketch.** The seam does not need changing: `parse_goa` is already
-  species-agnostic and `extract_human_interpro.py --species X` already works.
-  What is needed is (a) a way to build one universe from several species'
-  inputs, (b) a decision on the independent unit, and (c) an evidence policy.
-  The cheapest informative first cut is human + mouse, where we already have
-  both sides and can measure the non-independence directly by comparing pooled
-  counts against ortholog-collapsed ones.
-
-  **Acceptance criteria — deliberately not "more associations".** The universe
-  grows, so the significant count grows arithmetically; that is not evidence of
-  anything. Require instead:
-  - the held-out enrichment (as in `temporal_breadth.py`) does not *fall*
-    against the human-only baseline on the same human evaluation set;
-  - the emergent-combination support distribution shifts upward (the n = 2-8
-    cases gain evidence) without the redundant-signature rate rising;
-  - recall against published dcGO rises materially from 0.069 while precision
-    holds in the 0.54-0.63 band;
-  - a stated, measured treatment of non-independence — at minimum, pooled versus
-    ortholog-collapsed counts reported side by side so a reader can see the
-    inflation;
-  - the permutation null is re-run, since a multi-species universe changes what
-    "random" means.
-
-- **Surprise score v2: weigh emergence against testability.** The held-out test
-  exposed a structural tension — emergence requires that a combination's carriers
-  are *already* nearly all annotated, so the most emergent associations leave the
-  fewest standing predictions and are the least verifiable (`surprise top-25`
-  yields 117 predictions against 0.14 expected hits). A useful score should trade
-  emergence off against how much it still predicts.
-- **Re-test `ligand` and `cofactor` at a 2023 t0.** UniProt only introduced the
-  structured `FT /ligand_id="ChEBI:…"` qualifier after 2021 (April 2021 used
-  free-text `/note="ATP"`), so the ligand layer is entirely post-2022 annotation
-  and untestable on the 2021→2026 split. Needs `release-2023_01` or similar —
-  a shorter, non-comparable window, so report separately.
-- **Breadth test with `--supra-only`.** The per-ontology numbers pool single
-  domains and supra-domains; isolating supra-domains would say whether the
-  *emergent* claim generalises beyond GO, which is the more interesting question.
-- **Decide the fate of `agent/reproducible-runs`.** Two unpushed commits, never
-  PR'd, worktree in `/tmp/dcgo-repro` (will not survive a reboot). Contains
-  `src/run_manifest.py` + tests and `CITATION.cff`, which close P0/P1 review
-  items. It conflicts with PR #26 on `run_dcgo_human.py`; cheapest path is to
-  cherry-pick those two files onto a fresh branch after #26 merges.
-- **`validation/bench_A`–`bench_D` are still untracked** — the review flagged
-  their provenance as unclear. Either commit or archive them.
-
-## Done — Disease Ontology re-keying
-
-- ~~**Give the disease layers a hierarchy via the Disease Ontology.**~~ —
-  `src/disease_ontology.py`, `--ontology doid` and `--ontology orphanet_doid`.
-  UniProt's `DR MIM` (phenotype) and `DR Orphanet` ids are re-keyed onto DOID
-  terms **at parse time**, using DO's own `xref: MIM:` / `xref: ORDO:` lines,
-  and then propagate up DO's `is_a` DAG. `disease`/`orphanet` keep emitting the
-  raw ids so the two hypothesis universes stay comparable. The DO release is
-  pinned to an immutable OBO Foundry release PURL with a SHA-256 checksum that
-  `scripts/download_data.py` now verifies.
-
-  **The result is not the one the acceptance criterion asked for, and that is
-  the finding.** Current UniProt, human, FDR<0.01. These are *not* comparable to
-  the 53 significant associations the 2021 t0 run produced — different snapshot,
-  different term space:
-
-  | | `disease` (OMIM ids) | `doid` (re-keyed) |
-  | --- | ---: | ---: |
-  | proteins | 5,029 | 3,928 |
-  | domain features | 51,311 | 43,019 |
-  | terms | 6,904 | 4,917 |
-  | Fisher tests | 354,251,144 | 211,524,423 |
-  | BH threshold p | 4.72e-10 | 3.96e-10 |
-  | significant | 17 | **16** |
-  | distinct terms among them | 4 | 2 |
-  | permutation control (seed 7) | 0 | 0 |
-  | True Path annotations | *impossible* | 160 (16 direct + 144 propagated) |
-
-  So re-keying did **not** buy more significant associations — it bought a
-  hierarchy (144 propagated annotations the OMIM layer cannot produce at all)
-  and interpretable term labels, at the cost of ~26% of the annotations. Note
-  the direction of the arithmetic: a *smaller* term space with a *similar* count
-  is not a win, and the honest read is that this layer's sparsity is at the
-  protein level (3,928 proteins over 4,917 DO terms ≈ 0.8 proteins/term), which
-  pooling through DO does not fix.
-
-  Mapping coverage (the first-class number): 5,087 / 6,920 distinct OMIM ids
-  (73.5%) and 5,534 / 7,457 protein–term annotations (74.2%). 1,833 OMIM ids had
-  no DO term. One concrete loss: `IPR051503` (complement system regulators) →
-  MIM 235400 (atypical HUS) disappears, because DO cross-references
-  `DOID:0080301` only as `ORDO:2134`, with no `MIM:` xref — which is exactly why
-  `orphanet_doid` exists as a second, complementary route.
-
-- **Still open here:** re-run `validation/temporal_breadth.py` on `doid` at the
-  2021 t0 to replace the "undefined (0 hits / 369)" `disease` row; and try
-  MONDO (`https://purl.obolibrary.org/obo/mondo.obo`, what dcGO 2023 switched
-  to), which has broader OMIM coverage and would use the same machinery — only
-  the OBO and the xref prefix change.
-
-## Loose ideas / nice-to-haves
-- Add InterPro names / gene names / GO term descriptions to the output TSVs
-  (currently just IDs) — improves readability for downstream users.
-- Protein → genome positions from Ensembl (for a genome-browser view).
-- Build anomaly/analysis data dir (`BUILD NOMALY DATADIR` — original note).
-- Other ontologies (DO/HPO/MP/EC/Reactome) — see FUTURE_WORK.md.
+- [x] Correct contingency tables, Fisher testing, BH families, and True Path
+  direction/background; remove the invalid shrinkage heuristic.
+- [x] Package and smoke-test the installed `dcgo` CLI; validate inputs and fail
+  explicitly when requested hierarchy support is unavailable.
+- [x] Add run manifests, `CITATION.cff`, CI coverage, end-to-end tests, and
+  committed benchmark artifacts. Current verification: **632 tests pass**.
+- [x] Complete InterPro2GO coverage, the 2021→2026 temporal benchmark,
+  uncertainty/permutation analysis, component ablation, mouse validation,
+  original-dcGO SSF comparison, and 19-ontology breadth evaluation.
+- [x] Run the all-species background experiment and make supra-domain inference
+  tractable by enumerating only co-occurring combinations while preserving the
+  full BH hypothesis count.
+- [x] Add and evaluate the surprise score and DOID/Orphanet-to-DOID re-keying;
+  retain their negative or inconclusive results rather than treating them as
+  successes.

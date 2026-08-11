@@ -1,13 +1,15 @@
 ontology	n_associations	n_predictions	n_hits	hit_rate	expected_rate	enrichment	ci_low	ci_high
-go (all-domains)	91830	3106234	106224	0.03420	0.00298	11.49	11.12	11.99
-reactome (all-domains)	38187	1194388	1430	0.00120	0.00012	9.66	7.81	11.96
-reactome (in-scope)	34397	760073	1430	0.00188	0.00016	11.44	8.85	14.60
-keyword (all-domains)	35981	889117	13140	0.01478	0.00440	3.36	3.16	3.57
-subcellular (all-domains)	6529	198367	3798	0.01915	0.00574	3.33	3.13	3.52
-subcellular (in-scope)	6340	172679	3798	0.02199	0.00592	3.72	3.50	3.93
-cofactor (all-domains)	747	12838	235	0.01831	0.00416	4.40	1.81	6.89
-cofactor (in-scope)	291	1404	235	0.16738	0.04722	3.54	2.10	4.45
-disease (all-domains)	44	369	0	0.00000	0.00000	nan	nan	nan
-disease (in-scope)	27	90	0	0.00000	0.00000	nan	nan	nan
-complex (all-domains)	1073	22772	2	0.00009	0.00000	162.51	0.00	463.14
-complex (in-scope)	958	9904	2	0.00020	0.00000	61.14	0.00	130.93
+go (all-domains)	91813	3135285	106567	0.03399	0.00297	11.44	11.01	11.90
+reactome (all-domains)	38247	1207447	1440	0.00119	0.00012	9.68	7.64	11.94
+reactome (in-scope)	34471	768585	1440	0.00187	0.00016	11.45	9.19	14.50
+keyword (all-domains)	36138	892909	13183	0.01476	0.00438	3.37	3.16	3.61
+subcellular (all-domains)	6582	200636	3827	0.01907	0.00578	3.30	3.10	3.50
+subcellular (in-scope)	6392	174584	3827	0.02192	0.00595	3.68	3.48	3.91
+cofactor (all-domains)	763	13174	240	0.01822	0.00408	4.47	1.91	7.07
+cofactor (in-scope)	293	1485	240	0.16162	0.04537	3.56	2.08	4.55
+disease (all-domains)	47	445	0	0.00000	0.00000	nan	nan	nan
+disease (in-scope)	30	103	0	0.00000	0.00000	nan	nan	nan
+complex (all-domains)	1072	22803	2	0.00009	0.00000	162.51	0.00	463.14
+complex (in-scope)	957	9890	2	0.00020	0.00000	61.14	0.00	130.93
+doid (all-domains)	27	160	0	0.00000	0.00000	nan	nan	nan
+doid (in-scope)	9	22	0	0.00000	0.00000	nan	nan	nan
