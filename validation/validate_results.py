@@ -28,7 +28,10 @@ from typing import Callable, Iterable
 import pandas as pd
 from loguru import logger
 
-from validation.association_io import association_pairs, load_associations
+project_root = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(project_root))
+
+from validation.association_io import association_pairs, load_associations  # noqa: E402
 
 logger.remove()
 logger.add(sys.stderr, level="INFO")
@@ -209,7 +212,7 @@ def calculate_overlap_at_thresholds(
             else:
                 filtered = predictions[predictions[column] >= v]
                 name = f"{label}≥{v:g}"
-            pred_pairs = {p for p in _pairs_from_df(filtered) if p[0] in shared}
+            pred_pairs = {p for p in association_pairs(filtered) if p[0] in shared}
             pred_shared = propagate_pairs(pred_pairs, get_ancestors)
             results.append(compute_metrics(pred_shared, ref_fixed, name))
 

@@ -11,11 +11,18 @@ Pair = tuple[str, str]
 
 
 def load_associations(
-    path: Path, *, required_columns: Iterable[str] = ()
+    path: Path,
+    *,
+    term_column: str = "go_term",
+    required_columns: Iterable[str] = (),
 ) -> pd.DataFrame:
-    """Load an association TSV and validate its named-column contract."""
+    """Load an association TSV and validate its named-column contract.
+
+    ``term_column`` supports the ontology-specific schemas written by the runner,
+    such as ``go_term``, ``ec_term``, and ``doid_term``.
+    """
     frame = pd.read_csv(path, sep="\t")
-    required = {"domain", "go_term", *required_columns}
+    required = {"domain", term_column, *required_columns}
     missing = sorted(required - set(frame.columns))
     if missing:
         raise ValueError(
@@ -24,6 +31,8 @@ def load_associations(
     return frame
 
 
-def association_pairs(frame: pd.DataFrame) -> set[Pair]:
+def association_pairs(
+    frame: pd.DataFrame, *, term_column: str = "go_term"
+) -> set[Pair]:
     """Return unique ``(domain, term)`` pairs from a validated table."""
-    return set(zip(frame["domain"], frame["go_term"]))
+    return set(zip(frame["domain"], frame[term_column]))

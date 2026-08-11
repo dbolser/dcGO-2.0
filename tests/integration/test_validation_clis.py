@@ -205,3 +205,24 @@ def test_domain_centric_cli_rejects_missing_association_columns(
 
     assert result.returncode == 1
     assert "missing required columns: go_term" in result.stderr
+
+
+def test_validate_results_direct_script_uses_its_own_checkout(tmp_path: Path) -> None:
+    """The script must not resolve ``validation`` from another checkout/PYTHONPATH."""
+    foreign_root = tmp_path / "foreign-checkout"
+    foreign_package = foreign_root / "validation"
+    foreign_package.mkdir(parents=True)
+    (foreign_package / "__init__.py").write_text("", encoding="utf-8")
+
+    result = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "validation" / "validate_results.py")],
+        cwd=tmp_path,
+        env={"PYTHONPATH": str(foreign_root)},
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    assert result.returncode == 1
+    assert "Missing required inputs" in result.stderr
+    assert "ModuleNotFoundError" not in result.stderr

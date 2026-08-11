@@ -43,8 +43,7 @@ logger.remove()
 logger.add(sys.stderr, level="INFO")
 
 project_root = Path(__file__).resolve().parents[1]
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
+sys.path.insert(0, str(project_root))
 
 from src.domain_annotation_parser import DomainAnnotationParser  # noqa: E402
 from src.goa_parser import parse_goa_human  # noqa: E402

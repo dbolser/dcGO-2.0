@@ -41,8 +41,7 @@ logger.remove()
 logger.add(sys.stderr, level="INFO")
 
 project_root = Path(__file__).resolve().parents[1]
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
+sys.path.insert(0, str(project_root))
 
 from validation import validate_results as vr  # noqa: E402
 from validation.association_io import association_pairs, load_associations  # noqa: E402

@@ -1,19 +1,11 @@
 """Unit tests for the reframed InterPro2GO validation logic (VALIDATION_PLAN.md §1)."""
 
-import importlib.util
-import sys
-from pathlib import Path
-
 import pytest
 
-pytestmark = pytest.mark.unit
+from validation import validate_results as vr
+from validation.association_io import association_pairs, load_associations
 
-# validation/ is not a package; load validate_results.py by path.
-_VALIDATION = Path(__file__).resolve().parents[2] / "validation" / "validate_results.py"
-_spec = importlib.util.spec_from_file_location("validate_results", _VALIDATION)
-vr = importlib.util.module_from_spec(_spec)
-sys.modules["validate_results"] = vr
-_spec.loader.exec_module(vr)
+pytestmark = pytest.mark.unit
 
 
 # A tiny 3-level ontology: child -> parent -> root
@@ -121,3 +113,11 @@ class TestThresholdSweepDedup:
         assert df["threshold"].is_unique
         # one p_value row, one adj_p row, one score row
         assert len(df) == 3
+
+
+def test_association_reader_supports_ontology_specific_term_column(tmp_path):
+    path = tmp_path / "ec.tsv"
+    path.write_text("domain\tec_term\nIPR000001\t1.2.3.4\n", encoding="utf-8")
+
+    frame = load_associations(path, term_column="ec_term")
+    assert association_pairs(frame, term_column="ec_term") == {("IPR000001", "1.2.3.4")}
