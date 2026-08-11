@@ -34,8 +34,10 @@
 **Kept core dependencies:**
 - `numpy`, `pandas`, `scipy` (core scientific computing)
 - `loguru` (logging)
-- `joblib` (parallel processing for Fisher's tests)
-- `statsmodels` (FDR correction)
+- Fisher testing runs through the compiled `fisher` package; no Python
+  multiprocessing dependency is required.
+- Benjamini-Hochberg correction is implemented and tested in
+  `src/vectorized_fisher.py`; `statsmodels` is not a runtime dependency.
 - `obonet`, `networkx` (GO ontology - for future True Path Rule)
 - `sqlalchemy` (database support - optional)
 
