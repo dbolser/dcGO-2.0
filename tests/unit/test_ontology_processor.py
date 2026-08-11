@@ -4,12 +4,18 @@ Unit tests for the OntologyProcessor and True Path Rule implementation.
 Tests the optimal level filtering and annotation propagation functionality.
 """
 
+import networkx as nx
 import pytest
 import tempfile
 from pathlib import Path
 from dataclasses import dataclass
 
-from src.ontology_processor import OntologyProcessor, Annotation
+from src.ontology_processor import (
+    Annotation,
+    InsufficientBackgroundError,
+    InvalidContingencyTableError,
+    OntologyProcessor,
+)
 
 
 @dataclass
@@ -149,6 +155,15 @@ class TestOntologyProcessorInitialization:
         assert processor is not None
         assert processor.go_graph is not None
         assert len(processor.go_graph.nodes) > 0
+
+    def test_metric_failure_aborts_initialization(self, temp_obo_file, monkeypatch):
+        def fail_metrics(*args, **kwargs):
+            raise nx.NetworkXError("metric failure")
+
+        monkeypatch.setattr(nx, "single_source_shortest_path_length", fail_metrics)
+
+        with pytest.raises(nx.NetworkXError, match="metric failure"):
+            OntologyProcessor(temp_obo_file)
 
     def test_file_not_found(self):
         """Test error handling for non-existent file."""
@@ -376,6 +391,73 @@ class TestOptimalLevelFilter:
 
         assert len(filtered) == 1
         assert filtered[0].go_term == "GO:9999999"
+
+    def test_malformed_association_is_not_silently_skipped(
+        self, ontology_processor, sample_protein_maps
+    ):
+        protein_domain_map, protein_go_map = sample_protein_maps
+
+        with pytest.raises(AttributeError):
+            ontology_processor.apply_optimal_level_filter(
+                [object()], protein_domain_map, protein_go_map
+            )
+
+    @pytest.mark.parametrize(
+        ("error", "counter"),
+        [
+            (
+                InsufficientBackgroundError("too small"),
+                "InsufficientBackgroundError",
+            ),
+            (
+                InvalidContingencyTableError("invalid cells"),
+                "InvalidContingencyTableError",
+            ),
+        ],
+    )
+    def test_expected_parent_rejections_are_counted_separately(
+        self,
+        ontology_processor,
+        sample_protein_maps,
+        monkeypatch,
+        error,
+        counter,
+    ):
+        protein_domain_map, protein_go_map = sample_protein_maps
+        association = MockAssociation("IPR001", "GO:0006812", 1e-10, 1e-8, 95.0)
+
+        def reject(*args, **kwargs):
+            raise error
+
+        monkeypatch.setattr(
+            ontology_processor, "_test_against_parent_background", reject
+        )
+
+        assert (
+            ontology_processor.apply_optimal_level_filter(
+                [association], protein_domain_map, protein_go_map
+            )
+            == []
+        )
+        assert ontology_processor._filter_rejections == {counter: 1}
+
+    def test_unexpected_parent_test_error_propagates(
+        self, ontology_processor, sample_protein_maps, monkeypatch
+    ):
+        protein_domain_map, protein_go_map = sample_protein_maps
+        association = MockAssociation("IPR001", "GO:0006812", 1e-10, 1e-8, 95.0)
+
+        def fail_unexpectedly(*args, **kwargs):
+            raise RuntimeError("implementation defect")
+
+        monkeypatch.setattr(
+            ontology_processor, "_test_against_parent_background", fail_unexpectedly
+        )
+
+        with pytest.raises(RuntimeError, match="implementation defect"):
+            ontology_processor.apply_optimal_level_filter(
+                [association], protein_domain_map, protein_go_map
+            )
 
 
 class TestAnnotationPropagation:
