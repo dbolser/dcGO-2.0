@@ -71,63 +71,84 @@ def propagate_via_ancestors(
     direct_associations: Iterable[Any],
     ancestors_fn: Callable[[str], Iterable[str]],
 ) -> "List[Annotation]":
-    """Propagate significant domain→term associations up a term hierarchy.
+    """Propagate associations with independent provenance and evidence merging.
 
-    Each direct association is emitted as-is, plus one ``"propagated"``
-    annotation per ancestor term returned by ``ancestors_fn``. ``(domain, term)``
-    pairs are de-duplicated, keeping the most significant source association
-    (lowest ``q_value``), so a shared ancestor is attributed to the strongest
-    evidence.
+    Every direct association supports its own ``(domain, term)`` pair and every
+    ancestor returned by ``ancestors_fn``. Supporting evidence is aggregated
+    independently of provenance:
+
+    * a pair is labelled ``direct`` whenever direct evidence exists, and its
+      ``direct_source_term`` is the pair's own term;
+    * otherwise the propagated source with the lowest q-value supplies
+      ``direct_source_term`` (term id breaks equal-q ties);
+    * ``q_value`` is the minimum and ``association_score`` the maximum across
+      all direct and propagated support for the pair.
+
+    Thus a strong child may strengthen a directly observed parent without
+    relabelling that parent as propagated. Results do not depend on input order.
 
     Args:
         direct_associations: iterable of objects exposing ``domain``,
-            ``go_term`` (the term id, whatever the ontology), ``q_value`` and
-            ``hyper_score`` — e.g. the ``AssociationResult`` records built in
-            ``run_dcgo_human.py``.
+            ``go_term``, ``q_value`` and ``hyper_score``.
         ancestors_fn: maps a term id to its ancestor term ids.
 
     Returns:
-        list of ``ontology_processor.Annotation`` (``annotation_type`` of
-        ``"direct"`` or ``"propagated"``).
+        De-duplicated ``ontology_processor.Annotation`` objects.
     """
-    # Lazy import keeps this module dependency-light (ontology_processor pulls in
-    # obonet/networkx/pandas) and avoids an import cycle.
     from src.ontology_processor import Annotation
 
-    # Most significant first, so shared ancestors record the best source term.
-    ordered = sorted(direct_associations, key=lambda a: a.q_value)
+    ordered = sorted(
+        direct_associations,
+        key=lambda assoc: (
+            assoc.q_value,
+            assoc.domain,
+            assoc.go_term,
+            -assoc.hyper_score,
+        ),
+    )
+
+    # Each support record is (association, is_direct). Preserve a stable pair
+    # order: direct pairs first, followed by newly encountered ancestors.
+    support: Dict[tuple[str, str], List[tuple[Any, bool]]] = defaultdict(list)
+    pair_order: List[tuple[str, str]] = []
+
+    def add_support(key: tuple[str, str], assoc: Any, is_direct: bool) -> None:
+        if key not in support:
+            pair_order.append(key)
+        support[key].append((assoc, is_direct))
+
+    for assoc in ordered:
+        add_support((assoc.domain, assoc.go_term), assoc, True)
+
+    for assoc in ordered:
+        for ancestor in sorted(ancestors_fn(assoc.go_term)):
+            add_support((assoc.domain, ancestor), assoc, False)
 
     annotations: List[Annotation] = []
-    seen: Set[tuple] = set()  # (domain, term) pairs already emitted
-    for assoc in ordered:
-        direct_key = (assoc.domain, assoc.go_term)
-        if direct_key not in seen:
-            annotations.append(
-                Annotation(
-                    domain=assoc.domain,
-                    go_term=assoc.go_term,
-                    q_value=assoc.q_value,
-                    association_score=assoc.hyper_score,
-                    annotation_type="direct",
-                    direct_source_term=assoc.go_term,
-                )
+    for domain, term in pair_order:
+        evidence = support[(domain, term)]
+        direct = [assoc for assoc, is_direct in evidence if is_direct]
+        if direct:
+            annotation_type = "direct"
+            direct_source_term = term
+        else:
+            source = min(
+                (assoc for assoc, _ in evidence),
+                key=lambda assoc: (assoc.q_value, assoc.go_term),
             )
-            seen.add(direct_key)
+            annotation_type = "propagated"
+            direct_source_term = source.go_term
 
-        for ancestor in ancestors_fn(assoc.go_term):
-            ancestor_key = (assoc.domain, ancestor)
-            if ancestor_key not in seen:
-                annotations.append(
-                    Annotation(
-                        domain=assoc.domain,
-                        go_term=ancestor,
-                        q_value=assoc.q_value,
-                        association_score=assoc.hyper_score,
-                        annotation_type="propagated",
-                        direct_source_term=assoc.go_term,
-                    )
-                )
-                seen.add(ancestor_key)
+        annotations.append(
+            Annotation(
+                domain=domain,
+                go_term=term,
+                q_value=min(assoc.q_value for assoc, _ in evidence),
+                association_score=max(assoc.hyper_score for assoc, _ in evidence),
+                annotation_type=annotation_type,
+                direct_source_term=direct_source_term,
+            )
+        )
 
     return annotations
 
