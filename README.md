@@ -30,7 +30,10 @@ Fisher's exact tests with FDR correction and hypergeometric association scoring.
 4. **Generates supra-domains** (contiguous domain combinations up to triplets)
    (contiguous combinations up to triplets).
 5. *(optional)* **Applies the True Path Rule** to propagate associations up the
-   GO DAG, when run with `--enable-true-path`.
+   GO DAG, when run with `--enable-true-path`; and *(optional, GO only)* applies
+   the paper's **relative inference** — a parental-background filter — when run
+   with `--enable-relative-inference`. These are separate steps of the published
+   method and are selected separately; see [Two hierarchy stages](#two-hierarchy-stages).
 
 Output: a TSV of significant domain–GO associations (FDR < 0.01 by default) with
 p-values, FDR q-values, odds ratios, and hypergeometric scores.
@@ -180,6 +183,43 @@ For an ontology with no hierarchy (`disease`, `rhea`, `xref`, …),
 without propagation, and any missing input is reported before the expensive
 stages start.
 
+### Two hierarchy stages
+
+The dcGO paper (Fang & Gough 2013) uses the hierarchy in two distinct places,
+and this pipeline exposes them as two flags:
+
+| Flag | Paper step | What it does | Direction |
+|------|-----------|--------------|-----------|
+| `--enable-relative-inference` | Step 2, "relative inference" | Fisher test of the association within the background of proteins annotated to the term's **direct parents**; associations failing it are dropped | **Removes** associations |
+| `--enable-true-path` | Step 3, "true-path rule" | Propagates each association to its **ancestor** terms | **Adds** annotations |
+
+Only Step 3 is the True Path Rule. The parental-background test is a separate
+statistical inference that happens to consult the hierarchy — the paper is
+explicit about this ("*two types of statistical inference followed by FDR
+calculation*", then "*following the true-path rule to obtain the complete
+domain-centric GO annotations*"), but it is easy to miss in a dense methods
+section.
+
+On the human GO run (`--disable-supra-domains`, 44,453 significant
+associations) the two behave completely differently:
+
+```
+--enable-true-path                                44,453 → 328,486 annotations (44,453 direct + 284,033 propagated)
+--enable-relative-inference                       44,453 →  21,582 annotations (all direct; 51.4% dropped)
+--enable-relative-inference --enable-true-path    44,453 →  21,582 → 148,212  (21,582 direct + 126,630 propagated)
+```
+
+Two caveats worth knowing:
+
+- **Our relative inference is not yet the paper's.** The paper computes the
+  relative p-value alongside the overall one, takes the *larger* of the two,
+  and applies BH-FDR to that. We apply it as a post-hoc `alpha < 0.05` filter
+  *after* BH has already run. Those are different methods with different error
+  control — see `VALIDATION_PLAN.md` next-steps item 2.
+- **`--enable-relative-inference` is GO-only.** The test needs each term's
+  *direct* parents; the registry supplies a transitive-ancestors function for
+  every other ontology, which cannot answer "one level up".
+
 #### Disease: re-keying OMIM onto the Disease Ontology
 
 OMIM is a catalogue, not an ontology. Its ids have no DAG, and it splits one
@@ -297,8 +337,9 @@ writing `data/interim/protein2ipr_<species>.dat.gz` so subsequent runs are fast.
 | `--num-cores` | `8` | CPU cores for parallel Fisher tests |
 | `--batch-size` | `50000` | Fisher test batch size |
 | `--enable-supra-domains` / `--disable-supra-domains` | enabled | Test contiguous domain combinations |
-| `--enable-true-path` | off | Propagate associations up the term hierarchy (fails if the ontology has none) |
-| `--go-ontology` | `data/raw/go_ontology/go-basic.obo` | GO OBO file (GO only; required for `--ontology go --enable-true-path`) |
+| `--enable-true-path` | off | Propagate associations up the term hierarchy, and only that (fails if the ontology has none) |
+| `--enable-relative-inference` | off | Parental-background filter: keep an association only if still enriched within its term's direct parents. **GO only**, and it *removes* associations |
+| `--go-ontology` | `data/raw/go_ontology/go-basic.obo` | GO OBO file (GO only; read by either of the two flags above) |
 | `--output-dir` | `results/` | Output directory |
 
 ---

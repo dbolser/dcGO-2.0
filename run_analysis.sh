@@ -25,11 +25,19 @@ GO_OBO="${GO_OBO:-data/raw/go_ontology/go-basic.obo}"
 # its flag — there is deliberately no --disable-true-path option, and an earlier
 # version of this script passed one, which made every configuration fail
 # immediately.
+#
+# True Path propagation and relative inference are separate flags, so the two
+# hierarchy stages get separate rungs. Before they were split, "true path" meant
+# both at once for GO, which is why the §4 ablation could not say which of them
+# produced its result. `05_supra_relative_true_path` is the rung equivalent to
+# the old `04_supra_true_path`.
 CONFIGS=(
   "01_baseline|--disable-supra-domains"
   "02_true_path_only|--disable-supra-domains --enable-true-path --go-ontology ${GO_OBO}"
   "03_supra_only|"
   "04_supra_true_path|--enable-true-path --go-ontology ${GO_OBO}"
+  "05_supra_relative_true_path|--enable-relative-inference --enable-true-path --go-ontology ${GO_OBO}"
+  "06_supra_relative_only|--enable-relative-inference --go-ontology ${GO_OBO}"
 )
 
 INTERPRO="data/interim/protein2ipr_${SPECIES}.dat.gz"

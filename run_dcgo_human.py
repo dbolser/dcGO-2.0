@@ -38,7 +38,9 @@ Options:
     --output-dir PATH        Output directory for results (default: results/)
     --batch-size INT         Batch size for Fisher tests (default: 50000)
     --permute-annotations N  Calibration control: shuffle protein↔term-set assignment (null run)
-    --enable-true-path       True Path propagation (GO via OBO DAG, EC via numbering, reactome/keyword via hierarchy files)
+    --enable-true-path       True Path propagation *only* (GO via OBO DAG, EC via numbering, reactome/keyword via hierarchy files)
+    --enable-relative-inference
+                             Parental-background filter (GO only). Independent of --enable-true-path
     --go-ontology PATH       Path to GO ontology file (default: data/raw/go_ontology/go-basic.obo)
 
 Examples:
@@ -61,8 +63,14 @@ Examples:
     uv run python run_dcgo_human.py --ontology tcdb               # transporter classification
     uv run python run_dcgo_human.py --ontology xref --xref-db KEGG # any DR database
 
-    # Run with True Path Rule propagation
+    # Run with True Path Rule propagation (paper Step 3)
     uv run python run_dcgo_human.py --enable-true-path --go-ontology data/raw/go_ontology/go-basic.obo
+
+    # Run with the parental-background filter (paper Step 2 "relative inference")
+    uv run python run_dcgo_human.py --enable-relative-inference
+
+    # Both, which is what --enable-true-path alone used to do for GO
+    uv run python run_dcgo_human.py --enable-relative-inference --enable-true-path
 
     # Key domains by SCOP superfamily instead of InterPro entry, to compare
     # against the published dcGO (VALIDATION_PLAN §3)
@@ -311,6 +319,17 @@ def validate_arguments(
             f"--species must be a bare name used in the input filenames, got "
             f"{args.species!r}"
         )
+    # The parental-background test needs *direct parents* of a term, which today
+    # only the GO OBO graph exposes (OntologyProcessor.go_graph.predecessors).
+    # The registry's other ontologies supply a transitive-ancestors function
+    # instead, which cannot answer "one level up". See the PR notes.
+    if args.enable_relative_inference and args.ontology != "go":
+        parser.error(
+            f"--enable-relative-inference is currently GO-only, got --ontology "
+            f"{args.ontology}. The parental-background test needs each term's "
+            "direct parents; the registry supplies transitive ancestors for "
+            "every other ontology."
+        )
 
 
 def build_ontology_paths(args: argparse.Namespace) -> dict[str, Path]:
@@ -347,8 +366,12 @@ def start_run_manifest(
             derived_from=source_urls.get("interpro_mappings"),
         )
     ]
+    # Relative inference reads the same GO DAG that propagation does, so either
+    # flag pulls the hierarchy inputs into the manifest.
     hierarchy_inputs = (
-        list(ontology_entry.hierarchy_needs) if args.enable_true_path else []
+        list(ontology_entry.hierarchy_needs)
+        if (args.enable_true_path or args.enable_relative_inference)
+        else []
     )
     # dict.fromkeys de-duplicates while preserving order: an ontology may list
     # the same file as both an annotation and a hierarchy input (subcellular).
@@ -374,9 +397,14 @@ def start_run_manifest(
                 "annotation_inputs": list(ontology_entry.needs),
                 "supports_true_path": ontology_entry.supports_true_path,
                 "true_path_enabled": bool(args.enable_true_path),
+                # Recorded separately from true_path_enabled because they are
+                # separate stages: relative inference filters, propagation adds.
+                # A manifest written before this split records only
+                # true_path_enabled, and for --ontology go that meant both.
+                "relative_inference_enabled": bool(args.enable_relative_inference),
                 "hierarchy_inputs": hierarchy_inputs,
                 "propagation": (
-                    "go_dag_with_parental_background_filter"
+                    "go_dag"
                     if ontology_entry.external_propagation
                     else "ancestor_closure"
                     if ontology_entry.build_ancestors is not None
@@ -517,9 +545,20 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--enable-true-path",
         action="store_true",
-        help="Enable True Path Rule propagation (GO via its OBO DAG, EC via its "
-        "numbering, reactome/keyword via their hierarchy files; not available "
-        "for disease/xref)",
+        help="Enable True Path Rule propagation, and only that: every "
+        "association is propagated to its ancestor terms (GO via its OBO DAG, "
+        "EC via its numbering, reactome/keyword via their hierarchy files; not "
+        "available for disease/xref). For the parental-background test that "
+        "used to run alongside this for GO, see --enable-relative-inference",
+    )
+    parser.add_argument(
+        "--enable-relative-inference",
+        action="store_true",
+        help="Enable the parental-background (relative inference) filter: keep "
+        "an association only if it is still enriched within the proteins "
+        "annotated to the term's direct parents. GO only. This is a filter, "
+        "not propagation — it deletes associations and is independent of "
+        "--enable-true-path",
     )
     parser.add_argument(
         "--go-ontology",
@@ -947,17 +986,31 @@ def main(argv: list[str] | None = None) -> int:
 
     n_significant = int(significant.sum())
 
-    # STAGE 5.5: True Path Rule (Optional)
+    # STAGE 5.5: Hierarchy post-processing (optional, two independent stages)
+    #
+    # These are two different operations from the dcGO paper and are selected
+    # separately. --enable-relative-inference is the paper's Step 2 "relative
+    # inference": a Fisher test of the association within the background of
+    # proteins annotated to the term's direct parents. It only ever *removes*
+    # associations. --enable-true-path is the paper's Step 3: propagation to
+    # ancestor terms. It only ever *adds* annotations. They used to share one
+    # flag, which made the ablation unable to attribute an effect to either.
     propagated_annotations = []
-    if args.enable_true_path and n_significant > 0:
+    run_hierarchy_stage = args.enable_true_path or args.enable_relative_inference
+    if run_hierarchy_stage and n_significant > 0:
         logger.info("")
-        logger.info("STAGE 5.5: True Path Rule Propagation")
+        stage_names = []
+        if args.enable_relative_inference:
+            stage_names.append("Relative Inference")
+        if args.enable_true_path:
+            stage_names.append("True Path Propagation")
+        logger.info(f"STAGE 5.5: {' + '.join(stage_names)}")
         logger.info("─" * 70)
         start_time = time.time()
 
         # Build AssociationResult objects for the significant associations. This
         # is ontology-agnostic — go_list holds GO terms or EC numbers.
-        logger.info("Preparing significant associations for propagation...")
+        logger.info("Preparing significant associations...")
         significant_associations = []
         significant_indices = np.where(significant)[0]
 
@@ -982,47 +1035,69 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
 
-        if ontology_entry.build_ancestors is not None:
-            # Every non-GO ontology propagates through the shared engine; only
-            # the *ancestors* differ (implicit in EC/TCDB/MEROPS/CAZy ids, or
-            # loaded from a hierarchy file for Reactome/keywords/subcellular/
-            # ChEBI). See src/ontology_registry.py.
-            logger.info(
-                f"Propagating {len(significant_associations):,} "
-                f"{ontology_label.upper()} associations up the "
-                f"{ontology_entry.spec.name} hierarchy..."
-            )
-            ancestors_fn = ontology_entry.build_ancestors(ontology_paths)
-            propagated_annotations = propagate_via_ancestors(
-                significant_associations, ancestors_fn
-            )
-        else:
-            # Load GO ontology (OBO DAG) and apply optimal-level filtering.
+        # The GO branch is the only one that can load an OntologyProcessor, and
+        # it is the only branch that offers relative inference. It is also the
+        # branch whose OBO DAG supplies the ancestors for propagation, so both
+        # stages share one processor when both are enabled.
+        ontology_processor = None
+        if ontology_entry.build_ancestors is None:
             logger.info(f"Loading GO ontology from: {args.go_ontology}")
             ontology_processor = OntologyProcessor(args.go_ontology)
 
+        # --- Stage A: relative inference (paper Step 2) — removes associations
+        if args.enable_relative_inference:
+            assert ontology_processor is not None  # guarded by validate_arguments
             logger.info(
-                f"Applying True Path Rule to {len(significant_associations):,} significant associations..."
+                f"Relative inference: testing {len(significant_associations):,} "
+                "associations against their direct-parent backgrounds..."
             )
-
-            # Apply optimal level filtering
-            # Note: alpha_threshold is for raw p-values from Fisher tests, not FDR-corrected
-            # Using 0.05 as recommended threshold for parent-child comparison tests
-            filtered_associations = ontology_processor.apply_optimal_level_filter(
+            # alpha_threshold is a raw Fisher p-value, not FDR-corrected: this
+            # is a post-hoc filter applied after BH, which is *not* what the
+            # paper does (it combines overall and relative p-values and then
+            # corrects). See VALIDATION_PLAN.md next-steps item 2.
+            significant_associations = ontology_processor.apply_optimal_level_filter(
                 significant_associations,
                 protein_domain_map,
                 protein_go_map,
                 min_background_size=PARENTAL_MIN_BACKGROUND_SIZE,
                 alpha_threshold=PARENTAL_ALPHA_THRESHOLD,
             )
-
             logger.info(
-                f"✓ Optimal level filtering: {len(filtered_associations):,} associations retained"
+                f"✓ Relative inference retained "
+                f"{len(significant_associations):,} associations"
             )
 
-            # Propagate annotations up the GO hierarchy
-            propagated_annotations = ontology_processor.propagate_annotations(
-                filtered_associations
+        # --- Stage B: True Path Rule (paper Step 3) — adds ancestor annotations
+        if args.enable_true_path:
+            if ontology_processor is not None:
+                logger.info(
+                    f"Propagating {len(significant_associations):,} GO "
+                    "associations up the GO DAG..."
+                )
+                propagated_annotations = ontology_processor.propagate_annotations(
+                    significant_associations
+                )
+            else:
+                # Every non-GO ontology propagates through the shared engine;
+                # only the *ancestors* differ (implicit in EC/TCDB/MEROPS/CAZy
+                # ids, or loaded from a hierarchy file for Reactome/keywords/
+                # subcellular/ChEBI). See src/ontology_registry.py.
+                logger.info(
+                    f"Propagating {len(significant_associations):,} "
+                    f"{ontology_label.upper()} associations up the "
+                    f"{ontology_entry.spec.name} hierarchy..."
+                )
+                ancestors_fn = ontology_entry.build_ancestors(ontology_paths)
+                propagated_annotations = propagate_via_ancestors(
+                    significant_associations, ancestors_fn
+                )
+        else:
+            # Relative inference alone still produces the annotations file, so
+            # the filter's output is inspectable without also propagating. An
+            # empty ancestors function reuses the canonical merge policy rather
+            # than hand-building Annotation objects a second way.
+            propagated_annotations = propagate_via_ancestors(
+                significant_associations, lambda _term: ()
             )
 
         if propagated_annotations:
@@ -1037,8 +1112,7 @@ def main(argv: list[str] | None = None) -> int:
             logger.info(f"  - Direct: {direct_count:,}")
             logger.info(f"  - Propagated: {propagated_count:,}")
 
-        true_path_time = time.time() - start_time
-        logger.info(f"✓ True Path Rule completed in {true_path_time:.2f}s")
+        logger.info(f"✓ Stage 5.5 completed in {time.time() - start_time:.2f}s")
 
     # Export results
     logger.info("")
