@@ -25,7 +25,7 @@ The True Path Rule ensures that if a protein is annotated with a specific GO ter
 
 ```bash
 --enable-true-path           # Propagate associations to ancestor terms (this document)
---enable-relative-inference  # Parental-background filter — a separate stage, GO only
+--enable-relative-inference  # Parental-background filter — a separate stage
 --go-ontology PATH           # Path to GO ontology file (default: data/raw/go_ontology/go.obo)
 ```
 

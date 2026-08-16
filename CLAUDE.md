@@ -192,8 +192,8 @@ tables); enumerating co-occurring pairs makes it 9.5M tables and 268 s.
   skipping. **It is propagation and nothing else.** The parental-background
   filter it used to run alongside for GO is the paper's separate *relative
   inference* (Step 2, vs. the true-path rule at Step 3) and is now
-  `--enable-relative-inference` — GO-only, and it *removes* associations rather
-  than adding them. Our version is still a post-hoc `alpha < 0.05` filter
+  `--enable-relative-inference`, available for all 12 ontologies with a
+  hierarchy, and it *removes* associations rather than adding them. Our version is still a post-hoc `alpha < 0.05` filter
   applied after BH, where the paper combines the overall and relative p-values
   *before* correcting; that gap is VALIDATION_PLAN next-steps item 2.
 - **The §4 ablation cannot attribute its True Path result to either stage.** It

@@ -35,7 +35,16 @@ import gzip
 import re
 from collections import defaultdict
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Set
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Sequence,
+    Set,
+)
 
 if TYPE_CHECKING:
     from src.ontology_processor import Annotation
@@ -65,6 +74,41 @@ def closure_ancestors(
         return result
 
     return ancestors
+
+
+def parents_from_map(
+    child_to_parents: Dict[str, Set[str]],
+) -> Callable[[str], Set[str]]:
+    """Direct-parents function over a child→parents map.
+
+    The map *is* the direct-parent relation, so this is a lookup — but relative
+    inference needs it as a function, alongside the transitive
+    :func:`closure_ancestors` built from the same map. Unknown terms yield the
+    empty set, which the caller reads as "nothing to test against".
+    """
+
+    def parents(term: str) -> Set[str]:
+        return set(child_to_parents.get(term, ()))
+
+    return parents
+
+
+def nearest_parents(
+    ordered_ancestors_fn: Callable[[str], Sequence[str]],
+) -> Callable[[str], Set[str]]:
+    """Direct-parents function for a hierarchy encoded in the term id.
+
+    :func:`dotted_ancestors`, :func:`alpha_prefix_ancestors` and
+    :func:`src.ec_annotation_source.ec_ancestors` all return ancestors **most
+    specific first**, and these classifications are trees — every id has exactly
+    one parent — so the direct parent is simply the first entry.
+    """
+
+    def parents(term: str) -> Set[str]:
+        ancestors = ordered_ancestors_fn(term)
+        return {ancestors[0]} if ancestors else set()
+
+    return parents
 
 
 def propagate_via_ancestors(
