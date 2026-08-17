@@ -535,7 +535,14 @@ def compute_relative_p_values(
     d = n_union - n_child - dp + a
 
     too_small = has_parents & (n_union < min_background_size)
-    invalid = has_parents & (d < 0)
+    # b can never go negative (a is a sub-count of n_child from the same
+    # matrix), but c and d can if parents_fn and ancestors_fn are ever derived
+    # from different relations: the child's propagated proteins stop being a
+    # subset of the parental union, so dp underestimates and c = dp - a drops
+    # below zero. fisher_exact casts the tables to uint32 downstream, where a
+    # negative cell wraps to ~4.29e9 and feeds silent garbage into BH — so
+    # every cell is guarded, not only d.
+    invalid = has_parents & ((b < 0) | (c < 0) | (d < 0))
     untestable = too_small | invalid
     if too_small.any():
         rejections["InsufficientBackgroundError"] = int(too_small.sum())
