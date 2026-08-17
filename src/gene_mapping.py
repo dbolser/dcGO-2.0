@@ -30,6 +30,7 @@ Mapping policy, mirroring :mod:`src.disease_ontology`:
 
 from __future__ import annotations
 
+import gzip
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -125,6 +126,44 @@ def parse_gene_accession_index(dat_path: Path) -> GeneAccessionIndex:
         f"{len(index.hgnc):,}; symbols: {len(index.symbol):,}"
     )
     return index
+
+
+def parse_idmapping_accession_map(
+    path: Path, id_type: str, *, id_space: str | None = None
+) -> GeneAccessionMap:
+    """Build a gene → accession map from a UniProt per-organism idmapping file.
+
+    The ``<ORG>_<taxid>_idmapping.dat.gz`` files are three-column TSVs —
+    ``accession<TAB>id_type<TAB>id`` — covering Swiss-Prot *and* TrEMBL, which
+    is what makes them the right translation table for model-organism gene ids
+    (``WormBase`` → WBGene, ``FlyBase`` → FBgn, ``MGI``, ``ZFIN``): most model
+    organism proteins are unreviewed, so the Swiss-Prot flat file the human
+    gene-keyed layers use would miss them.
+
+    Only rows whose second column equals ``id_type`` are kept; the map is the
+    file inverted (gene id → every accession that carries it), so one-to-many
+    gene ids are preserved for :func:`remap_gene_annotations`'s counted policy.
+    """
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"idmapping file not found: {path}")
+
+    logger.info(f"Building {id_type} → accession map from {path}")
+    open_func = gzip.open if path.suffix == ".gz" else open
+    mapping: Dict[str, Set[str]] = defaultdict(set)
+    n_rows = 0
+    with open_func(path, "rt") as handle:
+        for line in handle:
+            fields = line.rstrip("\n").split("\t")
+            if len(fields) == 3 and fields[1] == id_type:
+                n_rows += 1
+                mapping[fields[2]].add(fields[0])
+    gene_map = GeneAccessionMap(id_space or id_type, dict(mapping), n_rows)
+    logger.info(
+        f"  {id_type} rows: {n_rows:,}; distinct ids: {len(gene_map):,} "
+        f"({gene_map.n_one_to_many:,} one-to-many)"
+    )
+    return gene_map
 
 
 def _invert(mapping: Dict[str, Set[str]]) -> Dict[str, Set[str]]:
