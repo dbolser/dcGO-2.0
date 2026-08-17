@@ -1083,10 +1083,15 @@ def main(argv: list[str] | None = None) -> int:
     relative_tables = None
     if args.enable_relative_inference or args.enable_true_path:
         # GO's hierarchy comes from the obonet graph, every other ontology's
-        # from the registry. Loaded once here and reused by Stage 5.5.
+        # from the registry. Loaded once here and reused by Stage 5.5 — unless
+        # --propagate-annotations already parsed the OBO, in which case that
+        # processor is reused (its graph and caches are identical).
         if ontology_entry.build_ancestors is None:
-            logger.info(f"Loading GO ontology from: {args.go_ontology}")
-            ontology_processor = OntologyProcessor(args.go_ontology)
+            if input_processor is not None:
+                ontology_processor = input_processor
+            else:
+                logger.info(f"Loading GO ontology from: {args.go_ontology}")
+                ontology_processor = OntologyProcessor(args.go_ontology)
 
     if args.enable_relative_inference:
         logger.info("")
@@ -1098,6 +1103,9 @@ def main(argv: list[str] | None = None) -> int:
             parents_fn = ontology_processor.get_parents
             relative_ancestors_fn = ontology_processor.get_ancestors
         else:
+            # Repeated build_* calls (input propagation above, both views
+            # here) share one parse: ontology_registry memoises the underlying
+            # child→parents map per (loader, path) in _child_parents.
             parents_fn = ontology_entry.build_parents(ontology_paths)
             relative_ancestors_fn = ontology_entry.build_ancestors(ontology_paths)
 
