@@ -168,6 +168,7 @@ INPUT_SOURCE_NAMES = {
     "hpo_obo": "hpo_ontology",
     "gwas_associations": "gwas_catalog",
     "efo_obo": "efo_ontology",
+    "hpa_single_cell": "hpa_single_cell",
     "syngo_zip": "syngo",
     "mgi_genepheno": "mgi_genepheno",
     "mgi_marker_swissprot": "mgi_marker_swissprot",
@@ -782,6 +783,13 @@ def build_argument_parser() -> argparse.ArgumentParser:
         default=Path("data/raw/efo/efo.obo"),
         help="Path to the Experimental Factor Ontology OBO, for --ontology "
         "efo --enable-true-path",
+    )
+    parser.add_argument(
+        "--hpa-single-cell",
+        type=Path,
+        default=Path("data/raw/hpa/rna_single_cell_type.tsv.zip"),
+        help="Path to HPA's rna_single_cell_type table (zip or extracted "
+        "TSV), for --ontology celltype",
     )
     parser.add_argument(
         "--syngo-zip",

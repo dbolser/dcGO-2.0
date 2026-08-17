@@ -420,6 +420,17 @@ class Config:
                 subdir="efo",
                 checksum="sha256:66e87fc65a6254c6d69281ed3d286784ee5f8265b1e57691efddd29b20570c46",
             ),
+            # HPA single-cell expression matrix, for --ontology celltype
+            # (src/hpa_annotation_source.py). Unversioned "current release"
+            # URL (HPA v25 at acquisition, 2025-12-12); the run manifest's
+            # SHA-256 identifies the snapshot.
+            "hpa_single_cell": DataSource(
+                name="hpa_single_cell",
+                url="https://www.proteinatlas.org/download/tsv/rna_single_cell_type.tsv.zip",
+                description="HPA single-cell gene × cell-type expression (--ontology celltype)",
+                required=False,
+                subdir="hpa",
+            ),
             # SynGO bulk release: one zip carrying both the HGNC-keyed
             # annotations and the term hierarchy, for --ontology syngo
             # (src/syngo_annotation_source.py). Release 1.3 (2025-03) is the

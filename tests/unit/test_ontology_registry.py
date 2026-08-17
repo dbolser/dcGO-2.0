@@ -31,6 +31,7 @@ def paths(tmp_path):
         "hpo_obo",
         "gwas_associations",
         "efo_obo",
+        "hpa_single_cell",
         "syngo_zip",
         "mgi_genepheno",
         "mgi_marker_swissprot",

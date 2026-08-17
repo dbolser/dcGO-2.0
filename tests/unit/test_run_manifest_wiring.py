@@ -71,6 +71,7 @@ def make_args(tmp_path, **overrides):
             "data/raw/gwas_catalog/gwas-catalog-associations_ontology-annotated-full.zip"
         ),
         efo_obo=Path("data/raw/efo/efo.obo"),
+        hpa_single_cell=Path("data/raw/hpa/rna_single_cell_type.tsv.zip"),
         syngo_zip=Path("data/raw/syngo/syngo1.3_complete_data.zip"),
         mgi_genepheno=Path("data/raw/mgi_reports/MGI_GenePheno.rpt"),
         mgi_marker_swissprot=Path("data/raw/mgi_reports/MRK_SwissProt_TrEMBL.rpt"),

@@ -85,6 +85,7 @@ from src.gwas_annotation_source import (
     GWASCatalogAnnotationSource,
     parse_efo_child_parents,
 )
+from src.hpa_annotation_source import CELLTYPE_SPEC, HPACellTypeAnnotationSource
 from src.hpo_annotation_source import HPO_SPEC, HPOAnnotationSource
 from src.mgi_annotation_source import MP_SPEC, MGIAnnotationSource
 from src.wormbase_annotation_source import (
@@ -508,6 +509,20 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
         build_parents=lambda paths: parents_from_map(_efo_child_parents(paths)),
         needs=("gwas_associations", "uniprot_dat"),
         hierarchy_needs=("efo_obo",),
+    ),
+    # Expression, not phenotype: "elevated in this cell type" under HPA's own
+    # enhanced/enriched criterion. Flat, keyed by HPA's cell-type names — the
+    # CL name-matching assessment (47% exact/case-insensitive, below the 60%
+    # floor) is in src/hpa_annotation_source.py.
+    "celltype": OntologyEntry(
+        key="celltype",
+        spec=CELLTYPE_SPEC,
+        description="HPA single-cell cell types with elevated expression, "
+        "Ensembl genes re-keyed to UniProt; flat (no CL mapping — see module)",
+        build_source=lambda paths, options: HPACellTypeAnnotationSource(
+            paths["hpa_single_cell"], paths["uniprot_dat"]
+        ),
+        needs=("hpa_single_cell", "uniprot_dat"),
     ),
     "syngo": OntologyEntry(
         key="syngo",
