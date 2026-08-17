@@ -146,6 +146,34 @@ class OntologyProcessor:
             self.go_graph.remove_nodes_from(obsolete_terms)
             logger.info(f"Removed {len(obsolete_terms)} obsolete GO terms")
 
+        # GO's annotation-propagation rules license is_a and part_of edges only.
+        # obonet stores the relationship type as the MultiDiGraph edge key, and
+        # go-basic.obo also carries ~7,800 regulates / positively_regulates /
+        # negatively_regulates edges. Traversing those would put a protein
+        # annotated to "negative regulation of X" into X's background and let
+        # get_parents return a regulates-target as a "parent" — wrong for the
+        # True Path Rule and for the relative inference alike. Drop them before
+        # reversing so get_ancestors, get_parents and propagate_annotations all
+        # see the same is_a/part_of-only DAG.
+        propagating_relations = {"is_a", "part_of"}
+        dropped_edges = [
+            (u, v, key)
+            for u, v, key in self.go_graph.edges(keys=True)
+            if key not in propagating_relations
+        ]
+        if dropped_edges:
+            self.go_graph.remove_edges_from(dropped_edges)
+            by_type: Dict[str, int] = {}
+            for _, _, key in dropped_edges:
+                by_type[key] = by_type.get(key, 0) + 1
+            detail = ", ".join(
+                f"{count:,} x {key}" for key, count in sorted(by_type.items())
+            )
+            logger.info(
+                f"Dropped {len(dropped_edges):,} non-propagating edges "
+                f"(annotation propagation follows is_a/part_of only): {detail}"
+            )
+
         # obonet emits edges child -> parent (each term points to its is_a
         # target). Reverse so edges run parent -> child, which is the direction
         # the rest of this module assumes: predecessors() are parents,

@@ -829,3 +829,91 @@ class TestBackgroundIsPropagated:
         direct = _BackgroundIndex(*maps)
         propagated = _BackgroundIndex(*maps, ontology_processor.get_ancestors)
         assert direct.domain_proteins == propagated.domain_proteins
+
+
+# OBO with all three edge families GO uses: is_a, part_of, and the regulates
+# family. Only the first two license annotation propagation.
+REGULATES_OBO_CONTENT = """
+format-version: 1.2
+data-version: test-regulates
+
+[Term]
+id: GO:0000001
+name: root process
+
+[Term]
+id: GO:0000002
+name: whole process
+is_a: GO:0000001 ! root process
+
+[Term]
+id: GO:0000003
+name: part process
+relationship: part_of GO:0000002 ! whole process
+
+[Term]
+id: GO:0000004
+name: negative regulation of whole process
+is_a: GO:0000001 ! root process
+relationship: negatively_regulates GO:0000002 ! whole process
+
+[Term]
+id: GO:0000005
+name: regulation of part process
+is_a: GO:0000001 ! root process
+relationship: regulates GO:0000003 ! part process
+"""
+
+
+@pytest.fixture
+def regulates_obo_file():
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".obo", delete=False) as f:
+        f.write(REGULATES_OBO_CONTENT)
+        temp_path = Path(f.name)
+    yield temp_path
+    temp_path.unlink()
+
+
+class TestPropagationEdgeTypes:
+    """Only is_a and part_of edges may carry annotation propagation."""
+
+    def test_is_a_and_part_of_are_traversed(self, regulates_obo_file):
+        processor = OntologyProcessor(regulates_obo_file)
+        # part_of then is_a: part process -> whole process -> root process
+        assert processor.get_ancestors("GO:0000003") == {"GO:0000002", "GO:0000001"}
+        assert processor.get_parents("GO:0000003") == ["GO:0000002"]
+
+    def test_regulates_edges_are_not_traversed(self, regulates_obo_file):
+        processor = OntologyProcessor(regulates_obo_file)
+        # "negative regulation of whole process" must NOT gain "whole process"
+        # as an ancestor or parent via its negatively_regulates edge.
+        assert processor.get_ancestors("GO:0000004") == {"GO:0000001"}
+        assert processor.get_parents("GO:0000004") == ["GO:0000001"]
+        # Nor may plain regulates carry propagation.
+        assert processor.get_ancestors("GO:0000005") == {"GO:0000001"}
+        # And the regulated term must not count the regulator as a descendant.
+        assert "GO:0000004" not in processor.get_descendants("GO:0000002")
+        assert "GO:0000005" not in processor.get_descendants("GO:0000003")
+
+    def test_regulates_edges_are_removed_from_graph(self, regulates_obo_file):
+        processor = OntologyProcessor(regulates_obo_file)
+        remaining = {key for _, _, key in processor.go_graph.edges(keys=True)}
+        assert remaining <= {"is_a", "part_of"}
+        # 2 is_a edges from GO:0000004/GO:0000005, one from GO:0000002, one
+        # part_of from GO:0000003; the 2 regulates-family edges are dropped.
+        assert processor.go_graph.number_of_edges() == 4
+
+    def test_propagate_annotations_ignores_regulates(self, regulates_obo_file):
+        processor = OntologyProcessor(regulates_obo_file)
+        associations = [
+            MockAssociation(
+                domain="IPR001",
+                go_term="GO:0000004",
+                p_value=1e-6,
+                q_value=1e-5,
+                hyper_score=10.0,
+            )
+        ]
+        annotations = processor.propagate_annotations(associations)
+        terms = {ann.go_term for ann in annotations}
+        assert terms == {"GO:0000004", "GO:0000001"}
