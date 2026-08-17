@@ -37,6 +37,13 @@ Ontology terms (:mod:`src.disease_ontology`), which is what gives the disease
 layer a hierarchy at all. Note this is a mapping of *terms*, not of proteins —
 the protein key space is still UniProt accessions.
 
+A fifth kind arrives keyed by *gene* rather than protein: HPO's
+``genes_to_phenotype.txt`` (NCBI GeneID) and SynGO's bulk release (HGNC).
+These re-key gene → UniProt accession at parse time using the flat file's own
+``DR GeneID`` / ``DR HGNC`` cross-references (:mod:`src.gene_mapping`) — the
+protein axis this time, but the same counted policy for unmapped and
+one-to-many ids.
+
 Adding an ontology is now a single :class:`OntologyEntry` — the Fisher/FDR
 engine and the True Path machinery are untouched.
 """
@@ -55,6 +62,7 @@ from src.annotation_source import (
 )
 from src.disease_ontology import DOID_SPEC, DiseaseOntologyAnnotationSource
 from src.ec_annotation_source import EC_SPEC, ECAnnotationSource, ec_ancestors
+from src.hpo_annotation_source import HPO_SPEC, HPOAnnotationSource
 from src.hierarchy import (
     alpha_prefix_ancestors,
     closure_ancestors,
@@ -64,6 +72,11 @@ from src.hierarchy import (
     parse_obo_child_parents,
 )
 from src.relative_inference import ParentsFn
+from src.syngo_annotation_source import (
+    SYNGO_SPEC,
+    SynGOAnnotationSource,
+    parse_syngo_hierarchy,
+)
 from src.uniprot_annotation_source import (
     COFACTOR_SPEC,
     DISEASE_SPEC,
@@ -217,6 +230,14 @@ def _doid_parents(paths: Dict[str, Path]) -> ParentsFn:
     return parents_from_map(_doid_child_parents(paths))
 
 
+def _hpo_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
+    return _child_parents("hpo", paths["hpo_obo"], parse_obo_child_parents)
+
+
+def _syngo_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
+    return _child_parents("syngo", paths["syngo_zip"], parse_syngo_hierarchy)
+
+
 def _subcell_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
     return _child_parents(
         "subcell",
@@ -354,6 +375,33 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
         build_parents=_doid_parents,
         needs=("uniprot_dat", "doid_obo"),
         hierarchy_needs=("doid_obo",),
+    ),
+    # ---- Gene-keyed layers (genes re-keyed to UniProt at parse time) -------
+    "hpo": OntologyEntry(
+        key="hpo",
+        spec=HPO_SPEC,
+        description="Human Phenotype Ontology, NCBI genes re-keyed to UniProt",
+        build_source=lambda paths, options: HPOAnnotationSource(
+            paths["hpo_g2p"], paths["uniprot_dat"]
+        ),
+        build_ancestors=lambda paths: closure_ancestors(_hpo_child_parents(paths)),
+        build_parents=lambda paths: parents_from_map(_hpo_child_parents(paths)),
+        needs=("hpo_g2p", "uniprot_dat"),
+        hierarchy_needs=("hpo_obo",),
+    ),
+    "syngo": OntologyEntry(
+        key="syngo",
+        spec=SYNGO_SPEC,
+        description="SynGO synaptic annotations, HGNC genes re-keyed to UniProt",
+        build_source=lambda paths, options: SynGOAnnotationSource(
+            paths["syngo_zip"], paths["uniprot_dat"]
+        ),
+        build_ancestors=lambda paths: closure_ancestors(_syngo_child_parents(paths)),
+        build_parents=lambda paths: parents_from_map(_syngo_child_parents(paths)),
+        # The zip carries the hierarchy sheet too, so it is both the annotation
+        # input and the hierarchy input (like subcellular's subcell.txt).
+        needs=("syngo_zip", "uniprot_dat"),
+        hierarchy_needs=("syngo_zip",),
     ),
     "tcdb": OntologyEntry(
         key="tcdb",

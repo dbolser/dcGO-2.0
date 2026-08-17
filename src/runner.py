@@ -37,6 +37,9 @@ class RunRequest:
     subcell: Path
     chebi_obo: Path
     doid_obo: Path
+    hpo_g2p: Path
+    hpo_obo: Path
+    syngo_zip: Path
 
     @classmethod
     def from_namespace(cls, args: argparse.Namespace) -> "RunRequest":
@@ -62,6 +65,9 @@ class RunRequest:
             subcell=args.subcell,
             chebi_obo=args.chebi_obo,
             doid_obo=args.doid_obo,
+            hpo_g2p=args.hpo_genes_to_phenotype,
+            hpo_obo=args.hpo_obo,
+            syngo_zip=args.syngo_zip,
         )
 
     def ontology_paths(self) -> dict[str, Path]:
@@ -76,6 +82,9 @@ class RunRequest:
             "subcell": self.subcell,
             "chebi_obo": self.chebi_obo,
             "doid_obo": self.doid_obo,
+            "hpo_g2p": self.hpo_g2p,
+            "hpo_obo": self.hpo_obo,
+            "syngo_zip": self.syngo_zip,
         }
 
 

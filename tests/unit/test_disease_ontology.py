@@ -171,31 +171,31 @@ class TestRemapProteinTerms:
             {"P1": {"100"}, "P2": {"300"}}, mapping, label="test"
         )
         assert remapped == {"P1": {"DOID:100"}, "P2": {"DOID:100"}}
-        assert coverage.n_source_terms == 2
-        assert coverage.n_result_terms == 1
+        assert coverage.n_source_values == 2
+        assert coverage.n_result_values == 1
 
     def test_unmapped_terms_are_dropped_but_counted(self, mapping):
         remapped, coverage = remap_protein_terms(
             {"P1": {"100", "600"}}, mapping, label="test"
         )
         assert remapped == {"P1": {"DOID:100"}}
-        assert coverage.unmapped_terms == ["600"]
-        assert coverage.n_mapped_terms == 1
-        assert coverage.n_source_terms == 2
+        assert coverage.unmapped_values == ["600"]
+        assert coverage.n_mapped_values == 1
+        assert coverage.n_source_values == 2
 
     def test_protein_with_no_mappable_term_leaves_the_layer(self, mapping):
         remapped, coverage = remap_protein_terms(
             {"P1": {"100"}, "P2": {"600"}}, mapping, label="test"
         )
         assert set(remapped) == {"P1"}
-        assert (coverage.n_source_proteins, coverage.n_result_proteins) == (2, 1)
+        assert (coverage.n_source_keys, coverage.n_result_keys) == (2, 1)
 
     def test_coverage_is_reported_over_annotations_not_just_terms(self, mapping):
         # A rare unmapped id costs less than a widely used one; coverage has to
         # be weighted by use, or it overstates the damage (or hides it).
         protein_terms = {"P1": {"100"}, "P2": {"100"}, "P3": {"100"}, "P4": {"600"}}
         _, coverage = remap_protein_terms(protein_terms, mapping, label="test")
-        assert coverage.term_coverage == pytest.approx(0.5)
+        assert coverage.value_coverage == pytest.approx(0.5)
         assert coverage.annotation_coverage == pytest.approx(0.75)
 
     def test_expansion_is_counted(self, mapping):
@@ -207,12 +207,12 @@ class TestRemapProteinTerms:
     def test_unmapped_terms_are_ordered_by_use(self, mapping):
         protein_terms = {"P1": {"600", "700"}, "P2": {"700"}}
         _, coverage = remap_protein_terms(protein_terms, mapping, label="test")
-        assert coverage.unmapped_terms == ["700", "600"]
+        assert coverage.unmapped_values == ["700", "600"]
 
     def test_empty_input_is_not_a_division_by_zero(self, mapping):
         remapped, coverage = remap_protein_terms({}, mapping, label="test")
         assert remapped == {}
-        assert coverage.term_coverage == 0.0
+        assert coverage.value_coverage == 0.0
         assert coverage.annotation_coverage == 0.0
 
 
@@ -254,9 +254,9 @@ DR   MIM; 600; phenotype.
         source = DiseaseOntologyAnnotationSource(dat, obo)
         assert source.coverage is None
         source.parse()
-        assert source.coverage.n_source_proteins == 3
-        assert source.coverage.n_result_proteins == 2
-        assert source.coverage.unmapped_terms == ["600"]
+        assert source.coverage.n_source_keys == 3
+        assert source.coverage.n_result_keys == 2
+        assert source.coverage.unmapped_values == ["600"]
 
     def test_spec_declares_the_doid_prefix(self, dat, obo):
         spec = DiseaseOntologyAnnotationSource(dat, obo).spec
