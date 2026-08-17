@@ -10,12 +10,14 @@ propagation as specified in the dcGO methodology.
 import networkx as nx
 import obonet
 import pandas as pd
+from collections import Counter
 from pathlib import Path
 from typing import Dict, List, Set, Union
 from loguru import logger
 from dataclasses import dataclass
 import gzip
 
+from src.hierarchy import PROPAGATION_RELATIONS
 from src.relative_inference import (
     BackgroundIndex,
     InsufficientBackgroundError,
@@ -155,7 +157,7 @@ class OntologyProcessor:
         # True Path Rule and for the relative inference alike. Drop them before
         # reversing so get_ancestors, get_parents and propagate_annotations all
         # see the same is_a/part_of-only DAG.
-        propagating_relations = {"is_a", "part_of"}
+        propagating_relations = set(PROPAGATION_RELATIONS)
         dropped_edges = [
             (u, v, key)
             for u, v, key in self.go_graph.edges(keys=True)
@@ -163,9 +165,7 @@ class OntologyProcessor:
         ]
         if dropped_edges:
             self.go_graph.remove_edges_from(dropped_edges)
-            by_type: Dict[str, int] = {}
-            for _, _, key in dropped_edges:
-                by_type[key] = by_type.get(key, 0) + 1
+            by_type = Counter(key for _, _, key in dropped_edges)
             detail = ", ".join(
                 f"{count:,} x {key}" for key, count in sorted(by_type.items())
             )

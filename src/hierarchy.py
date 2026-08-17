@@ -50,6 +50,13 @@ from typing import (
 if TYPE_CHECKING:
     from src.ontology_processor import Annotation
 
+#: Edge types that license annotation propagation under GO's True Path Rule.
+#: The regulates family (regulates, positively_regulates,
+#: negatively_regulates) does not carry annotations. Used by the obonet-backed
+#: GO processor to filter its DAG, and recorded in the run manifest as the
+#: propagation-edge policy.
+PROPAGATION_RELATIONS: tuple[str, ...] = ("is_a", "part_of")
+
 
 def closure_ancestors(
     child_to_parents: Dict[str, Set[str]],
