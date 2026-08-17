@@ -103,7 +103,9 @@ terms. Remaining, in rough priority:
    single domains, paper-parity config (`--propagate-annotations
    --enable-relative-inference --enable-true-path`, post-regulates-fix;
    computed with `validation/specificity_metrics.py`, which makes the ad hoc
-   chain numbers above reproducible):
+   chain numbers above reproducible; re-derived unchanged from a
+   full-precision `ic` export after the column moved from 4 decimals to
+   `%.10g`, so no row sits on a rounding boundary):
 
    | --min-ic | significant | mean #ancestors | on an ancestor chain | GO roots |
    |---:|---:|---:|---:|---|

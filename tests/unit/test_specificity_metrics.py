@@ -123,7 +123,10 @@ class TestCliGuards:
         """The ic column lives in the header, so a zero-association run is a
         legitimate all-zero sweep, not a schema error."""
         table = write_table(tmp_path)
-        assert main(["--associations", str(table), "--obo", str(obo), "--min-ic", "1"]) == 0
+        assert (
+            main(["--associations", str(table), "--obo", str(obo), "--min-ic", "1"])
+            == 0
+        )
         out = capsys.readouterr().out.splitlines()
         assert out[1].startswith("1\t0\t")
 
@@ -190,15 +193,18 @@ class TestCliGuards:
             "IPR000001,IPR000002\tGO:0006811\tsupra_pair\t2.0",
             "IPR000001,IPR000002,IPR000003\tGO:0006811\tsupra_triple\t2.0",
         )
-        assert main(
-            [
-                "--associations",
-                str(table),
-                "--obo",
-                str(obo),
-                "--domain-type",
-                "supra",
-            ]
-        ) == 0
+        assert (
+            main(
+                [
+                    "--associations",
+                    str(table),
+                    "--obo",
+                    str(obo),
+                    "--domain-type",
+                    "supra",
+                ]
+            )
+            == 0
+        )
         out = capsys.readouterr().out.splitlines()
         assert out[1].split("\t")[1] == "2"
