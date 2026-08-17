@@ -16,6 +16,15 @@ from urllib.parse import urlparse
 
 import psutil
 
+from src.release_pins import (
+    FLYBASE_FBAL_TO_FBGN_FILENAME,
+    FLYBASE_FBGN_UNIPROT_FILENAME,
+    FLYBASE_GENOTYPE_PHENOTYPE_FILENAME,
+    FLYBASE_RELEASE,
+    WORMBASE_PHENOTYPE_FILENAME,
+    WORMBASE_RELEASE,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -52,6 +61,11 @@ class DataSource:
     #: set it when several sources belong together (e.g. the three published
     #: dcGO tables all land in ``data/raw/dcgo_reference/``).
     subdir: Optional[str] = None
+    #: What to update when this URL goes stale. Printed by
+    #: ``scripts/download_data.py`` on a download failure, for sources whose
+    #: URL embeds a release name and therefore *will* break on upstream
+    #: release turnover (WormBase, FlyBase).
+    update_hint: Optional[str] = None
 
     def __post_init__(self) -> None:
         """Validate data source configuration."""
@@ -379,6 +393,170 @@ class Config:
                 url="https://www.syngoportal.org/data/syngo1.3_complete_data.zip",
                 description="SynGO synaptic annotations + ontology (--ontology syngo)",
                 required=False,
+            ),
+            # ---- Model-organism phenotype layers ---------------------------
+            # Each pairs an annotation file (gene → phenotype term) with the
+            # database's own gene → UniProt id-mapping file, and an OBO for
+            # True Path / relative inference. They run against the organism's
+            # protein universe: --species mouse/worm/zebrafish/fly.
+            "mgi_genepheno": DataSource(
+                name="mgi_genepheno",
+                url="https://www.informatics.jax.org/downloads/reports/MGI_GenePheno.rpt",
+                description="MGI mouse genotype → MP phenotype report (--ontology mp)",
+                required=False,
+                subdir="mgi_reports",
+            ),
+            "mgi_marker_swissprot": DataSource(
+                name="mgi_marker_swissprot",
+                url="https://www.informatics.jax.org/downloads/reports/MRK_SwissProt_TrEMBL.rpt",
+                description="MGI marker → UniProt accession report (--ontology mp)",
+                required=False,
+                subdir="mgi_reports",
+            ),
+            "mp_ontology": DataSource(
+                name="mp_ontology",
+                url="https://purl.obolibrary.org/obo/mp.obo",
+                description="Mammalian Phenotype Ontology DAG (True Path for --ontology mp)",
+                required=False,
+            ),
+            # The filename carries the WormBase release, and the URL WILL 404
+            # when WormBase moves to the next release: only the
+            # current-production-release/ directory is servable (the
+            # per-release archive paths 403, and no unversioned filename is
+            # published — verified against the directory listing). The release
+            # string is pinned once in src/release_pins.py, shared with the
+            # run_dcgo_human.py flag default, so a bump is one edit there.
+            # The run manifest labels inputs with this URL; after a bump the
+            # file's SHA-256 remains its identity.
+            "wormbase_phenotype": DataSource(
+                name="wormbase_phenotype",
+                url="https://downloads.wormbase.org/releases/"
+                "current-production-release/ONTOLOGY/"
+                f"{WORMBASE_PHENOTYPE_FILENAME}",
+                description="WormBase gene → phenotype GAF (--ontology wbphenotype)",
+                required=False,
+                subdir="wormbase",
+                update_hint=(
+                    f"WormBase has likely moved past {WORMBASE_RELEASE}: bump "
+                    "WORMBASE_RELEASE in src/release_pins.py (updates this URL "
+                    "and the --wb-phenotype default together)"
+                ),
+            ),
+            "wbphenotype_ontology": DataSource(
+                name="wbphenotype_ontology",
+                url="https://purl.obolibrary.org/obo/wbphenotype.obo",
+                description="WormBase Phenotype Ontology DAG (True Path for --ontology wbphenotype)",
+                required=False,
+                subdir="wormbase_ontology",
+            ),
+            # UniProt's per-organism idmapping covers TrEMBL too, which the
+            # Swiss-Prot flat file route used by the human gene-keyed layers
+            # does not — and model-organism proteomes are mostly TrEMBL.
+            "worm_idmapping": DataSource(
+                name="worm_idmapping",
+                url="https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/CAEEL_6239_idmapping.dat.gz",
+                description="UniProt idmapping for C. elegans (WBGene → accession)",
+                required=False,
+                subdir="uniprot_idmapping",
+            ),
+            # The other model organisms' idmapping files. The mp/zfa/fbcv/fbbt
+            # annotation chains map through their database's own tables, but
+            # scripts/extract_species_interpro.py builds each species' domain
+            # universe from these, so the documented per-species chain needs
+            # them downloadable too.
+            "mouse_idmapping": DataSource(
+                name="mouse_idmapping",
+                url="https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/MOUSE_10090_idmapping.dat.gz",
+                description="UniProt idmapping for mouse (accession universe for --species mouse)",
+                required=False,
+                subdir="uniprot_idmapping",
+            ),
+            "zebrafish_idmapping": DataSource(
+                name="zebrafish_idmapping",
+                url="https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/DANRE_7955_idmapping.dat.gz",
+                description="UniProt idmapping for zebrafish (accession universe for --species zebrafish)",
+                required=False,
+                subdir="uniprot_idmapping",
+            ),
+            "fly_idmapping": DataSource(
+                name="fly_idmapping",
+                url="https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/by_organism/DROME_7227_idmapping.dat.gz",
+                description="UniProt idmapping for D. melanogaster (accession universe for --species fly)",
+                required=False,
+                subdir="uniprot_idmapping",
+            ),
+            "zfin_phenotype": DataSource(
+                name="zfin_phenotype",
+                url="https://zfin.org/downloads/phenoGeneCleanData_fish.txt",
+                description="ZFIN clean gene → EQ phenotype data (--ontology zfa)",
+                required=False,
+                subdir="zfin",
+            ),
+            "zfin_uniprot": DataSource(
+                name="zfin_uniprot",
+                url="https://zfin.org/downloads/uniprot.txt",
+                description="ZFIN ZDB-GENE → UniProt accession mapping (--ontology zfa)",
+                required=False,
+                subdir="zfin",
+            ),
+            "zfa_ontology": DataSource(
+                name="zfa_ontology",
+                url="https://purl.obolibrary.org/obo/zfa.obo",
+                description="Zebrafish Anatomy Ontology DAG (True Path for --ontology zfa)",
+                required=False,
+                subdir="zfin_ontology",
+            ),
+            # FlyBase paths and filenames carry the release; pinned once in
+            # src/release_pins.py (shared with the run_dcgo_human.py flag
+            # defaults, so a release bump is one edit there). Unlike WormBase,
+            # FlyBase keeps old releases servable, so these URLs stay valid
+            # after turnover. The working host is s3ftp.flybase.org
+            # (ftp.flybase.net TLS-fails). The run manifest labels inputs
+            # with these URLs; the file's SHA-256 is its identity.
+            "flybase_genotype_phenotype": DataSource(
+                name="flybase_genotype_phenotype",
+                url=f"https://s3ftp.flybase.org/releases/{FLYBASE_RELEASE}/"
+                "precomputed_files/alleles/"
+                f"{FLYBASE_GENOTYPE_PHENOTYPE_FILENAME}",
+                description="FlyBase genotype → FBcv/FBbt phenotype table (--ontology fbcv/fbbt)",
+                required=False,
+                subdir="flybase",
+                update_hint=(
+                    "bump FLYBASE_RELEASE in src/release_pins.py (updates the "
+                    "three FlyBase URLs and their flag defaults together)"
+                ),
+            ),
+            "flybase_fbal_to_fbgn": DataSource(
+                name="flybase_fbal_to_fbgn",
+                url=f"https://s3ftp.flybase.org/releases/{FLYBASE_RELEASE}/"
+                f"precomputed_files/alleles/{FLYBASE_FBAL_TO_FBGN_FILENAME}",
+                description="FlyBase allele → gene mapping (--ontology fbcv/fbbt)",
+                required=False,
+                subdir="flybase",
+                update_hint="bump FLYBASE_RELEASE in src/release_pins.py",
+            ),
+            "flybase_fbgn_uniprot": DataSource(
+                name="flybase_fbgn_uniprot",
+                url=f"https://s3ftp.flybase.org/releases/{FLYBASE_RELEASE}/"
+                f"precomputed_files/genes/{FLYBASE_FBGN_UNIPROT_FILENAME}",
+                description="FlyBase FBgn → UniProt accession mapping (--ontology fbcv/fbbt)",
+                required=False,
+                subdir="flybase",
+                update_hint="bump FLYBASE_RELEASE in src/release_pins.py",
+            ),
+            "fbbt_ontology": DataSource(
+                name="fbbt_ontology",
+                url="https://purl.obolibrary.org/obo/fbbt.obo",
+                description="Drosophila Anatomy Ontology DAG (True Path for --ontology fbbt)",
+                required=False,
+                subdir="flybase_ontology",
+            ),
+            "fbcv_ontology": DataSource(
+                name="fbcv_ontology",
+                url="https://purl.obolibrary.org/obo/fbcv.obo",
+                description="FlyBase Controlled Vocabulary DAG (True Path for --ontology fbcv)",
+                required=False,
+                subdir="flybase_ontology",
             ),
             "goa_annotations": DataSource(
                 name="goa_annotations",

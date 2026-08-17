@@ -37,6 +37,7 @@ from typing import Dict, Set, Tuple
 
 from loguru import logger
 
+from src.hierarchy import open_text
 from src.remap import RemapCoverage, remap_values
 from src.uniprot_annotation_source import iter_uniprot_entries
 
@@ -127,6 +128,59 @@ def parse_gene_accession_index(dat_path: Path) -> GeneAccessionIndex:
     return index
 
 
+def parse_idmapping_accession_map(
+    path: Path, id_type: str, *, id_space: str | None = None
+) -> GeneAccessionMap:
+    """Build a gene → accession map from a UniProt per-organism idmapping file.
+
+    The ``<ORG>_<taxid>_idmapping.dat.gz`` files are three-column TSVs —
+    ``accession<TAB>id_type<TAB>id`` — covering Swiss-Prot *and* TrEMBL, which
+    is what makes them the right translation table for model-organism gene ids
+    (``WormBase`` → WBGene, ``FlyBase`` → FBgn, ``MGI``, ``ZFIN``): most model
+    organism proteins are unreviewed, so the Swiss-Prot flat file the human
+    gene-keyed layers use would miss them.
+
+    Only rows whose second column equals ``id_type`` are kept; the map is the
+    file inverted (gene id → every accession that carries it), so one-to-many
+    gene ids are preserved for :func:`remap_gene_annotations`'s counted policy.
+    """
+    logger.info(f"Building {id_type} → accession map from {path}")
+    mapping: Dict[str, Set[str]] = defaultdict(set)
+    n_rows = 0
+    with open_text(path, label="idmapping file") as handle:
+        for line in handle:
+            fields = line.rstrip("\n").split("\t")
+            if len(fields) == 3 and fields[1] == id_type:
+                n_rows += 1
+                mapping[fields[2]].add(fields[0])
+    gene_map = GeneAccessionMap(id_space or id_type, dict(mapping), n_rows)
+    logger.info(
+        f"  {id_type} rows: {n_rows:,}; distinct ids: {len(gene_map):,} "
+        f"({gene_map.n_one_to_many:,} one-to-many)"
+    )
+    return gene_map
+
+
+def parse_idmapping_accessions(path: Path) -> Set[str]:
+    """The distinct *canonical* accessions of a per-organism idmapping file.
+
+    The first column mixes canonical accessions with isoform ids
+    (``Q9N4D9-2``); 9% of the worm file's distinct first-column values are
+    isoform-suffixed at acquisition. ``protein2ipr`` is keyed by canonical
+    accession only, so isoform ids can never match a domain row — kept as-is
+    they silently deflate any coverage measured against the resulting set.
+    The suffix is stripped here (UniProt accessions contain no ``-`` except
+    the isoform separator) and the set de-duplicates the collapse.
+    """
+    accessions: Set[str] = set()
+    with open_text(path, label="idmapping file") as handle:
+        for line in handle:
+            accession = line.split("\t", 1)[0].strip()
+            if accession:
+                accessions.add(accession.split("-", 1)[0])
+    return accessions
+
+
 def _invert(mapping: Dict[str, Set[str]]) -> Dict[str, Set[str]]:
     inverted: Dict[str, Set[str]] = defaultdict(set)
     for key, values in mapping.items():
@@ -139,6 +193,8 @@ def remap_gene_annotations(
     gene_terms: Dict[str, Set[str]],
     gene_map: GeneAccessionMap,
     label: str,
+    *,
+    target_label: str = "reviewed UniProt accession",
 ) -> Tuple[Dict[str, Set[str]], RemapCoverage]:
     """Re-key a ``{gene id: {term}}`` map onto ``{accession: {term}}``.
 
@@ -148,6 +204,11 @@ def remap_gene_annotations(
     gene ids being remapped (``value_coverage`` is the fraction of genes that
     mapped, ``unmapped_values`` the genes that mapped to nothing) and its
     *keys* are the ontology terms.
+
+    ``target_label`` names the accession space in the unmapped-ids warning.
+    The default suits the Swiss-Prot-flat-file maps (HPO, SynGO); the
+    model-organism layers map through TrEMBL-inclusive tables and pass a
+    plain "UniProt accession" so the log does not overclaim review status.
     """
     remapped, coverage = remap_values(
         _invert(gene_terms),
@@ -155,6 +216,6 @@ def remap_gene_annotations(
         label,
         key_label="term",
         value_label="gene",
-        target_label="reviewed UniProt accession",
+        target_label=target_label,
     )
     return _invert(remapped), coverage

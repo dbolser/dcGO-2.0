@@ -11,6 +11,7 @@ from pathlib import Path
 from src.goa_parser import (
     GOAAnnotation,
     GOAParser,
+    has_not_qualifier,
     parse_goa,
     parse_goa_human,
     EXPERIMENTAL_EVIDENCE,
@@ -18,6 +19,32 @@ from src.goa_parser import (
     ELECTRONIC_EVIDENCE,
     ALL_EVIDENCE,
 )
+
+
+class TestHasNotQualifier:
+    """The GAF negation predicate, shared with the WormBase phenotype layer."""
+
+    @pytest.mark.parametrize(
+        "qualifier",
+        ["NOT", "NOT|enables", "NOT|involved_in", "not|enables", "enables|NOT"],
+    )
+    def test_not_token_negates(self, qualifier):
+        assert has_not_qualifier(qualifier)
+
+    @pytest.mark.parametrize(
+        "qualifier",
+        [
+            "",
+            "enables",
+            "involved_in",
+            "acts_upstream_of_or_within_negative_effect",
+            # A hypothetical relation merely containing the letters must not
+            # negate — this is exactly where token semantics beat substring.
+            "NOTHING_LIKE_A_NEGATION",
+        ],
+    )
+    def test_other_qualifiers_do_not(self, qualifier):
+        assert not has_not_qualifier(qualifier)
 
 
 def test_parse_goa_human_is_alias_of_parse_goa():

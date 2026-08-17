@@ -19,8 +19,9 @@ Options:
     --ontology STR           Ontology to associate domains with (default: go). See
                              src/ontology_registry.py, or --help, for the full list:
                              go, ec, reactome, keyword, disease, doid, orphanet,
-                             orphanet_doid, hpo, syngo, tcdb, merops, cazy,
-                             unipathway, complex, drugbank, pharos, condensate,
+                             orphanet_doid, hpo, syngo, mp, wbphenotype, zfa,
+                             fbcv, fbbt, tcdb, merops, cazy, unipathway,
+                             complex, drugbank, pharos, condensate,
                              subcellular, ligand, cofactor, rhea, xref
     --doid-obo PATH          Path to doid.obo, used when --ontology doid|orphanet_doid
     --xref-db STR            UniProt DR database name, required when --ontology xref (e.g. KEGG, BRENDA)
@@ -67,6 +68,13 @@ Examples:
     uv run python run_dcgo_human.py --ontology hpo                # HPO phenotypes (NCBI GeneID)
     uv run python run_dcgo_human.py --ontology syngo              # SynGO synaptic terms (HGNC)
 
+    # Model-organism phenotype layers: learn the domain association on the
+    # model organism's own proteins (domains are species-agnostic)
+    uv run python run_dcgo_human.py --species mouse --ontology mp
+    uv run python run_dcgo_human.py --species worm --ontology wbphenotype
+    uv run python run_dcgo_human.py --species zebrafish --ontology zfa
+    uv run python run_dcgo_human.py --species fly --ontology fbcv
+
     # Run with True Path Rule propagation (paper Step 3)
     uv run python run_dcgo_human.py --enable-true-path --go-ontology data/raw/go_ontology/go-basic.obo
 
@@ -107,6 +115,12 @@ from src.ontology_registry import (
     ontology_keys,
 )
 from src.relative_inference import compute_relative_p_values
+from src.release_pins import (
+    FLYBASE_FBAL_TO_FBGN_FILENAME,
+    FLYBASE_FBGN_UNIPROT_FILENAME,
+    FLYBASE_GENOTYPE_PHENOTYPE_FILENAME,
+    WORMBASE_PHENOTYPE_FILENAME,
+)
 from src.run_manifest import RunManifest, describe_file, manifest_filename
 from src.runner import RunRequest, resolve_inputs
 from src.sparse_fisher import (
@@ -146,6 +160,20 @@ INPUT_SOURCE_NAMES = {
     "hpo_g2p": "hpo_annotations",
     "hpo_obo": "hpo_ontology",
     "syngo_zip": "syngo",
+    "mgi_genepheno": "mgi_genepheno",
+    "mgi_marker_swissprot": "mgi_marker_swissprot",
+    "mp_obo": "mp_ontology",
+    "wb_phenotype": "wormbase_phenotype",
+    "worm_idmapping": "worm_idmapping",
+    "wbphenotype_obo": "wbphenotype_ontology",
+    "zfin_phenotype": "zfin_phenotype",
+    "zfin_uniprot": "zfin_uniprot",
+    "zfa_obo": "zfa_ontology",
+    "fb_genotype_phenotype": "flybase_genotype_phenotype",
+    "fbal_to_fbgn": "flybase_fbal_to_fbgn",
+    "fbgn_uniprot": "flybase_fbgn_uniprot",
+    "fbbt_obo": "fbbt_ontology",
+    "fbcv_obo": "fbcv_ontology",
     # Not an ontology input: the upstream source protein2ipr_<species>.dat.gz
     # was derived from, recorded as `derived_from`.
     "interpro_mappings": "interpro_mappings",
@@ -674,6 +702,103 @@ def build_argument_parser() -> argparse.ArgumentParser:
         default=Path("data/raw/syngo/syngo1.3_complete_data.zip"),
         help="Path to the SynGO bulk-release zip (annotations + ontology "
         "sheets), for --ontology syngo",
+    )
+    parser.add_argument(
+        "--mgi-genepheno",
+        type=Path,
+        default=Path("data/raw/mgi_reports/MGI_GenePheno.rpt"),
+        help="Path to MGI's genotype → MP phenotype report, for --ontology mp "
+        "(run with --species mouse)",
+    )
+    parser.add_argument(
+        "--mgi-marker-swissprot",
+        type=Path,
+        default=Path("data/raw/mgi_reports/MRK_SwissProt_TrEMBL.rpt"),
+        help="Path to MGI's marker → UniProt accession report, for --ontology mp",
+    )
+    parser.add_argument(
+        "--mp-obo",
+        type=Path,
+        default=Path("data/raw/mp_ontology/mp.obo"),
+        help="Path to the Mammalian Phenotype Ontology OBO, for --ontology mp "
+        "--enable-true-path",
+    )
+    parser.add_argument(
+        "--wb-phenotype",
+        type=Path,
+        default=Path("data/raw/wormbase") / WORMBASE_PHENOTYPE_FILENAME,
+        help="Path to WormBase's phenotype_association GAF (the filename "
+        "carries the WormBase release), for --ontology wbphenotype "
+        "(run with --species worm)",
+    )
+    parser.add_argument(
+        "--worm-idmapping",
+        type=Path,
+        default=Path("data/raw/uniprot_idmapping/CAEEL_6239_idmapping.dat.gz"),
+        help="Path to UniProt's per-organism idmapping file for C. elegans "
+        "(WBGene → accession), for --ontology wbphenotype",
+    )
+    parser.add_argument(
+        "--wbphenotype-obo",
+        type=Path,
+        default=Path("data/raw/wormbase_ontology/wbphenotype.obo"),
+        help="Path to the WormBase Phenotype Ontology OBO, for --ontology "
+        "wbphenotype --enable-true-path",
+    )
+    parser.add_argument(
+        "--zfin-phenotype",
+        type=Path,
+        default=Path("data/raw/zfin/phenoGeneCleanData_fish.txt"),
+        help="Path to ZFIN's clean gene → EQ phenotype file, for --ontology "
+        "zfa (run with --species zebrafish)",
+    )
+    parser.add_argument(
+        "--zfin-uniprot",
+        type=Path,
+        default=Path("data/raw/zfin/uniprot.txt"),
+        help="Path to ZFIN's ZDB-GENE → UniProt accession file, for --ontology zfa",
+    )
+    parser.add_argument(
+        "--zfa-obo",
+        type=Path,
+        default=Path("data/raw/zfin_ontology/zfa.obo"),
+        help="Path to the Zebrafish Anatomy Ontology OBO, for --ontology zfa "
+        "--enable-true-path",
+    )
+    parser.add_argument(
+        "--fb-genotype-phenotype",
+        type=Path,
+        default=Path("data/raw/flybase") / FLYBASE_GENOTYPE_PHENOTYPE_FILENAME,
+        help="Path to FlyBase's genotype_phenotype_data table (the filename "
+        "carries the FlyBase release), for --ontology fbcv/fbbt "
+        "(run with --species fly)",
+    )
+    parser.add_argument(
+        "--fbal-to-fbgn",
+        type=Path,
+        default=Path("data/raw/flybase") / FLYBASE_FBAL_TO_FBGN_FILENAME,
+        help="Path to FlyBase's allele → gene table, for --ontology fbcv/fbbt",
+    )
+    parser.add_argument(
+        "--fbgn-uniprot",
+        type=Path,
+        default=Path("data/raw/flybase") / FLYBASE_FBGN_UNIPROT_FILENAME,
+        help="Path to FlyBase's FBgn → UniProt accession table, for "
+        "--ontology fbcv/fbbt",
+    )
+    parser.add_argument(
+        "--fbbt-obo",
+        type=Path,
+        default=Path("data/raw/flybase_ontology/fbbt.obo"),
+        help="Path to the Drosophila Anatomy Ontology OBO, for --ontology "
+        "fbbt --enable-true-path",
+    )
+    parser.add_argument(
+        "--fbcv-obo",
+        type=Path,
+        default=Path("data/raw/flybase_ontology/fbcv.obo"),
+        help="Path to the FlyBase Controlled Vocabulary OBO, for --ontology "
+        "fbcv --enable-true-path",
     )
     parser.add_argument(
         "--permute-annotations",
