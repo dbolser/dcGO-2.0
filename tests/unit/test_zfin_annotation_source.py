@@ -43,6 +43,8 @@ def pheno(tmp_path):
                 row(gene="ZDB-GENE-2", e1_super="ZFA:0001559", tag="normal"),
                 # Unmappable gene, for the coverage test.
                 row(gene="ZDB-GENE-9", e1_super="ZFA:0001559"),
+                # Non-gene locus (ncRNA class): no protein product, dropped.
+                row(gene="ZDB-MIRNAG-081210-9", e1_super="ZFA:0001559"),
             ]
         )
         + "\n"
@@ -76,6 +78,10 @@ class TestParsePhenoGeneCleanData:
     def test_non_zfa_entities_are_skipped(self, pheno):
         terms = set().union(*parse_pheno_gene_clean_data(pheno).values())
         assert not any(term.startswith("GO:") for term in terms)
+
+    def test_non_gene_loci_are_dropped(self, pheno):
+        # miRNA/lincRNA loci have no protein product to re-key.
+        assert "ZDB-MIRNAG-081210-9" not in parse_pheno_gene_clean_data(pheno)
 
     def test_non_abnormal_rows_are_dropped(self, pheno):
         # The normal-tagged ZFA:0001559 row must not credit ZDB-GENE-2.

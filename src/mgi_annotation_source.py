@@ -40,6 +40,7 @@ from loguru import logger
 
 from src.annotation_source import AnnotationSource, OntologySpec
 from src.gene_mapping import GeneAccessionMap, remap_gene_annotations
+from src.hierarchy import open_text
 from src.remap import RemapCoverage
 
 #: Mammalian Phenotype Ontology terms, e.g. ``MP:0001516``.
@@ -58,16 +59,12 @@ def parse_mgi_genepheno(path: Path) -> Dict[str, Set[str]]:
     Multi-gene genotypes (pipe-separated marker column) are dropped and
     counted — see the module docstring for the policy.
     """
-    path = Path(path)
-    if not path.exists():
-        raise FileNotFoundError(f"MGI GenePheno file not found: {path}")
-
     logger.info(f"Parsing MGI genotype→phenotype annotations from {path}")
     gene_terms: Dict[str, Set[str]] = defaultdict(set)
     n_rows = 0
     n_multi_gene = 0
     n_malformed = 0
-    with open(path, "rt") as handle:
+    with open_text(path, label="MGI GenePheno file") as handle:
         for line in handle:
             fields = line.rstrip("\n").split("\t")
             if len(fields) <= _MARKER_COL:
@@ -101,21 +98,18 @@ def parse_mrk_swissprot(path: Path) -> GeneAccessionMap:
     accessions (Swiss-Prot and TrEMBL). Markers listing several accessions are
     kept one-to-many, matching the counted expansion policy downstream.
     """
-    path = Path(path)
-    if not path.exists():
-        raise FileNotFoundError(f"MGI SwissProt/TrEMBL report not found: {path}")
-
     logger.info(f"Building MGI → accession map from {path}")
     mapping: Dict[str, Set[str]] = defaultdict(set)
     n_rows = 0
-    for line in open(path, "rt"):
-        fields = line.rstrip("\n").split("\t")
-        if len(fields) < 7 or not fields[0].startswith("MGI:"):
-            continue
-        accessions = {acc for acc in fields[6].split() if acc}
-        if accessions:
-            n_rows += 1
-            mapping[fields[0]] |= accessions
+    with open_text(path, label="MGI SwissProt/TrEMBL report") as handle:
+        for line in handle:
+            fields = line.rstrip("\n").split("\t")
+            if len(fields) < 7 or not fields[0].startswith("MGI:"):
+                continue
+            accessions = {acc for acc in fields[6].split() if acc}
+            if accessions:
+                n_rows += 1
+                mapping[fields[0]] |= accessions
     gene_map = GeneAccessionMap("MGI", dict(mapping), n_rows)
     logger.info(
         f"  Markers with accessions: {len(gene_map):,} "

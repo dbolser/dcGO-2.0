@@ -30,6 +30,10 @@ GENOTYPES = (
     "Df(1)x\tFBab0000010\tlethal\tFBcv:0000351\t\t\tFBrf5\n"
     # Allele with no FBgn mapping, for the counting test.\n
     "z[1]\tFBal0000099\tviable\tFBcv:0000349\t\t\tFBrf6\n"
+    # Heterozygote over wild type: '+' is a placeholder, not a component.\n
+    "w[1]/+\tFBal0000004/+\tsterile\tFBcv:0000365\t\t\tFBrf7\n"
+    # Allele mixed with an aberration: more than one genetic component.\n
+    "a[1]/Df(1)x\tFBal0000001/FBab0000010\tlethal\tFBcv:0000351\t\t\tFBrf8\n"
 )
 
 FBAL_TO_FBGN = (
@@ -38,6 +42,7 @@ FBAL_TO_FBGN = (
     "FBal0000001\ta[1]\tFBgn0000010\ta\n"
     "FBal0000002\tb[1]\tFBgn0000020\tb\n"
     "FBal0000003\tc[1]\tFBgn0000030\tc\n"
+    "FBal0000004\tw[1]\tFBgn0000040\tw\n"
 )
 
 FBGN_UNIPROT = (
@@ -47,6 +52,7 @@ FBGN_UNIPROT = (
     "a\tDmel\tFBgn0000010\tAQ2\t\t\t1\n"
     "b\tDmel\tFBgn0000020\tAQ3\t\tP10002\t2\n"
     "b\tDmel\tFBgn0000020\tAQ4\t\tQ90002\t2\n"
+    "w\tDmel\tFBgn0000040\tAQ5\t\tP10004\t4\n"
 )
 
 
@@ -93,6 +99,17 @@ class TestParseGenotypePhenotype:
     def test_non_allele_ids_are_dropped(self, genotypes):
         assert "FBab0000010" not in parse_genotype_phenotype(genotypes, "FBcv:")
 
+    def test_wild_type_placeholder_still_counts_as_single_allele(self, genotypes):
+        # FBal0000004/+ is a heterozygote of ONE allele; '+' is not a component.
+        parsed = parse_genotype_phenotype(genotypes, "FBcv:")
+        assert parsed["FBal0000004"] == {"FBcv:0000365"}
+
+    def test_allele_plus_aberration_is_multi_component(self, genotypes):
+        # FBal0000001/FBab0000010 has two genetic components; the phenotype
+        # must not be attributed to the allele alone.
+        parsed = parse_genotype_phenotype(genotypes, "FBcv:")
+        assert "FBcv:0000351" not in parsed.get("FBal0000001", set())
+
     def test_missing_file_fails_loudly(self, tmp_path):
         with pytest.raises(FileNotFoundError):
             parse_genotype_phenotype(tmp_path / "gone.tsv", "FBcv:")
@@ -104,7 +121,15 @@ class TestFlyBaseMappings:
             "FBal0000001": "FBgn0000010",
             "FBal0000002": "FBgn0000020",
             "FBal0000003": "FBgn0000030",
+            "FBal0000004": "FBgn0000040",
         }
+
+    def test_fbal_to_fbgn_conflict_keeps_the_first_mapping(self, tmp_path):
+        path = tmp_path / "conflicting.tsv"
+        path.write_text(
+            "FBal0000001\ta[1]\tFBgn0000010\ta\nFBal0000001\ta[1]\tFBgn0000099\tother\n"
+        )
+        assert parse_fbal_to_fbgn(path) == {"FBal0000001": "FBgn0000010"}
 
     def test_fbgn_uniprot_skips_blank_accessions(self, fbgn_map):
         gene_map = parse_fbgn_uniprot(fbgn_map)
@@ -146,4 +171,4 @@ class TestFlyBasePhenotypeAnnotationSource:
         )
         source.parse()
         assert source.n_unmapped_alleles == 1  # FBal0000099 has no FBgn
-        assert source.coverage.n_mapped_values == 2  # both known genes mapped
+        assert source.coverage.n_mapped_values == 3  # all known genes mapped

@@ -52,6 +52,7 @@ from loguru import logger
 
 from src.annotation_source import AnnotationSource, OntologySpec
 from src.gene_mapping import GeneAccessionMap, remap_gene_annotations
+from src.hierarchy import open_text
 from src.remap import RemapCoverage
 
 #: Zebrafish Anatomy Ontology terms, e.g. ``ZFA:0000108``.
@@ -72,23 +73,24 @@ def parse_pheno_gene_clean_data(path: Path) -> Dict[str, Set[str]]:
     See the module docstring for which columns are read and why non-``ZFA:``
     entities are skipped.
     """
-    path = Path(path)
-    if not path.exists():
-        raise FileNotFoundError(f"ZFIN phenotype file not found: {path}")
-
     logger.info(f"Parsing ZFIN phenotype annotations from {path}")
     gene_terms: Dict[str, Set[str]] = defaultdict(set)
     n_rows = 0
     n_not_abnormal = 0
+    n_non_gene = 0
     n_entities = 0
     n_non_zfa = 0
-    with open(path, "rt") as handle:
+    with open_text(path, label="ZFIN phenotype file") as handle:
         for line in handle:
             fields = line.rstrip("\n").split("\t")
             if len(fields) <= max(_ENTITY_COLS):
                 continue
             gene = fields[_GENE_COL].strip()
             if not gene.startswith("ZDB-GENE-"):
+                # ZFIN also phenotypes non-gene loci (ncRNA classes such as
+                # ZDB-MIRNAG-, ZDB-LINCRNAG-). They have no protein product to
+                # re-key, so they are dropped — counted like every other drop.
+                n_non_gene += 1
                 continue
             if fields[_TAG_COL].strip() != "abnormal":
                 n_not_abnormal += 1
@@ -104,7 +106,8 @@ def parse_pheno_gene_clean_data(path: Path) -> Dict[str, Set[str]]:
                 else:
                     n_non_zfa += 1
     logger.info(
-        f"  Abnormal rows: {n_rows:,} (non-abnormal dropped: {n_not_abnormal:,}); "
+        f"  Abnormal rows: {n_rows:,} (non-abnormal dropped: {n_not_abnormal:,}; "
+        f"non-gene loci dropped: {n_non_gene:,}); "
         f"ZFA entities kept: {n_entities:,}; non-ZFA entities skipped "
         f"(GO/BSPO/CHEBI/...): {n_non_zfa:,}"
     )
@@ -122,21 +125,18 @@ def parse_zfin_uniprot(path: Path) -> GeneAccessionMap:
     ``ZDB-GENE-`` rows are kept. One gene may list several accessions — kept
     one-to-many for the counted expansion policy downstream.
     """
-    path = Path(path)
-    if not path.exists():
-        raise FileNotFoundError(f"ZFIN uniprot.txt not found: {path}")
-
     logger.info(f"Building ZDB-GENE → accession map from {path}")
     mapping: Dict[str, Set[str]] = defaultdict(set)
     n_rows = 0
-    for line in open(path, "rt"):
-        fields = line.rstrip("\n").split("\t")
-        if len(fields) < 4:
-            continue
-        gene, accession = fields[0].strip(), fields[3].strip()
-        if gene.startswith("ZDB-GENE-") and accession:
-            n_rows += 1
-            mapping[gene].add(accession)
+    with open_text(path, label="ZFIN uniprot.txt") as handle:
+        for line in handle:
+            fields = line.rstrip("\n").split("\t")
+            if len(fields) < 4:
+                continue
+            gene, accession = fields[0].strip(), fields[3].strip()
+            if gene.startswith("ZDB-GENE-") and accession:
+                n_rows += 1
+                mapping[gene].add(accession)
     gene_map = GeneAccessionMap("ZDB-GENE", dict(mapping), n_rows)
     logger.info(
         f"  Genes with accessions: {len(gene_map):,} "

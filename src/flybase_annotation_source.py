@@ -17,12 +17,15 @@ ZFA layer (:mod:`src.zfin_annotation_source`).
 
 **Single-allele policy.** ``genotype_FBids`` lists every zygosity component,
 ``/``-separated within a locus and space-separated across loci
-(``FBal0059629/FBal0408868 FBal0134436``). A phenotype observed on a
-multi-allele genotype cannot be attributed to one allele, so only genotypes
-whose id set is exactly one distinct FBal id are kept (a homozygote like
-``FBal0119724`` counts once). At acquisition this keeps 199,987 of 399,972
-data rows (50.0%); multi-allele rows and rows keyed by a non-allele id
-(aberrations, insertions) are dropped and counted.
+(``FBal0059629/FBal0408868 FBal0134436``); ``+`` is the wild-type placeholder
+and is ignored, so ``FBal0000001/+`` — a heterozygote of one allele — is
+single-allele. A phenotype observed on a genotype with more than one genetic
+component cannot be attributed to one allele, so only genotypes whose ids
+reduce to exactly one distinct FBal are kept (a homozygote like
+``FBal0119724`` counts once). At acquisition this keeps 199,921 of 399,972
+data rows (50.0%); 199,970 multi-component rows (two-plus alleles, or an
+allele mixed with an aberration/insertion) and 81 rows keyed only by
+non-allele ids are dropped and counted.
 
 Kept rows are re-keyed FBal → FBgn via ``fbal_to_fbgn_*.tsv.gz`` (allele →
 gene is 1:1 in FlyBase; misses are counted), pooling alleles of the same gene,
@@ -36,7 +39,6 @@ reader (:func:`src.hierarchy.parse_obo_child_parents`).
 
 from __future__ import annotations
 
-import gzip
 import re
 from collections import defaultdict
 from pathlib import Path
@@ -46,6 +48,7 @@ from loguru import logger
 
 from src.annotation_source import AnnotationSource, OntologySpec
 from src.gene_mapping import GeneAccessionMap, remap_gene_annotations
+from src.hierarchy import open_text
 from src.remap import RemapCoverage
 
 #: FlyBase controlled vocabulary phenotype classes, e.g. ``FBcv:0000397``.
@@ -62,41 +65,46 @@ _TERM_COL = 3
 _ID_SPLIT = re.compile(r"[ /]+")
 
 
-def _open_text(path: Path):
-    return gzip.open(path, "rt") if path.suffix == ".gz" else open(path, "rt")
-
-
 def parse_genotype_phenotype(path: Path, term_prefix: str) -> Dict[str, Set[str]]:
     """Parse FlyBase genotype phenotypes into ``{FBal id: {term}}``.
 
     Keeps only single-allele genotypes and terms carrying ``term_prefix`` —
-    see the module docstring for the policy and the counted drops.
+    see the module docstring for the policy and the counted drops. A ``+``
+    token is the wild-type placeholder, not a component (``FBal0000001/+`` is
+    a heterozygote of one allele), so it is ignored before the genotype's ids
+    are counted. The remaining ids then split the audit precisely: a genotype
+    whose ids include two or more distinct components — or an allele mixed
+    with an aberration/insertion — is *multi-allele*; one whose only id is a
+    non-allele object (FBab, FBti, …) is *non-allele*.
     """
-    path = Path(path)
-    if not path.exists():
-        raise FileNotFoundError(f"FlyBase genotype_phenotype file not found: {path}")
-
     logger.info(f"Parsing FlyBase phenotype annotations from {path}")
     allele_terms: Dict[str, Set[str]] = defaultdict(set)
     n_rows = 0
     n_multi_allele = 0
     n_non_allele = 0
     n_other_prefix = 0
-    with _open_text(path) as handle:
+    with open_text(path, label="FlyBase genotype_phenotype file") as handle:
         for line in handle:
             if line.startswith("#") or not line.strip():
                 continue
             fields = line.rstrip("\n").split("\t")
             if len(fields) <= _TERM_COL:
                 continue
-            ids = {token for token in _ID_SPLIT.split(fields[_FBIDS_COL]) if token}
-            if len(ids) != 1:
-                n_multi_allele += 1
-                continue
-            (allele,) = ids
-            if not allele.startswith("FBal"):
+            ids = {
+                token
+                for token in _ID_SPLIT.split(fields[_FBIDS_COL])
+                if token and token != "+"
+            }
+            alleles = {token for token in ids if token.startswith("FBal")}
+            if not alleles:
                 n_non_allele += 1
                 continue
+            if len(ids) > 1:
+                # Two alleles, or an allele plus an aberration/insertion —
+                # either way the phenotype has more than one genetic component.
+                n_multi_allele += 1
+                continue
+            (allele,) = alleles
             term = fields[_TERM_COL].strip()
             if not term.startswith(term_prefix):
                 n_other_prefix += 1
@@ -105,27 +113,36 @@ def parse_genotype_phenotype(path: Path, term_prefix: str) -> Dict[str, Set[str]
             allele_terms[allele].add(term)
     logger.info(
         f"  {term_prefix} rows kept: {n_rows:,} (single-allele); dropped: "
-        f"{n_multi_allele:,} multi-allele, {n_non_allele:,} non-allele ids, "
+        f"{n_multi_allele:,} multi-component, {n_non_allele:,} non-allele ids, "
         f"{n_other_prefix:,} other-vocabulary terms"
     )
     return dict(allele_terms)
 
 
 def parse_fbal_to_fbgn(path: Path) -> Dict[str, str]:
-    """Parse ``fbal_to_fbgn`` into ``{FBal id: FBgn id}`` (1:1 in FlyBase)."""
-    path = Path(path)
-    if not path.exists():
-        raise FileNotFoundError(f"FlyBase fbal_to_fbgn file not found: {path}")
+    """Parse ``fbal_to_fbgn`` into ``{FBal id: FBgn id}``.
 
+    The mapping is 1:1 in FlyBase; if a release ever repeats an FBal id with
+    a *different* gene, the first row wins and the conflict is counted and
+    logged rather than silently letting the last row overwrite the map.
+    """
     mapping: Dict[str, str] = {}
-    with _open_text(path) as handle:
+    n_conflicts = 0
+    with open_text(path, label="FlyBase fbal_to_fbgn file") as handle:
         for line in handle:
             if line.startswith("#"):
                 continue
             fields = line.rstrip("\n").split("\t")
             if len(fields) >= 3 and fields[0].startswith("FBal"):
-                mapping[fields[0]] = fields[2]
+                existing = mapping.setdefault(fields[0], fields[2])
+                if existing != fields[2]:
+                    n_conflicts += 1
     logger.info(f"  FBal → FBgn mappings: {len(mapping):,}")
+    if n_conflicts:
+        logger.warning(
+            f"  {n_conflicts:,} rows re-mapped an FBal id to a different FBgn; "
+            "kept the first mapping for each"
+        )
     return mapping
 
 
@@ -137,14 +154,10 @@ def parse_fbgn_uniprot(path: Path) -> GeneAccessionMap:
     skipped). One gene collects every accession it is paired with — kept
     one-to-many for the counted expansion policy downstream.
     """
-    path = Path(path)
-    if not path.exists():
-        raise FileNotFoundError(f"FlyBase fbgn_NAseq_Uniprot file not found: {path}")
-
     logger.info(f"Building FBgn → accession map from {path}")
     mapping: Dict[str, Set[str]] = defaultdict(set)
     n_rows = 0
-    with _open_text(path) as handle:
+    with open_text(path, label="FlyBase fbgn_NAseq_Uniprot file") as handle:
         for line in handle:
             if line.startswith("#"):
                 continue
