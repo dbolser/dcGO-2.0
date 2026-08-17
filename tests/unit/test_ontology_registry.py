@@ -26,6 +26,7 @@ def paths(tmp_path):
         "subcell",
         "chebi_obo",
         "doid_obo",
+        "mondo_obo",
         "hpo_g2p",
         "hpo_obo",
         "syngo_zip",
@@ -192,12 +193,25 @@ class TestSourceConstruction:
         source = get_ontology("doid").build_source(paths, {})
         assert (source.database, source.id_type) == ("MIM", "phenotype")
         assert source.xref_prefix == "MIM"
-        assert source.doid_obo_path == paths["doid_obo"]
+        assert source.obo_path == paths["doid_obo"]
 
     def test_orphanet_doid_rekeys_the_orphanet_layer(self, paths):
         source = get_ontology("orphanet_doid").build_source(paths, {})
         assert (source.database, source.id_type) == ("Orphanet", None)
         assert source.xref_prefix == "ORDO"
+
+    def test_mondo_rekeys_the_same_layer_with_mondo_prefixes(self, paths):
+        source = get_ontology("mondo").build_source(paths, {})
+        assert (source.database, source.id_type) == ("MIM", "phenotype")
+        assert source.xref_prefix == "OMIM"  # Mondo writes OMIM:, DO writes MIM:
+        assert source.obo_path == paths["mondo_obo"]
+        assert source.spec.term_prefix == "MONDO:"
+
+    def test_orphanet_mondo_rekeys_the_orphanet_layer(self, paths):
+        source = get_ontology("orphanet_mondo").build_source(paths, {})
+        assert (source.database, source.id_type) == ("Orphanet", None)
+        assert source.xref_prefix == "Orphanet"
+        assert source.spec.term_prefix == "MONDO:"
 
     def test_doid_needs_the_obo_even_without_true_path(self, paths, tmp_path):
         # The OBO supplies the mapping table, not just the hierarchy, so a run

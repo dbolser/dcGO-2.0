@@ -365,6 +365,19 @@ class Config:
                 required=False,
                 checksum="sha256:5b9803aa17eeabf4c70f144c64216294d01e66335da3e560576d4eb2dc9ff490",
             ),
+            # Mondo Disease Ontology. Like doid.obo it supplies both the term
+            # DAG and the OMIM/Orphanet cross-references (prefixes OMIM: and
+            # Orphanet:, vs DO's MIM:/ORDO:) that re-key UniProt's disease
+            # layer, for --ontology mondo|orphanet_mondo. Pinned to an
+            # immutable release PURL; bump URL and checksum together.
+            "mondo_ontology": DataSource(
+                name="mondo_ontology",
+                url="https://purl.obolibrary.org/obo/mondo/releases/2026-08-04/mondo.obo",
+                description="Mondo Disease Ontology (DAG + OMIM/Orphanet xrefs) for --ontology mondo",
+                required=False,
+                subdir="mondo",
+                checksum="sha256:fce4bccd97c4eb66161e88272ca0bd6ecd28c003afa878bbec8eae0ceb78fba8",
+            ),
             # Human Phenotype Ontology annotation and ontology files, for
             # run_dcgo_human.py --ontology hpo (src/hpo_annotation_source.py).
             # Both land in data/raw/hpo/. genes_to_phenotype.txt is NCBI-GeneID

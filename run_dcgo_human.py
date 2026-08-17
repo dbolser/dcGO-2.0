@@ -19,11 +19,12 @@ Options:
     --ontology STR           Ontology to associate domains with (default: go). See
                              src/ontology_registry.py, or --help, for the full list:
                              go, ec, reactome, keyword, disease, doid, orphanet,
-                             orphanet_doid, hpo, syngo, mp, wbphenotype, zfa,
-                             fbcv, fbbt, tcdb, merops, cazy, unipathway,
-                             complex, drugbank, pharos, condensate,
-                             subcellular, ligand, cofactor, rhea, xref
+                             orphanet_doid, mondo, orphanet_mondo, hpo, syngo,
+                             mp, wbphenotype, zfa, fbcv, fbbt, tcdb, merops,
+                             cazy, unipathway, complex, drugbank, pharos,
+                             condensate, subcellular, ligand, cofactor, rhea, xref
     --doid-obo PATH          Path to doid.obo, used when --ontology doid|orphanet_doid
+    --mondo-obo PATH         Path to mondo.obo, used when --ontology mondo|orphanet_mondo
     --xref-db STR            UniProt DR database name, required when --ontology xref (e.g. KEGG, BRENDA)
     --xref-type STR          Optional DR third-field filter for --ontology xref (e.g. 'phenotype')
     --enzyme-dat PATH        Path to Expasy enzyme.dat, used when --ontology ec
@@ -162,6 +163,7 @@ INPUT_SOURCE_NAMES = {
     "subcell": "uniprot_subcell",
     "chebi_obo": "chebi",
     "doid_obo": "disease_ontology",
+    "mondo_obo": "mondo_ontology",
     "hpo_g2p": "hpo_annotations",
     "hpo_obo": "hpo_ontology",
     "syngo_zip": "syngo",
@@ -739,6 +741,14 @@ def build_argument_parser() -> argparse.ArgumentParser:
         default=Path("data/raw/disease_ontology/doid.obo"),
         help="Path to the Human Disease Ontology OBO, for --ontology "
         "doid/orphanet_doid (supplies both the OMIM/Orphanet cross-references "
+        "used to re-key the annotations and the DAG they propagate up)",
+    )
+    parser.add_argument(
+        "--mondo-obo",
+        type=Path,
+        default=Path("data/raw/mondo/mondo.obo"),
+        help="Path to the Mondo Disease Ontology OBO, for --ontology "
+        "mondo/orphanet_mondo (supplies both the OMIM/Orphanet cross-references "
         "used to re-key the annotations and the DAG they propagate up)",
     )
     parser.add_argument(

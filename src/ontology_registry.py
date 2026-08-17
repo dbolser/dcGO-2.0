@@ -69,7 +69,11 @@ from src.annotation_source import (
     GAFAnnotationSource,
     OntologySpec,
 )
-from src.disease_ontology import DOID_SPEC, DiseaseOntologyAnnotationSource
+from src.disease_ontology import (
+    DOID_SPEC,
+    MONDO_SPEC,
+    DiseaseOntologyAnnotationSource,
+)
 from src.ec_annotation_source import EC_SPEC, ECAnnotationSource, ec_ancestors
 from src.flybase_annotation_source import (
     FBBT_SPEC,
@@ -250,9 +254,20 @@ def _doid_parents(paths: Dict[str, Path]) -> ParentsFn:
     return parents_from_map(_doid_child_parents(paths))
 
 
+def _mondo_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
+    """Mondo ``is_a`` graph. Like DO, the classification is pure ``is_a``:
+    Mondo's ``relationship:`` lines carry RO/BFO relation ids (disease has
+    location, has material basis in…), none of which license annotation
+    propagation, so no relations are traversed."""
+    return _child_parents(
+        "mondo",
+        paths["mondo_obo"],
+        lambda path: parse_obo_child_parents(path, relations=()),
+    )
+
+
 def _hpo_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
     return _child_parents("hpo", paths["hpo_obo"], parse_obo_child_parents)
-
 
 def _mp_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
     return _child_parents("mp", paths["mp_obo"], parse_obo_child_parents)
@@ -417,6 +432,43 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
         build_parents=_doid_parents,
         needs=("uniprot_dat", "doid_obo"),
         hierarchy_needs=("doid_obo",),
+    ),
+    # The same re-keying as doid/orphanet_doid, onto Mondo instead: mondo.obo
+    # cross-references OMIM (10,176 xrefs) and Orphanet (10,491) under its own
+    # prefixes. Mondo subsumes DO's coverage of OMIM and adds its own classes,
+    # so the two hypothesis universes differ and both stay runnable — same
+    # reasoning that keeps 'disease' alongside 'doid'.
+    "mondo": OntologyEntry(
+        key="mondo",
+        spec=MONDO_SPEC,
+        description="Mondo disease terms, re-keyed from DR MIM at parse time",
+        build_source=lambda paths, options: DiseaseOntologyAnnotationSource(
+            paths["uniprot_dat"],
+            paths["mondo_obo"],
+            xref_prefix="OMIM",
+            spec=MONDO_SPEC,
+        ),
+        build_ancestors=lambda paths: closure_ancestors(_mondo_child_parents(paths)),
+        build_parents=lambda paths: parents_from_map(_mondo_child_parents(paths)),
+        needs=("uniprot_dat", "mondo_obo"),
+        hierarchy_needs=("mondo_obo",),
+    ),
+    "orphanet_mondo": OntologyEntry(
+        key="orphanet_mondo",
+        spec=MONDO_SPEC,
+        description="Mondo disease terms, re-keyed from DR Orphanet at parse time",
+        build_source=lambda paths, options: DiseaseOntologyAnnotationSource(
+            paths["uniprot_dat"],
+            paths["mondo_obo"],
+            database="Orphanet",
+            id_type=None,
+            xref_prefix="Orphanet",
+            spec=MONDO_SPEC,
+        ),
+        build_ancestors=lambda paths: closure_ancestors(_mondo_child_parents(paths)),
+        build_parents=lambda paths: parents_from_map(_mondo_child_parents(paths)),
+        needs=("uniprot_dat", "mondo_obo"),
+        hierarchy_needs=("mondo_obo",),
     ),
     # ---- Gene-keyed layers (genes re-keyed to UniProt at parse time) -------
     "hpo": OntologyEntry(

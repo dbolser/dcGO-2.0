@@ -64,6 +64,7 @@ def make_args(tmp_path, **overrides):
         subcell=Path("data/raw/uniprot_subcell/subcell.txt"),
         chebi_obo=Path("data/raw/chebi/chebi_lite.obo"),
         doid_obo=Path("data/raw/disease_ontology/doid.obo"),
+        mondo_obo=Path("data/raw/mondo/mondo.obo"),
         hpo_genes_to_phenotype=Path("data/raw/hpo/genes_to_phenotype.txt"),
         hpo_obo=Path("data/raw/hpo/hp.obo"),
         syngo_zip=Path("data/raw/syngo/syngo1.3_complete_data.zip"),
