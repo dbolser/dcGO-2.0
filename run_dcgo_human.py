@@ -1130,9 +1130,9 @@ def main(argv: list[str] | None = None) -> int:
             input_processor = OntologyProcessor(args.go_ontology)
             input_ancestors = input_processor.get_ancestors
             # Membership test so terms the hierarchy no longer contains are
-            # handled instead of silently failing to propagate. Registry
-            # hierarchies expose only an ancestors function, so the remap and
-            # tally are GO-only for now.
+            # handled instead of silently failing to propagate (the alt_id
+            # remap below is GO-only — other ontologies resolve merges at
+            # parse time, e.g. the DOID/Mondo replaced_by resolution).
             known_term_fn = input_processor.go_graph.__contains__
 
             # Merged ids first: an annotation to an alt_id has an exact live
@@ -1161,7 +1161,16 @@ def main(argv: list[str] | None = None) -> int:
                 )
         else:
             input_ancestors = ontology_entry.build_ancestors(ontology_paths)
-            known_term_fn = None
+            # Same membership discipline for registry hierarchies: the
+            # annotation file and the hierarchy file are pinned separately and
+            # drift (NCIt ids minted after the pinned OBO, EFO traits the OBO
+            # release lacks), so terms the hierarchy has never heard of must
+            # be counted and dropped, not carried as untestable annotations.
+            known_term_fn = (
+                ontology_entry.build_known_terms(ontology_paths)
+                if ontology_entry.build_known_terms is not None
+                else None
+            )
 
         # Terms still unknown after the remap (obsolete or malformed ids) are
         # dropped, not carried: an unknown term cannot propagate and has no

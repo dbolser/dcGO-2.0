@@ -238,6 +238,34 @@ class TestSourceConstruction:
         assert source.dat_path == paths["uniprot_dat"]
 
 
+class TestKnownTerms:
+    """build_known_terms: the membership test --propagate-annotations needs."""
+
+    # Hierarchies encoded in the id itself have no closed term universe.
+    ID_ENCODED = {"ec", "tcdb", "merops", "cazy"}
+
+    def test_every_map_backed_hierarchy_exposes_membership(self):
+        for key, entry in ONTOLOGIES.items():
+            if entry.build_ancestors is None or key in self.ID_ENCODED:
+                assert entry.build_known_terms is None, key
+            else:
+                assert entry.build_known_terms is not None, key
+
+    def test_membership_covers_children_and_edge_only_parents(self, paths, tmp_path):
+        obo = tmp_path / "known_terms_doid.obo"
+        # DOID:1 exists only as a parent (a root): it must still be known,
+        # while an id in neither column must not be.
+        obo.write_text(
+            "format-version: 1.2\n\n"
+            "[Term]\nid: DOID:100\nname: ataxia\nis_a: DOID:1 ! disease\n"
+        )
+        paths["doid_obo"] = obo
+        known = get_ontology("doid").build_known_terms(paths)
+        assert known("DOID:100")
+        assert known("DOID:1")
+        assert not known("DOID:404")
+
+
 class TestGeneKeyedPreflight:
     """The gene-keyed layers must demand every input they read."""
 

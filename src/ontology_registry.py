@@ -61,7 +61,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, Optional
+from typing import Callable, Dict, Iterable, List, Optional, TypedDict
 
 from src.annotation_source import (
     GO_SPEC,
@@ -154,6 +154,17 @@ class OntologyEntry:
             which is what relative inference ranges over (ancestors are the
             transitive closure and are not a substitute). ``None`` when the
             ontology has no hierarchy, so relative inference is unavailable.
+        build_known_terms: ``(paths) → (term → bool)`` membership test for the
+            hierarchy, so ``--propagate-annotations`` can count and drop terms
+            the hierarchy file does not contain (the annotation file and the
+            hierarchy file are pinned separately and *will* drift). Derived
+            from the same child→parents map as the other two, so "known" means
+            *attached to at least one hierarchy edge*: a term absent from the
+            edge set can neither propagate nor be tested against a parental
+            background, which for the propagation pipeline is exactly what
+            "unknown" has to mean. ``None`` when there is no hierarchy or it
+            is encoded in the id itself (EC/TCDB/MEROPS/CAZy have no closed
+            term universe to test against).
         needs: keys of ``paths`` the source requires, checked before the run so
             a missing input fails loudly instead of half-way through.
         hierarchy_needs: extra ``paths`` keys the hierarchy requires.
@@ -169,6 +180,9 @@ class OntologyEntry:
     build_source: Callable[[Dict[str, Path], Dict[str, object]], AnnotationSource]
     build_ancestors: Optional[Callable[[Dict[str, Path]], AncestorsFn]] = None
     build_parents: Optional[Callable[[Dict[str, Path]], ParentsFn]] = None
+    build_known_terms: Optional[Callable[[Dict[str, Path]], Callable[[str], bool]]] = (
+        None
+    )
     needs: tuple = ()
     hierarchy_needs: tuple = ()
     external_propagation: bool = False
@@ -181,6 +195,40 @@ class OntologyEntry:
     def supports_relative_inference(self) -> bool:
         """Relative inference needs direct parents, not just ancestors."""
         return self.build_parents is not None or self.external_propagation
+
+
+class _MapHierarchy(TypedDict):
+    """The hierarchy kwargs every child→parents-map-backed ontology shares."""
+
+    build_ancestors: Callable[[Dict[str, Path]], AncestorsFn]
+    build_parents: Callable[[Dict[str, Path]], ParentsFn]
+    build_known_terms: Callable[[Dict[str, Path]], Callable[[str], bool]]
+
+
+def _edge_membership(child_to_parents: Dict[str, set]) -> Callable[[str], bool]:
+    """Membership test over every term attached to a hierarchy edge."""
+    known = set(child_to_parents)
+    for parents in child_to_parents.values():
+        known |= parents
+    return known.__contains__
+
+
+def _map_hierarchy(
+    child_parents_fn: Callable[[Dict[str, Path]], Dict[str, set]],
+) -> _MapHierarchy:
+    """Ancestors, direct parents and term membership from one cached map.
+
+    Every map-backed hierarchy used to spell out the first two as separate
+    lambdas per entry; deriving all three here keeps them mutually consistent
+    by construction (the membership test ranges over exactly the edges the
+    closure walks — see ``OntologyEntry.build_known_terms`` for why that is
+    the right meaning of "known").
+    """
+    return _MapHierarchy(
+        build_ancestors=lambda paths: closure_ancestors(child_parents_fn(paths)),
+        build_parents=lambda paths: parents_from_map(child_parents_fn(paths)),
+        build_known_terms=lambda paths: _edge_membership(child_parents_fn(paths)),
+    )
 
 
 _CHILD_PARENTS_CACHE: Dict[tuple, Dict[str, set]] = {}
@@ -234,39 +282,23 @@ def _dr(
 
 
 def _chebi_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
+    """ChEBI ``is_a`` graph, for the ligand and cofactor layers."""
     return _child_parents("chebi", paths["chebi_obo"], parse_obo_child_parents)
 
 
-def _chebi_ancestors(paths: Dict[str, Path]) -> AncestorsFn:
-    """ChEBI ``is_a`` closure, for the ligand and cofactor layers."""
-    return closure_ancestors(_chebi_child_parents(paths))
-
-
-def _chebi_parents(paths: Dict[str, Path]) -> ParentsFn:
-    return parents_from_map(_chebi_child_parents(paths))
-
-
-def _doid_ancestors(paths: Dict[str, Path]) -> AncestorsFn:
-    """Disease Ontology ``is_a`` closure, for the DOID-keyed disease layers.
+def _doid_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
+    """Disease Ontology ``is_a`` graph, for the DOID-keyed disease layers.
 
     ``doid.obo`` carries no ``relationship:`` lines at all — the disease
     classification is pure ``is_a`` — so no extra relations are traversed.
     Obsolete stanzas are excluded (the default), which is what makes the
     ``replaced_by`` resolution in :mod:`src.disease_ontology` necessary.
     """
-    return closure_ancestors(_doid_child_parents(paths))
-
-
-def _doid_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
     return _child_parents(
         "doid",
         paths["doid_obo"],
         lambda path: parse_obo_child_parents(path, relations=()),
     )
-
-
-def _doid_parents(paths: Dict[str, Path]) -> ParentsFn:
-    return parents_from_map(_doid_child_parents(paths))
 
 
 def _mondo_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
@@ -337,20 +369,12 @@ def _syngo_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
 
 
 def _subcell_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
+    """Subcellular-location hierarchy over ``subcell.txt`` HI/HP edges."""
     return _child_parents(
         "subcell",
         paths["subcell"],
         lambda path: parse_subcell_vocabulary(path).child_to_parents,
     )
-
-
-def _subcell_ancestors(paths: Dict[str, Path]) -> AncestorsFn:
-    """Subcellular-location closure over ``subcell.txt`` HI/HP edges."""
-    return closure_ancestors(_subcell_child_parents(paths))
-
-
-def _subcell_parents(paths: Dict[str, Path]) -> ParentsFn:
-    return parents_from_map(_subcell_child_parents(paths))
 
 
 def _build_go_source(
@@ -405,8 +429,7 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
         spec=REACTOME_SPEC,
         description="Reactome pathways (DR Reactome)",
         build_source=_dr("Reactome", REACTOME_SPEC),
-        build_ancestors=lambda paths: closure_ancestors(_reactome_child_parents(paths)),
-        build_parents=lambda paths: parents_from_map(_reactome_child_parents(paths)),
+        **_map_hierarchy(_reactome_child_parents),
         needs=("uniprot_dat",),
         hierarchy_needs=("reactome_relations",),
     ),
@@ -417,8 +440,7 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
         build_source=lambda paths, options: UniProtKeywordAnnotationSource(
             paths["uniprot_dat"]
         ),
-        build_ancestors=lambda paths: closure_ancestors(_keyword_child_parents(paths)),
-        build_parents=lambda paths: parents_from_map(_keyword_child_parents(paths)),
+        **_map_hierarchy(_keyword_child_parents),
         needs=("uniprot_dat",),
         hierarchy_needs=("keywlist",),
     ),
@@ -441,8 +463,7 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
         build_source=lambda paths, options: DiseaseOntologyAnnotationSource(
             paths["uniprot_dat"], paths["doid_obo"]
         ),
-        build_ancestors=_doid_ancestors,
-        build_parents=_doid_parents,
+        **_map_hierarchy(_doid_child_parents),
         needs=("uniprot_dat", "doid_obo"),
         hierarchy_needs=("doid_obo",),
     ),
@@ -469,8 +490,7 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
             id_type=None,
             xref_prefix="ORDO",
         ),
-        build_ancestors=_doid_ancestors,
-        build_parents=_doid_parents,
+        **_map_hierarchy(_doid_child_parents),
         needs=("uniprot_dat", "doid_obo"),
         hierarchy_needs=("doid_obo",),
     ),
@@ -489,8 +509,7 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
             xref_prefix="OMIM",
             spec=MONDO_SPEC,
         ),
-        build_ancestors=lambda paths: closure_ancestors(_mondo_child_parents(paths)),
-        build_parents=lambda paths: parents_from_map(_mondo_child_parents(paths)),
+        **_map_hierarchy(_mondo_child_parents),
         needs=("uniprot_dat", "mondo_obo"),
         hierarchy_needs=("mondo_obo",),
     ),
@@ -506,8 +525,7 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
             xref_prefix="Orphanet",
             spec=MONDO_SPEC,
         ),
-        build_ancestors=lambda paths: closure_ancestors(_mondo_child_parents(paths)),
-        build_parents=lambda paths: parents_from_map(_mondo_child_parents(paths)),
+        **_map_hierarchy(_mondo_child_parents),
         needs=("uniprot_dat", "mondo_obo"),
         hierarchy_needs=("mondo_obo",),
     ),
@@ -523,8 +541,7 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
         build_source=lambda paths, options: CIViCNCItAnnotationSource(
             paths["civic_evidence"], paths["doid_obo"], paths["uniprot_dat"]
         ),
-        build_ancestors=lambda paths: closure_ancestors(_ncit_child_parents(paths)),
-        build_parents=lambda paths: parents_from_map(_ncit_child_parents(paths)),
+        **_map_hierarchy(_ncit_child_parents),
         needs=("civic_evidence", "doid_obo", "uniprot_dat"),
         hierarchy_needs=("ncit_obo",),
     ),
@@ -539,8 +556,7 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
             paths["oncotree_json"],
             paths["uniprot_dat"],
         ),
-        build_ancestors=lambda paths: closure_ancestors(_oncotree_child_parents(paths)),
-        build_parents=lambda paths: parents_from_map(_oncotree_child_parents(paths)),
+        **_map_hierarchy(_oncotree_child_parents),
         # The JSON is both the code mapping and the hierarchy (like syngo's zip).
         needs=("civic_evidence", "doid_obo", "oncotree_json", "uniprot_dat"),
         hierarchy_needs=("oncotree_json",),
@@ -553,8 +569,7 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
         build_source=lambda paths, options: HPOAnnotationSource(
             paths["hpo_g2p"], paths["uniprot_dat"]
         ),
-        build_ancestors=lambda paths: closure_ancestors(_hpo_child_parents(paths)),
-        build_parents=lambda paths: parents_from_map(_hpo_child_parents(paths)),
+        **_map_hierarchy(_hpo_child_parents),
         needs=("hpo_g2p", "uniprot_dat"),
         hierarchy_needs=("hpo_obo",),
     ),
@@ -569,8 +584,7 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
         build_source=lambda paths, options: GWASCatalogAnnotationSource(
             paths["gwas_associations"], paths["uniprot_dat"]
         ),
-        build_ancestors=lambda paths: closure_ancestors(_efo_child_parents(paths)),
-        build_parents=lambda paths: parents_from_map(_efo_child_parents(paths)),
+        **_map_hierarchy(_efo_child_parents),
         needs=("gwas_associations", "uniprot_dat"),
         hierarchy_needs=("efo_obo",),
     ),
@@ -595,8 +609,7 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
         build_source=lambda paths, options: SynGOAnnotationSource(
             paths["syngo_zip"], paths["uniprot_dat"]
         ),
-        build_ancestors=lambda paths: closure_ancestors(_syngo_child_parents(paths)),
-        build_parents=lambda paths: parents_from_map(_syngo_child_parents(paths)),
+        **_map_hierarchy(_syngo_child_parents),
         # The zip carries the hierarchy sheet too, so it is both the annotation
         # input and the hierarchy input (like subcellular's subcell.txt).
         needs=("syngo_zip", "uniprot_dat"),
@@ -615,8 +628,7 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
         build_source=lambda paths, options: MGIAnnotationSource(
             paths["mgi_genepheno"], paths["mgi_marker_swissprot"]
         ),
-        build_ancestors=lambda paths: closure_ancestors(_mp_child_parents(paths)),
-        build_parents=lambda paths: parents_from_map(_mp_child_parents(paths)),
+        **_map_hierarchy(_mp_child_parents),
         needs=("mgi_genepheno", "mgi_marker_swissprot"),
         hierarchy_needs=("mp_obo",),
     ),
@@ -628,10 +640,7 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
         build_source=lambda paths, options: WormBasePhenotypeAnnotationSource(
             paths["wb_phenotype"], paths["worm_idmapping"]
         ),
-        build_ancestors=lambda paths: closure_ancestors(
-            _wbphenotype_child_parents(paths)
-        ),
-        build_parents=lambda paths: parents_from_map(_wbphenotype_child_parents(paths)),
+        **_map_hierarchy(_wbphenotype_child_parents),
         needs=("wb_phenotype", "worm_idmapping"),
         hierarchy_needs=("wbphenotype_obo",),
     ),
@@ -647,8 +656,7 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
         build_source=lambda paths, options: WormBaseAnatomyAnnotationSource(
             paths["wb_anatomy"], paths["worm_idmapping"]
         ),
-        build_ancestors=lambda paths: closure_ancestors(_wbbt_child_parents(paths)),
-        build_parents=lambda paths: parents_from_map(_wbbt_child_parents(paths)),
+        **_map_hierarchy(_wbbt_child_parents),
         needs=("wb_anatomy", "worm_idmapping"),
         hierarchy_needs=("wbbt_obo",),
     ),
@@ -663,8 +671,7 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
         build_source=lambda paths, options: ZFINAnatomyAnnotationSource(
             paths["zfin_phenotype"], paths["zfin_uniprot"]
         ),
-        build_ancestors=lambda paths: closure_ancestors(_zfa_child_parents(paths)),
-        build_parents=lambda paths: parents_from_map(_zfa_child_parents(paths)),
+        **_map_hierarchy(_zfa_child_parents),
         needs=("zfin_phenotype", "zfin_uniprot"),
         hierarchy_needs=("zfa_obo",),
     ),
@@ -679,8 +686,7 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
             paths["fbgn_uniprot"],
             spec=FBCV_SPEC,
         ),
-        build_ancestors=lambda paths: closure_ancestors(_fbcv_child_parents(paths)),
-        build_parents=lambda paths: parents_from_map(_fbcv_child_parents(paths)),
+        **_map_hierarchy(_fbcv_child_parents),
         needs=("fb_genotype_phenotype", "fbal_to_fbgn", "fbgn_uniprot"),
         hierarchy_needs=("fbcv_obo",),
     ),
@@ -695,8 +701,7 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
             paths["fbgn_uniprot"],
             spec=FBBT_SPEC,
         ),
-        build_ancestors=lambda paths: closure_ancestors(_fbbt_child_parents(paths)),
-        build_parents=lambda paths: parents_from_map(_fbbt_child_parents(paths)),
+        **_map_hierarchy(_fbbt_child_parents),
         needs=("fb_genotype_phenotype", "fbal_to_fbgn", "fbgn_uniprot"),
         hierarchy_needs=("fbbt_obo",),
     ),
@@ -817,8 +822,7 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
         build_source=lambda paths, options: UniProtSubcellularAnnotationSource(
             paths["uniprot_dat"], paths["subcell"]
         ),
-        build_ancestors=_subcell_ancestors,
-        build_parents=_subcell_parents,
+        **_map_hierarchy(_subcell_child_parents),
         needs=("uniprot_dat", "subcell"),
         hierarchy_needs=("subcell",),
     ),
@@ -829,8 +833,7 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
         build_source=lambda paths, options: UniProtLigandAnnotationSource(
             paths["uniprot_dat"]
         ),
-        build_ancestors=_chebi_ancestors,
-        build_parents=_chebi_parents,
+        **_map_hierarchy(_chebi_child_parents),
         needs=("uniprot_dat",),
         hierarchy_needs=("chebi_obo",),
     ),
@@ -841,8 +844,7 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
         build_source=lambda paths, options: UniProtCofactorAnnotationSource(
             paths["uniprot_dat"]
         ),
-        build_ancestors=_chebi_ancestors,
-        build_parents=_chebi_parents,
+        **_map_hierarchy(_chebi_child_parents),
         needs=("uniprot_dat",),
         hierarchy_needs=("chebi_obo",),
     ),
