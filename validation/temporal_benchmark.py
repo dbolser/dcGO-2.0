@@ -52,7 +52,7 @@ if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 from src.information_content import (  # noqa: E402
-    information_content as shared_information_content,
+    information_content_from_term_sets as shared_information_content_from_term_sets,
 )
 
 # The three GO aspect roots — trivially true, excluded from scoring (CAFA does
@@ -152,13 +152,11 @@ def information_content(
     The counting convention is the project-wide one in
     :func:`src.information_content.information_content` (also behind the
     pipeline's ``ic`` column and ``--min-ic`` floor); this wrapper adds the
-    propagation the benchmark's unpropagated maps need.
+    propagation the benchmark's unpropagated maps need, streamed one closure
+    at a time so the full propagated map is never materialised.
     """
-    return shared_information_content(
-        {
-            protein: propagate_terms(terms, get_ancestors)
-            for protein, terms in annotation_map.items()
-        }
+    return shared_information_content_from_term_sets(
+        propagate_terms(terms, get_ancestors) for terms in annotation_map.values()
     )
 
 

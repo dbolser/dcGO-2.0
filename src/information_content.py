@@ -29,6 +29,34 @@ from collections import defaultdict
 from typing import Dict, Iterable, Mapping
 
 
+def information_content_from_term_sets(
+    term_sets: Iterable[Iterable[str]],
+) -> Dict[str, float]:
+    """Marginal IC per term from a stream of per-protein term sets.
+
+    Each yielded set is one protein's terms (already True-Path propagated when
+    the ontology has a hierarchy — see the module docstring), and the universe
+    size is the number of sets yielded. Streaming is the point: the caller can
+    feed per-protein closures straight from a generator (e.g.
+    :func:`src.hierarchy.iter_propagated_term_sets`) without ever holding a
+    full propagated copy of the annotation map — a multi-GB transient at
+    allspecies scale — because only the frequency counter accumulates.
+    """
+    n_proteins = 0
+    counts: Dict[str, int] = defaultdict(int)
+    for terms in term_sets:
+        n_proteins += 1
+        for term in terms:
+            counts[term] += 1
+    if n_proteins == 0:
+        return {}
+    ic: Dict[str, float] = {}
+    for term, count in counts.items():
+        p = count / n_proteins
+        ic[term] = -math.log2(p) if 0.0 < p < 1.0 else 0.0
+    return ic
+
+
 def information_content(
     annotation_map: Mapping[str, Iterable[str]],
 ) -> Dict[str, float]:
@@ -44,15 +72,4 @@ def information_content(
     The map must already be True-Path propagated when the ontology has a
     hierarchy — see the module docstring.
     """
-    n_proteins = len(annotation_map)
-    if n_proteins == 0:
-        return {}
-    counts: Dict[str, int] = defaultdict(int)
-    for terms in annotation_map.values():
-        for term in terms:
-            counts[term] += 1
-    ic: Dict[str, float] = {}
-    for term, count in counts.items():
-        p = count / n_proteins
-        ic[term] = -math.log2(p) if 0.0 < p < 1.0 else 0.0
-    return ic
+    return information_content_from_term_sets(annotation_map.values())

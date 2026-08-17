@@ -11,7 +11,10 @@ from __future__ import annotations
 
 import pytest
 
-from src.information_content import information_content
+from src.information_content import (
+    information_content,
+    information_content_from_term_sets,
+)
 from validation.temporal_benchmark import information_content as benchmark_ic
 
 
@@ -50,6 +53,24 @@ class TestEdgeCases:
 
     def test_single_protein_universe_makes_every_term_ic_zero(self) -> None:
         assert information_content({"P1": {"T"}}) == {"T": 0.0}
+
+
+class TestStreamingMode:
+    """information_content_from_term_sets is the same estimate, streamed."""
+
+    def test_matches_the_mapping_form(self) -> None:
+        streamed = information_content_from_term_sets(
+            iter(TestHandComputableFixture.MAP.values())
+        )
+        assert streamed == information_content(TestHandComputableFixture.MAP)
+
+    def test_generator_input_counts_the_universe_itself(self) -> None:
+        """The denominator is the number of sets yielded — no len() needed."""
+        ic = information_content_from_term_sets(s for s in ({"T"}, set()))
+        assert ic == {"T": 1.0}
+
+    def test_empty_stream_gives_empty_ic(self) -> None:
+        assert information_content_from_term_sets(iter(())) == {}
 
 
 class TestBenchmarkWrapperSharesTheConvention:

@@ -104,10 +104,14 @@ from src.annotation_source import restrict_to_universe
 from src.domain_annotation_parser import DOMAIN_KEYS, DomainAnnotationParser
 from src.hierarchy import (
     PROPAGATION_RELATIONS,
+    iter_propagated_term_sets,
     propagate_annotation_map,
     propagate_via_ancestors,
 )
-from src.information_content import information_content
+from src.information_content import (
+    information_content,
+    information_content_from_term_sets,
+)
 from src.ontology_processor import OntologyProcessor
 from src.ontology_registry import (
     OntologyEntry,
@@ -1126,19 +1130,40 @@ def main(argv: list[str] | None = None) -> int:
     # this run used is recorded in the manifest (thresholds.ic_source).
     ic_source = resolve_ic_source(args, ontology_entry)
     if ic_source == "propagated" and not args.propagate_annotations:
-        # Propagate a throwaway copy for the frequency estimate only; the
-        # tested map itself stays exactly as the flags left it.
+        # Propagate a throwaway stream for the frequency estimate only; the
+        # tested map itself stays exactly as the flags left it. Streamed
+        # per-protein closure → counter, so the full propagated copy (a
+        # multi-GB transient at allspecies scale) is never materialised. The
+        # input cleaning matches --propagate-annotations exactly — alt_id
+        # annotations remapped to their live primary ids, terms the hierarchy
+        # does not contain dropped — so ic_source="propagated" names a single
+        # estimate regardless of which flag engaged the hierarchy.
         if ontology_entry.build_ancestors is None:
             if input_processor is None:
                 logger.info(f"Loading GO ontology from: {args.go_ontology}")
                 # Kept in input_processor so Stage 4.5 reuses this parse.
                 input_processor = OntologyProcessor(args.go_ontology)
-            ic_ancestors = input_processor.get_ancestors
+            alt_map = input_processor.alt_id_map
+            term_ic = information_content_from_term_sets(
+                iter_propagated_term_sets(
+                    (
+                        {alt_map.get(term, term) for term in terms}
+                        for terms in protein_go_map.values()
+                    ),
+                    input_processor.get_ancestors,
+                    known_term_fn=input_processor.go_graph.__contains__,
+                    drop_unknown=True,
+                )
+            )
         else:
-            ic_ancestors = ontology_entry.build_ancestors(ontology_paths)
-        ic_map, _ic_coverage = propagate_annotation_map(protein_go_map, ic_ancestors)
-        term_ic = information_content(ic_map)
-        del ic_map
+            # Registry hierarchies expose only an ancestors function — no
+            # membership test, no alt_ids — same as --propagate-annotations.
+            term_ic = information_content_from_term_sets(
+                iter_propagated_term_sets(
+                    protein_go_map.values(),
+                    ontology_entry.build_ancestors(ontology_paths),
+                )
+            )
     else:
         # Already propagated (--propagate-annotations), or a run that never
         # touches a hierarchy ("direct" — exact for flat vocabularies).

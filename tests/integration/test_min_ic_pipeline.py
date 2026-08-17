@@ -29,6 +29,12 @@ from run_dcgo_human import main
 ROOT = "GO:0008150"
 SPECIFIC = "GO:0006811"
 OTHER = "GO:0051179"
+#: A merged (retired) id whose live replacement is SPECIFIC — see the alt_id
+#: line in the OBO. Unused by the base fixture; TestIcEstimateConsistency
+#: annotates through it.
+ALT_OF_SPECIFIC = "GO:0000811"
+#: An id the ontology does not contain at all (obsolete/malformed).
+UNKNOWN = "GO:0099999"
 
 OBO = """format-version: 1.2
 data-version: test-min-ic
@@ -42,6 +48,7 @@ namespace: biological_process
 id: GO:0006811
 name: ion transport
 namespace: biological_process
+alt_id: GO:0000811
 is_a: GO:0008150 ! biological_process
 
 [Term]
@@ -158,6 +165,46 @@ class TestIcColumn:
         # inflation the propagated estimate exists to prevent.
         assert float(by_pair[("IPR000001", ROOT)]["ic"]) == 1.0
         assert manifest["analysis"]["thresholds"]["ic_source"] == "direct"
+
+
+class TestIcEstimateConsistency:
+    """The throwaway IC propagation cleans its input exactly like
+    --propagate-annotations: alt_ids remapped to their live primary ids,
+    terms the hierarchy does not contain dropped. ic_source="propagated"
+    must mean one estimate regardless of which flag engaged the hierarchy."""
+
+    @pytest.fixture
+    def dirty_pipeline_dir(self, pipeline_dir: Path) -> Path:
+        """The base fixture plus annotations through a merged id and a dead id.
+
+        P0020–P0039 gain SPECIFIC via its alt_id, so after remapping SPECIFIC
+        covers all 40 proteins (IC 0); P0000–P0019 gain UNKNOWN, which the
+        hierarchy does not contain and the estimate must drop.
+        """
+        gaf = pipeline_dir / "data/raw/goa_annotations/goa_ictest.gaf.gz"
+        lines = gzip.decompress(gaf.read_bytes()).decode().splitlines()
+        lines += [gaf_line(f"P{i:05d}", ALT_OF_SPECIFIC) for i in range(20, 40)]
+        lines += [gaf_line(f"P{i:05d}", UNKNOWN) for i in range(20)]
+        gaf.write_bytes(gzip.compress(("\n".join(lines) + "\n").encode()))
+        return pipeline_dir
+
+    def test_throwaway_ic_remaps_alt_ids_and_drops_unknown_terms(
+        self, dirty_pipeline_dir: Path
+    ):
+        # --enable-true-path engages the hierarchy without propagating the
+        # tested map, so IC comes from the throwaway streamed propagation.
+        rows, manifest = run_pipeline(
+            dirty_pipeline_dir, "results_dirty", "--enable-true-path"
+        )
+        assert manifest["analysis"]["thresholds"]["ic_source"] == "propagated"
+
+        by_pair = {(r["domain"], r["go_term"]): r for r in rows}
+        # After the alt_id remap SPECIFIC covers 40/40 proteins → IC 0.0.
+        # Without the remap the estimate would be 20/40 → 1.0.
+        assert float(by_pair[("IPR000001", SPECIFIC)]["ic"]) == 0.0
+        # The dead id is dropped from the frequency estimate, so its rows read
+        # 0.0 ("no frequency information"), not -log2(20/40) = 1.0.
+        assert float(by_pair[("IPR000001", UNKNOWN)]["ic"]) == 0.0
 
 
 class TestMinIcFloor:
