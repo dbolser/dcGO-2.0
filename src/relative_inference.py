@@ -408,8 +408,12 @@ def build_propagated_term_matrix(
 
     extended: List[str] = list(term_ids)
     index_of: Dict[str, int] = {term: i for i, term in enumerate(extended)}
-    for term in term_ids:
-        for ancestor in ancestors_fn(term):
+    # One ancestors_fn call per distinct term: the axis extension and the
+    # incidence rows below share the same lookup, so an uncached ancestors_fn
+    # is never asked the same question twice.
+    term_ancestors: List[List[str]] = [list(ancestors_fn(term)) for term in term_ids]
+    for ancestors in term_ancestors:
+        for ancestor in ancestors:
             if ancestor not in index_of:
                 index_of[ancestor] = len(extended)
                 extended.append(ancestor)
@@ -417,10 +421,10 @@ def build_propagated_term_matrix(
     # Incidence matrix: row t marks t itself and all of its ancestors.
     rows: List[int] = []
     cols: List[int] = []
-    for i, term in enumerate(term_ids):
+    for i, ancestors in enumerate(term_ancestors):
         rows.append(i)
         cols.append(i)
-        for ancestor in ancestors_fn(term):
+        for ancestor in ancestors:
             rows.append(i)
             cols.append(index_of[ancestor])
     incidence = sparse.csr_matrix(
@@ -499,21 +503,6 @@ def compute_relative_p_values(
     union_counts = np.asarray(parent_union.sum(axis=0)).ravel().astype(np.int64)
     del rows, cols, parent_incidence
 
-    # Two domain x term products, blocked over domains for the same allocation
-    # reason compute_cooccurring_contingency_tables blocks: the child's own
-    # propagated co-occurrence, and its parental-union co-occurrence.
-    domain_csc = protein_domain_matrix.astype(np.int32).tocsc()
-    n_domains = protein_domain_matrix.shape[1]
-    child_blocks, union_blocks = [], []
-    for start in range(0, n_domains, domain_block):
-        stop = min(start + domain_block, n_domains)
-        block = domain_csc[:, start:stop].T
-        child_blocks.append((block @ propagated).tocsr())
-        union_blocks.append((block @ parent_union).tocsr())
-    cooccurrence = sparse.vstack(child_blocks, format="csr")
-    union_cooccurrence = sparse.vstack(union_blocks, format="csr")
-    del child_blocks, union_blocks, domain_csc
-
     domain_idx = pair_index // n_terms
     term_idx = pair_index % n_terms
 
@@ -525,8 +514,50 @@ def compute_relative_p_values(
     if not has_parents.any():
         return relative_p, tables, rejections
 
-    a = np.asarray(cooccurrence[domain_idx, term_idx]).ravel().astype(np.int64)
-    dp = np.asarray(union_cooccurrence[domain_idx, term_idx]).ravel().astype(np.int64)
+    # The child gather only ever reads annotated-term columns (term_idx is
+    # always < n_terms); the ancestor-only extension exists for the union
+    # background, so the child product is taken against the annotated columns
+    # alone.
+    propagated_annotated = propagated[:, :n_terms].tocsr()
+
+    # Two domain x term products, blocked over domains for the same allocation
+    # reason compute_cooccurring_contingency_tables blocks — but sampled, never
+    # materialised: only the enumerated (domain, term) entries are read, so each
+    # block's product is gathered into ``a``/``dp`` and discarded before the
+    # next block is built. Peak memory is one block's product, not the full
+    # co-occurrence matrix. Pairs are walked in domain order so each block's
+    # pairs form one contiguous slice of the sorted index; a block no pair
+    # references is skipped without computing its products at all.
+    order = np.argsort(domain_idx, kind="stable")
+    sorted_domain = domain_idx[order]
+    sorted_term = term_idx[order]
+    a_sorted = np.zeros(n_pairs, dtype=np.int64)
+    dp_sorted = np.zeros(n_pairs, dtype=np.int64)
+
+    domain_csc = protein_domain_matrix.astype(np.int32).tocsc()
+    n_domains = protein_domain_matrix.shape[1]
+    for start in range(0, n_domains, domain_block):
+        stop = min(start + domain_block, n_domains)
+        lo, hi = np.searchsorted(sorted_domain, (start, stop), side="left")
+        if lo == hi:
+            continue
+        block = domain_csc[:, start:stop].T
+        pair_rows = sorted_domain[lo:hi] - start
+        pair_cols = sorted_term[lo:hi]
+        child_block = (block @ propagated_annotated).tocsr()
+        a_sorted[lo:hi] = np.asarray(child_block[pair_rows, pair_cols]).ravel()
+        del child_block
+        union_block = (block @ parent_union).tocsr()
+        dp_sorted[lo:hi] = np.asarray(union_block[pair_rows, pair_cols]).ravel()
+        del union_block
+    del domain_csc, propagated_annotated
+
+    a = np.empty(n_pairs, dtype=np.int64)
+    dp = np.empty(n_pairs, dtype=np.int64)
+    a[order] = a_sorted
+    dp[order] = dp_sorted
+    del order, sorted_domain, sorted_term, a_sorted, dp_sorted
+
     n_child = term_counts[term_idx]
     n_union = union_counts[term_idx]
 
