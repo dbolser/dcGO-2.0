@@ -1371,7 +1371,21 @@ def main(argv: list[str] | None = None) -> int:
 
     logger.info(f"✓ Exported top 100 associations to: {top_file}")
 
-    # Export propagated annotations if True Path Rule was applied
+    # Export the ancestor-closure view, if it was requested.
+    #
+    # This file is NOT a second set of inferences and is not the deliverable. It
+    # is the ontology's transitive closure applied mechanically to the direct
+    # associations: every row whose annotation_type is "propagated" says only
+    # "the term above one we inferred", which any consumer holding the OBO can
+    # derive for itself. It is dumped for convenience — GO-slim style roll-ups,
+    # and parity with the published dcGO, whose product genuinely is the DAG
+    # profile (VALIDATION_PLAN §3).
+    #
+    # The careful result is the *direct* rows, in _associations_significant.tsv.
+    # Propagating past them discards the thing the relative inference exists to
+    # establish, namely the level at which the association is specific. Nothing
+    # here feeds back into significance: this runs after Fisher, after BH, after
+    # everything, so the closure cannot change which associations were inferred.
     if propagated_annotations:
         annotations_file = (
             args.output_dir
