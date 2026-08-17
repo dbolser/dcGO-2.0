@@ -150,6 +150,24 @@ class TestParseWBAnatomyAssociation:
         parsed = parse_wb_anatomy_association(anatomy_gaf)
         assert "WBbt:0005812" not in parsed["WBGene00000001"]
 
+    def test_uncertain_matches_pipe_separated_tokens(self, tmp_path):
+        # Qualifiers are |-lists; "Enriched|Uncertain" must drop like a bare
+        # "Uncertain", and a token merely containing the word must not.
+        import gzip as _gzip
+
+        gaf = (
+            "!gaf-version: 2.0\n"
+            "WB\tWBGene00000003\tabc-1\tEnriched|Uncertain\tWBbt:0005813\t"
+            "WB_REF:z\tIDA\tWB:Expr6\tA\t\tX.1\tgene\ttaxon:6239\t20251105\tWB\t\t\n"
+            "WB\tWBGene00000003\tabc-1\tUncertainty\tWBbt:0005814\t"
+            "WB_REF:z\tIDA\tWB:Expr7\tA\t\tX.1\tgene\ttaxon:6239\t20251105\tWB\t\t\n"
+        )
+        path = tmp_path / "anatomy_pipe.wb.gz"
+        with _gzip.open(path, "wt") as handle:
+            handle.write(gaf)
+        parsed = parse_wb_anatomy_association(path)
+        assert parsed["WBGene00000003"] == {"WBbt:0005814"}
+
     def test_blank_and_partial_qualifiers_are_kept(self, anatomy_gaf):
         parsed = parse_wb_anatomy_association(anatomy_gaf)
         assert parsed["WBGene00000002"] == {"WBbt:0005772", "WBbt:0003679"}

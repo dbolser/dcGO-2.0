@@ -103,7 +103,9 @@ def _parse_wb_gaf(
             if has_not_qualifier(qualifier):
                 n_not += 1
                 continue
-            if qualifier in dropped_qualifiers:
+            # GAF qualifiers are |-separated lists; match against the tokens,
+            # not the whole field, so "NOT|Uncertain"-style compounds drop.
+            if dropped_qualifiers and dropped_qualifiers & set(qualifier.split("|")):
                 n_dropped_qualifier += 1
                 continue
             n_rows += 1
