@@ -26,6 +26,7 @@ from __future__ import annotations
 import io
 import zipfile
 from collections import defaultdict
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, Iterator, List, Optional, Set, Tuple
 
@@ -159,36 +160,89 @@ def parse_syngo_hierarchy(zip_path: Path) -> Dict[str, Set[str]]:
     return child_to_parents
 
 
+@dataclass(frozen=True)
+class HGNCResolution:
+    """How the annotated HGNC ids resolved to accessions, with audit counts.
+
+    Attributes:
+        gene_map: the composite map, restricted to the annotated genes.
+        n_genes: annotated HGNC ids considered.
+        n_by_id: resolved by their HGNC id (``DR HGNC`` match).
+        n_by_symbol: resolved by approved symbol, with no contradicting id.
+        n_symbol_conflicts: the symbol matched an entry, but every matched
+            entry cross-references a *different* HGNC id — a stale or
+            reassigned symbol that would bind another gene's protein, so the
+            match is rejected rather than trusted.
+        n_unresolved: genes no route resolved (these are the ids that then
+            appear in the remap coverage's ``unmapped_values``).
+    """
+
+    gene_map: GeneAccessionMap
+    n_genes: int = 0
+    n_by_id: int = 0
+    n_by_symbol: int = 0
+    n_symbol_conflicts: int = 0
+    n_unresolved: int = 0
+
+
 def resolve_hgnc_accessions(
     gene_terms: Dict[str, Set[str]],
     symbols: Dict[str, str],
     index: GeneAccessionIndex,
-) -> Tuple[GeneAccessionMap, int]:
-    """Resolve each annotated HGNC id to accessions, symbol as fallback.
+) -> HGNCResolution:
+    """Resolve each annotated HGNC id to accessions, symbol as guarded fallback.
 
-    Returns the composite :class:`GeneAccessionMap` restricted to the annotated
-    genes, plus how many of them only resolved through their symbol.
+    A symbol-only match is cross-checked against the matched entry's own
+    ``DR HGNC`` id: if the entry names a different gene, the symbol is stale
+    (an HGNC merge) or reassigned (another gene now owns it), and without HGNC
+    history the two cannot be told apart — so the match is rejected and
+    counted (``n_symbol_conflicts``) rather than silently binding a different
+    gene's protein. Since the symbol index is itself built from ``DR HGNC``
+    lines, this guard makes the fallback deliberately conservative.
     """
+    accession_ids: Dict[str, Set[str]] = defaultdict(set)
+    for hgnc_id, accessions in index.hgnc.source_to_accessions.items():
+        for accession in accessions:
+            accession_ids[accession].add(hgnc_id)
+
     resolved: Dict[str, Set[str]] = {}
-    n_symbol_fallback = 0
+    n_by_id = 0
+    n_by_symbol = 0
+    n_conflicts = 0
     for gene in gene_terms:
         accessions = index.hgnc.targets(gene)
-        if not accessions:
+        if accessions:
+            n_by_id += 1
+        else:
             symbol = symbols.get(gene, "")
-            accessions = index.symbol.targets(symbol) if symbol else set()
+            candidates = index.symbol.targets(symbol) if symbol else set()
+            accessions = {
+                accession
+                for accession in candidates
+                if not accession_ids.get(accession) or gene in accession_ids[accession]
+            }
             if accessions:
-                n_symbol_fallback += 1
+                n_by_symbol += 1
+            elif candidates:
+                n_conflicts += 1
         if accessions:
             resolved[gene] = accessions
-    if n_symbol_fallback:
-        logger.info(
-            f"  {n_symbol_fallback:,} HGNC ids resolved via their approved "
-            "symbol (no DR HGNC id match)"
-        )
-    return (
-        GeneAccessionMap("HGNC(+symbol)", resolved, index.hgnc.n_entries),
-        n_symbol_fallback,
+
+    resolution = HGNCResolution(
+        gene_map=GeneAccessionMap("HGNC(+symbol)", resolved, index.hgnc.n_entries),
+        n_genes=len(gene_terms),
+        n_by_id=n_by_id,
+        n_by_symbol=n_by_symbol,
+        n_symbol_conflicts=n_conflicts,
+        n_unresolved=len(gene_terms) - n_by_id - n_by_symbol,
     )
+    logger.info(
+        f"  HGNC resolution: {resolution.n_by_id:,} by id, "
+        f"{resolution.n_by_symbol:,} by symbol, "
+        f"{resolution.n_symbol_conflicts:,} symbol conflicts rejected, "
+        f"{resolution.n_unresolved:,} unresolved of {resolution.n_genes:,} genes"
+    )
+    return resolution
 
 
 class SynGOAnnotationSource(AnnotationSource):
@@ -206,16 +260,15 @@ class SynGOAnnotationSource(AnnotationSource):
         #: Populated by :meth:`parse`; its *values* are the HGNC ids, its
         #: *keys* the SynGO terms (see :func:`src.gene_mapping.remap_gene_annotations`).
         self.coverage: Optional[RemapCoverage] = None
-        #: HGNC ids that only resolved through their approved symbol.
-        self.n_symbol_fallback: int = 0
+        #: Populated by :meth:`parse`: how each HGNC id resolved (by id, by
+        #: guarded symbol fallback, rejected symbol conflict, or not at all).
+        self.resolution: Optional[HGNCResolution] = None
 
     def parse(self) -> Dict[str, Set[str]]:
         gene_terms, symbols = parse_syngo_annotations(self.zip_path)
         index = parse_gene_accession_index(self.dat_path)
-        gene_map, self.n_symbol_fallback = resolve_hgnc_accessions(
-            gene_terms, symbols, index
-        )
+        self.resolution = resolve_hgnc_accessions(gene_terms, symbols, index)
         remapped, self.coverage = remap_gene_annotations(
-            gene_terms, gene_map, label="HGNC→UniProt (SynGO)"
+            gene_terms, self.resolution.gene_map, label="HGNC→UniProt (SynGO)"
         )
         return remapped

@@ -20,9 +20,10 @@ from src.syngo_annotation_source import (
 )
 
 ANNOTATION_ROWS = [
-    # (hgnc_id, hgnc_symbol, go_id). HGNC:1 maps by id; HGNC:2 only by symbol;
-    # HGNC:9 maps to nothing. The uniprot_id column carries the (possibly
-    # non-human) evidence protein and must be ignored.
+    # (hgnc_id, hgnc_symbol, go_id). HGNC:1 maps by id; HGNC:2's symbol
+    # matches an entry that names a *different* HGNC id (a stale symbol —
+    # rejected); HGNC:9 maps to nothing. The uniprot_id column carries the
+    # (possibly non-human) evidence protein and must be ignored.
     ("HGNC:1", "GENE1", "Q00000", "GO:0045202"),
     ("HGNC:1", "GENE1", "Q00000", "SYNGO:presynapse_x"),
     ("HGNC:2", "GENE2", "Q11111", "GO:0045202"),
@@ -146,31 +147,54 @@ class TestParseSynGOHierarchy:
 
 
 class TestResolveHGNCAccessions:
-    def test_symbol_fallback_is_used_and_counted(self, zip_path, dat):
+    def test_conflicting_symbol_match_is_rejected_and_counted(self, zip_path, dat):
+        # P20002 carries symbol GENE2 but cross-references HGNC:22, not the
+        # row's HGNC:2 — a stale/reassigned symbol must not bind it.
         gene_terms, symbols = parse_syngo_annotations(zip_path)
         index = parse_gene_accession_index(dat)
-        gene_map, n_fallback = resolve_hgnc_accessions(gene_terms, symbols, index)
-        assert gene_map.targets("HGNC:1") == {"P20001"}  # by HGNC id
-        assert gene_map.targets("HGNC:2") == {"P20002"}  # by symbol only
-        assert gene_map.targets("HGNC:9") == set()
-        assert n_fallback == 1
+        resolution = resolve_hgnc_accessions(gene_terms, symbols, index)
+        assert resolution.gene_map.targets("HGNC:1") == {"P20001"}  # by HGNC id
+        assert resolution.gene_map.targets("HGNC:2") == set()  # rejected
+        assert resolution.gene_map.targets("HGNC:9") == set()
+        assert resolution.n_by_id == 1
+        assert resolution.n_by_symbol == 0
+        assert resolution.n_symbol_conflicts == 1
+        assert resolution.n_unresolved == 4  # HGNC:2, HGNC:3, HGNC:4, HGNC:9
+
+    def test_counts_partition_the_annotated_genes(self, zip_path, dat):
+        gene_terms, symbols = parse_syngo_annotations(zip_path)
+        index = parse_gene_accession_index(dat)
+        resolution = resolve_hgnc_accessions(gene_terms, symbols, index)
+        assert resolution.n_genes == len(gene_terms) == 5
+        assert (
+            resolution.n_by_id + resolution.n_by_symbol + resolution.n_unresolved
+            == resolution.n_genes
+        )
 
 
 class TestSynGOAnnotationSource:
     """End-to-end: HGNC-keyed xlsx in, accession-keyed SynGO terms out."""
 
     def test_parse_produces_accession_keyed_terms(self, zip_path, dat):
+        # Only HGNC:1 resolves; HGNC:2's symbol match is rejected as a
+        # conflict, so P20002 must not appear.
         source = SynGOAnnotationSource(zip_path, dat)
         assert source.parse() == {
             "P20001": {"GO:0045202", "SYNGO:presynapse_x"},
-            "P20002": {"GO:0045202"},
         }
 
-    def test_unmapped_gene_and_fallback_are_counted(self, zip_path, dat):
+    def test_unmapped_genes_and_resolution_are_counted(self, zip_path, dat):
         source = SynGOAnnotationSource(zip_path, dat)
+        assert source.resolution is None
         source.parse()
-        assert source.coverage.unmapped_values == ["HGNC:3", "HGNC:4", "HGNC:9"]
-        assert source.n_symbol_fallback == 1
+        assert source.coverage.unmapped_values == [
+            "HGNC:2",
+            "HGNC:3",
+            "HGNC:4",
+            "HGNC:9",
+        ]
+        assert source.resolution.n_symbol_conflicts == 1
+        assert source.resolution.n_unresolved == 4
 
     def test_spec_has_no_single_term_prefix(self, zip_path, dat):
         # SynGO terms mix GO: and SYNGO: ids, so the spec cannot pin one.
