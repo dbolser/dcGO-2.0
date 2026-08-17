@@ -53,6 +53,8 @@ CIVIC_TSV = "\n".join(
         row("JAK2 V617F", "1037", status="submitted"),
         # Leading zeros are part of the DOID id and must survive.
         row("ERBB2 Amplification", "0060079"),
+        # No gene token at all: the extraction stage's own counter.
+        row("", "1037"),
         "",
     ]
 )
@@ -169,10 +171,11 @@ class TestParseCIViCEvidence:
         gene_doids, counts = parse_civic_evidence(civic)
         assert gene_doids["JAK2"] == {"DOID:1037"}
         assert gene_doids["ABL1"] == {"DOID:8552"}
-        assert counts.n_rows == 8
+        assert counts.n_rows == 9
         assert counts.n_not_supports == 2  # Does Not Support + N/A
         assert counts.n_not_accepted == 1
         assert counts.n_no_doid == 1
+        assert counts.n_no_gene == 1  # its own stage, not folded into no-DOID
         assert counts.n_kept == 4
 
     def test_leading_zeros_survive_the_doid_prefix(self, civic):
@@ -203,6 +206,29 @@ class TestDiseaseMappings:
         vocabulary = parse_oncotree(oncotree_json)
         assert vocabulary.child_to_parents["ALL"] == {"LYMPH"}
         assert vocabulary.child_to_parents["LYMPH"] == {"TISSUE"}
+
+    def test_oncotree_parse_is_shared_per_file(self, oncotree_json):
+        # The annotation chain and the hierarchy both need the dump; one
+        # parse serves both.
+        assert parse_oncotree(oncotree_json) is parse_oncotree(oncotree_json)
+
+    def test_oncotree_envelope_json_fails_loudly(self, tmp_path):
+        path = tmp_path / "error.json"
+        path.write_text(json.dumps({"error": "service unavailable"}))
+        with pytest.raises(ValueError, match="error.json"):
+            parse_oncotree(path)
+
+    def test_oncotree_non_object_entries_fail_loudly(self, tmp_path):
+        path = tmp_path / "strings.json"
+        path.write_text(json.dumps(["ALL", "LYMPH"]))
+        with pytest.raises(ValueError, match="node objects"):
+            parse_oncotree(path)
+
+    def test_oncotree_codeless_nodes_fail_loudly(self, tmp_path):
+        path = tmp_path / "codeless.json"
+        path.write_text(json.dumps([{"name": "no code here"}]))
+        with pytest.raises(ValueError, match="code"):
+            parse_oncotree(path)
 
 
 class TestCIViCNCItAnnotationSource:

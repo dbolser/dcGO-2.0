@@ -12,6 +12,7 @@ from src.disease_ontology import (
     MONDO_SPEC,
     DiseaseOntologyAnnotationSource,
     build_doid_xref_map,
+    build_doid_xref_maps,
     remap_protein_terms,
 )
 from src.hierarchy import closure_ancestors, parse_obo_child_parents
@@ -149,6 +150,15 @@ class TestBuildXrefMap:
 
     def test_orphanet_prefix_uses_the_same_machinery(self, obo):
         assert build_doid_xref_map(obo, "ORDO").targets("900") == {"DOID:100"}
+
+    def test_multiple_prefixes_come_from_one_pass(self, obo):
+        # The OncoTree chain needs NCI and UMLS_CUI from the same file; the
+        # multi-prefix form must agree with the single-prefix calls.
+        mappings = build_doid_xref_maps(obo, ("MIM", "ORDO"))
+        assert mappings["MIM"].targets("100") == {"DOID:100"}
+        assert mappings["ORDO"].targets("900") == {"DOID:100"}
+        assert mappings["MIM"].n_xrefs == 7
+        assert mappings["ORDO"].n_xrefs == 1
 
     def test_missing_file_fails_loudly(self, tmp_path):
         with pytest.raises(FileNotFoundError):

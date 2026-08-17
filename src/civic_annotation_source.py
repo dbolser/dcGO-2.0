@@ -56,13 +56,14 @@ import json
 import re
 from collections import defaultdict
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Dict, Optional, Set, Tuple
 
 from loguru import logger
 
 from src.annotation_source import AnnotationSource, OntologySpec
-from src.disease_ontology import build_doid_xref_map
+from src.disease_ontology import build_doid_xref_map, build_doid_xref_maps
 from src.gene_mapping import parse_gene_accession_index, remap_gene_annotations
 from src.remap import RemapCoverage, remap_values
 
@@ -86,6 +87,8 @@ class CIViCFilterCounts:
         n_not_accepted: rows whose status was not ``accepted`` (0 in the
             nightly, counted defensively).
         n_no_doid: rows with an empty DOID column.
+        n_no_gene: rows whose molecular-profile name yielded no gene token —
+            its own counter so the audit names the stage that dropped the row.
         n_kept: rows contributing at least one (gene, DOID) pair.
     """
 
@@ -93,6 +96,7 @@ class CIViCFilterCounts:
     n_not_supports: int = 0
     n_not_accepted: int = 0
     n_no_doid: int = 0
+    n_no_gene: int = 0
     n_kept: int = 0
 
 
@@ -124,7 +128,7 @@ def parse_civic_evidence(
 
     logger.info(f"Parsing CIViC clinical evidence from {path}")
     gene_terms: Dict[str, Set[str]] = defaultdict(set)
-    n_rows = n_not_supports = n_not_accepted = n_no_doid = n_kept = 0
+    n_rows = n_not_supports = n_not_accepted = n_no_doid = n_no_gene = n_kept = 0
     with open(path, "rt", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle, delimiter="\t")
         missing = {"molecular_profile", "doid", "evidence_direction"} - set(
@@ -149,7 +153,7 @@ def parse_civic_evidence(
                 continue
             genes = genes_of_molecular_profile(row["molecular_profile"] or "")
             if not genes:
-                n_no_doid += 1
+                n_no_gene += 1
                 continue
             n_kept += 1
             for gene in genes:
@@ -160,12 +164,14 @@ def parse_civic_evidence(
         n_not_supports=n_not_supports,
         n_not_accepted=n_not_accepted,
         n_no_doid=n_no_doid,
+        n_no_gene=n_no_gene,
         n_kept=n_kept,
     )
     logger.info(
         f"  Rows: {counts.n_rows:,}; not 'Supports': {counts.n_not_supports:,}; "
         f"not accepted: {counts.n_not_accepted:,}; no DOID: "
-        f"{counts.n_no_doid:,}; kept: {counts.n_kept:,}"
+        f"{counts.n_no_doid:,}; no gene token: {counts.n_no_gene:,}; "
+        f"kept: {counts.n_kept:,}"
     )
     logger.info(
         f"  Genes: {len(gene_terms):,}; diseases: "
@@ -222,13 +228,35 @@ class OncoTreeVocabulary:
     n_nodes: int = 0
 
 
-def parse_oncotree(path: Path) -> OncoTreeVocabulary:
-    """Parse the OncoTree API's tumour-types JSON."""
-    path = Path(path)
+@lru_cache(maxsize=8)
+def _load_oncotree(path_str: str) -> OncoTreeVocabulary:
+    """Parse and validate one OncoTree dump; memoised so the ``oncotree``
+    entry's annotation chain and hierarchy share a single parse per file."""
+    path = Path(path_str)
     if not path.exists():
         raise FileNotFoundError(f"OncoTree tumour-types JSON not found: {path}")
     with open(path, "rt", encoding="utf-8") as handle:
         nodes = json.load(handle)
+    # The API can serve an error/envelope object instead of the node list;
+    # accepting it would AttributeError on a string node or, worse, silently
+    # build an empty vocabulary. Validate the shape and name the file.
+    if not isinstance(nodes, list) or not nodes:
+        raise ValueError(
+            f"{path} does not look like the OncoTree tumorTypes dump: expected "
+            f"a non-empty JSON list of node objects, got "
+            f"{type(nodes).__name__}"
+        )
+    bad = next((node for node in nodes if not isinstance(node, dict)), None)
+    if bad is not None:
+        raise ValueError(
+            f"{path} does not look like the OncoTree tumorTypes dump: list "
+            f"entries should be node objects, found {type(bad).__name__}"
+        )
+    if not any("code" in node for node in nodes):
+        raise ValueError(
+            f"{path} does not look like the OncoTree tumorTypes dump: no "
+            "entry carries a 'code' field"
+        )
     child_to_parents: Dict[str, Set[str]] = {}
     nci_to_codes: Dict[str, Set[str]] = defaultdict(set)
     umls_to_codes: Dict[str, Set[str]] = defaultdict(set)
@@ -258,6 +286,11 @@ def parse_oncotree(path: Path) -> OncoTreeVocabulary:
     return vocabulary
 
 
+def parse_oncotree(path: Path) -> OncoTreeVocabulary:
+    """Parse the OncoTree API's tumour-types JSON (validated, memoised)."""
+    return _load_oncotree(str(Path(path)))
+
+
 def parse_oncotree_child_parents(path: Path) -> Dict[str, Set[str]]:
     """The OncoTree hierarchy alone, for the registry's ancestors/parents."""
     return parse_oncotree(path).child_to_parents
@@ -269,16 +302,17 @@ def build_doid_to_oncotree_map(
     """``{DOID term → {OncoTree code}}`` via NCI and UMLS cross-references.
 
     DO carries no OncoTree xref, so a DOID reaches a code when the two agree
-    on an NCI Thesaurus id or a UMLS CUI (union of both routes).
+    on an NCI Thesaurus id or a UMLS CUI (union of both routes; both xref
+    namespaces come from one pass over doid.obo).
     """
     vocabulary = parse_oncotree(oncotree_path)
+    mappings = build_doid_xref_maps(doid_obo_path, ("NCI", "UMLS_CUI"))
     doid_to_codes: Dict[str, Set[str]] = defaultdict(set)
     for prefix, reverse_index in (
         ("NCI", vocabulary.nci_to_codes),
         ("UMLS_CUI", vocabulary.umls_to_codes),
     ):
-        mapping = build_doid_xref_map(doid_obo_path, prefix)
-        for external_id, doids in mapping.source_to_doids.items():
+        for external_id, doids in mappings[prefix].source_to_doids.items():
             codes = reverse_index.get(external_id)
             if codes:
                 for doid in doids:

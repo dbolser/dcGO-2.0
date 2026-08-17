@@ -161,36 +161,44 @@ def _resolve_replacement(
     return current
 
 
-def build_doid_xref_map(path: Path, xref_prefix: str = "MIM") -> XrefMapping:
-    """Build ``{external id → {term}}`` from the ``xref`` lines of an OBO file.
+def build_doid_xref_maps(
+    path: Path, xref_prefixes: Tuple[str, ...]
+) -> Dict[str, XrefMapping]:
+    """Build one :class:`XrefMapping` per prefix from a single pass over an OBO.
 
-    Written for ``doid.obo`` and generic over any OBO that cross-references an
-    external catalogue on its term stanzas — ``mondo.obo`` uses the identical
+    Written for ``doid.obo`` and generic over any OBO that cross-references
+    external catalogues on its term stanzas — ``mondo.obo`` uses the identical
     machinery (only the prefixes differ, and trailing ``{source=...}``
-    qualifiers are ignored by the xref pattern).
+    qualifiers are ignored by the xref pattern). Accepting several prefixes at
+    once exists for the chains that need two namespaces from the same file
+    (the OncoTree route reads DO's ``NCI`` *and* ``UMLS_CUI`` xrefs): the file
+    is scanned once, not once per prefix.
 
     Args:
         path: the ontology OBO file.
-        xref_prefix: which cross-reference namespace to index. For DO,
+        xref_prefixes: which cross-reference namespaces to index. For DO,
             ``"MIM"`` is OMIM (the prefix in the OBO is ``MIM``, *not*
             ``OMIM``) and ``"ORDO"`` is Orphanet; Mondo writes the same two
             namespaces as ``"OMIM"`` and ``"Orphanet"``.
 
     Returns:
-        an :class:`XrefMapping` whose targets are live (non-obsolete) terms
-        only, plus the counts needed to audit what the mapping dropped or
+        ``{prefix: XrefMapping}`` whose targets are live (non-obsolete) terms
+        only, plus the counts needed to audit what each mapping dropped or
         duplicated.
     """
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"Disease Ontology OBO not found: {path}")
 
+    wanted = set(xref_prefixes)
     # Pass 1: collect every stanza's id, obsolete flag, replacement and xrefs.
-    raw_xrefs: Dict[str, Set[str]] = defaultdict(set)  # source id → DO terms
+    raw_xrefs: Dict[str, Dict[str, Set[str]]] = {
+        prefix: defaultdict(set) for prefix in xref_prefixes
+    }
+    n_xrefs: Dict[str, int] = dict.fromkeys(xref_prefixes, 0)
     obsolete: Set[str] = set()
     replaced_by: Dict[str, str] = {}
     n_terms = 0
-    n_xrefs = 0
 
     term_id: Optional[str] = None
     in_term = False
@@ -215,62 +223,75 @@ def build_doid_xref_map(path: Path, xref_prefix: str = "MIM") -> XrefMapping:
             elif (match := _REPLACED_BY_RE.match(line)) is not None:
                 replaced_by[term_id] = match.group(1)
             elif (match := _XREF_RE.match(line)) is not None:
-                if match.group(1) == xref_prefix:
-                    raw_xrefs[match.group(2)].add(term_id)
-                    n_xrefs += 1
+                if match.group(1) in wanted:
+                    raw_xrefs[match.group(1)][match.group(2)].add(term_id)
+                    n_xrefs[match.group(1)] += 1
 
-    # Pass 2: resolve obsolete targets and record what each decision cost.
-    source_to_doids: Dict[str, Set[str]] = {}
-    n_obsolete_resolved = 0
-    n_obsolete_dropped = 0
-    without_target: Set[str] = set()
+    mappings: Dict[str, XrefMapping] = {}
+    for xref_prefix in xref_prefixes:
+        # Pass 2: resolve obsolete targets and record what each decision cost.
+        source_to_doids: Dict[str, Set[str]] = {}
+        n_obsolete_resolved = 0
+        n_obsolete_dropped = 0
+        without_target: Set[str] = set()
 
-    for source_id, targets in raw_xrefs.items():
-        live: Set[str] = set()
-        for target in targets:
-            if target not in obsolete:
-                live.add(target)
-                continue
-            replacement = _resolve_replacement(target, replaced_by, obsolete)
-            if replacement is None:
-                n_obsolete_dropped += 1
+        for source_id, targets in raw_xrefs[xref_prefix].items():
+            live: Set[str] = set()
+            for target in targets:
+                if target not in obsolete:
+                    live.add(target)
+                    continue
+                replacement = _resolve_replacement(target, replaced_by, obsolete)
+                if replacement is None:
+                    n_obsolete_dropped += 1
+                else:
+                    n_obsolete_resolved += 1
+                    live.add(replacement)
+            if live:
+                source_to_doids[source_id] = live
             else:
-                n_obsolete_resolved += 1
-                live.add(replacement)
-        if live:
-            source_to_doids[source_id] = live
-        else:
-            without_target.add(source_id)
+                without_target.add(source_id)
 
-    n_non_numeric = sum(1 for source_id in raw_xrefs if not source_id.isdigit())
-    n_one_to_many = sum(1 for targets in source_to_doids.values() if len(targets) > 1)
+        n_non_numeric = sum(
+            1 for source_id in raw_xrefs[xref_prefix] if not source_id.isdigit()
+        )
+        n_one_to_many = sum(
+            1 for targets in source_to_doids.values() if len(targets) > 1
+        )
 
-    mapping = XrefMapping(
-        xref_prefix=xref_prefix,
-        source_to_doids=source_to_doids,
-        n_terms=n_terms,
-        n_obsolete_terms=len(obsolete),
-        n_xrefs=n_xrefs,
-        n_source_ids=len(raw_xrefs),
-        n_non_numeric=n_non_numeric,
-        n_one_to_many=n_one_to_many,
-        n_obsolete_resolved=n_obsolete_resolved,
-        n_obsolete_dropped=n_obsolete_dropped,
-        source_ids_without_target=frozenset(without_target),
-    )
-    logger.info(
-        f"Parsed {xref_prefix} cross-references from {path}: "
-        f"{mapping.n_terms:,} terms ({mapping.n_obsolete_terms:,} obsolete), "
-        f"{mapping.n_xrefs:,} {xref_prefix} xrefs over {mapping.n_source_ids:,} "
-        f"distinct ids → {len(mapping):,} mappable"
-    )
-    logger.info(
-        f"  one-to-many: {mapping.n_one_to_many:,} ids map to >1 term (kept, "
-        f"expanded); non-numeric (phenotypic series): {mapping.n_non_numeric:,}; "
-        f"obsolete targets: {mapping.n_obsolete_resolved:,} resolved via "
-        f"replaced_by, {mapping.n_obsolete_dropped:,} dropped"
-    )
-    return mapping
+        mapping = XrefMapping(
+            xref_prefix=xref_prefix,
+            source_to_doids=source_to_doids,
+            n_terms=n_terms,
+            n_obsolete_terms=len(obsolete),
+            n_xrefs=n_xrefs[xref_prefix],
+            n_source_ids=len(raw_xrefs[xref_prefix]),
+            n_non_numeric=n_non_numeric,
+            n_one_to_many=n_one_to_many,
+            n_obsolete_resolved=n_obsolete_resolved,
+            n_obsolete_dropped=n_obsolete_dropped,
+            source_ids_without_target=frozenset(without_target),
+        )
+        logger.info(
+            f"Parsed {xref_prefix} cross-references from {path}: "
+            f"{mapping.n_terms:,} terms ({mapping.n_obsolete_terms:,} obsolete), "
+            f"{mapping.n_xrefs:,} {xref_prefix} xrefs over "
+            f"{mapping.n_source_ids:,} distinct ids → {len(mapping):,} mappable"
+        )
+        logger.info(
+            f"  one-to-many: {mapping.n_one_to_many:,} ids map to >1 term (kept, "
+            f"expanded); non-numeric (phenotypic series): "
+            f"{mapping.n_non_numeric:,}; obsolete targets: "
+            f"{mapping.n_obsolete_resolved:,} resolved via replaced_by, "
+            f"{mapping.n_obsolete_dropped:,} dropped"
+        )
+        mappings[xref_prefix] = mapping
+    return mappings
+
+
+def build_doid_xref_map(path: Path, xref_prefix: str = "MIM") -> XrefMapping:
+    """One-prefix convenience over :func:`build_doid_xref_maps`."""
+    return build_doid_xref_maps(path, (xref_prefix,))[xref_prefix]
 
 
 def remap_protein_terms(
