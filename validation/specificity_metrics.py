@@ -19,9 +19,11 @@ inference can never test it).
 The corresponding numbers in ``VALIDATION_PLAN.md`` (28.6% / 55.2% / 82.4%)
 were computed ad hoc; this module makes them reproducible, including the
 ``--min-ic`` sweep over the pipeline's exported ``ic`` column. The floor is
-applied after BH in the pipeline, so filtering the unfloored table on that
-column is *exactly* the floored run's reported set — one pipeline run yields
-the whole sweep:
+applied after BH in the pipeline, and the column is written at full precision
+(``%.10g``) so the comparison here sees the same values the in-run floor
+compared — filtering the unfloored table on that column is *exactly* the
+floored run's reported set, floor boundaries included. One pipeline run
+yields the whole sweep:
 
     uv run python validation/specificity_metrics.py \\
         --associations results/domain_go_associations_significant.tsv \\

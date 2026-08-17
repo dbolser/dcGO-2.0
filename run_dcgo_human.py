@@ -1722,7 +1722,10 @@ def main(argv: list[str] | None = None) -> int:
                 f"{pvalues[idx]:.6e}\t{adjusted_pvalues[idx]:.6e}\t{odds_ratios[idx]:.4f}\t"
                 f"{or_low:.4f}\t{or_high:.4f}\t{hyper_score:.2f}\t"
                 f"{meta.domain_type.value}\t{constituents}\t{meta.observation_count}\t"
-                f"{a}\t{b}\t{c}\t{d}\t{pair_ic[idx]:.4f}"
+                # ic at full precision (%.10g): the in-run floor compares
+                # float64, so sweeping this column must equal a floored run
+                # exactly, including at floor boundaries.
+                f"{a}\t{b}\t{c}\t{d}\t{pair_ic[idx]:.10g}"
                 f"{xref_field(domain_id)}\n"
             )
 
@@ -1762,7 +1765,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"{rank}\t{domain_id}\t{go_list[go_idx]}\t"
                 f"{pvalues[idx]:.6e}\t{adjusted_pvalues[idx]:.6e}\t{odds_ratios[idx]:.4f}\t{hyper_score:.2f}\t"
                 f"{meta.domain_type.value}\t{constituents}\t{meta.observation_count}\t"
-                f"{pair_ic[idx]:.4f}"
+                f"{pair_ic[idx]:.10g}"
                 f"{xref_field(domain_id)}\n"
             )
 
@@ -1798,7 +1801,7 @@ def main(argv: list[str] | None = None) -> int:
                 f.write(
                     f"{ann.domain}\t{ann.go_term}\t{ann.q_value:.6e}\t{ann.association_score:.2f}\t"
                     f"{ann.annotation_type}\t{ann.direct_source_term}\t"
-                    f"{term_ic.get(ann.go_term, 0.0):.4f}\n"
+                    f"{term_ic.get(ann.go_term, 0.0):.10g}\n"
                 )
 
         logger.info(
