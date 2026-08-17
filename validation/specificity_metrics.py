@@ -37,7 +37,7 @@ import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Iterable, Mapping
+from typing import Callable, Iterable
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(_PROJECT_ROOT) not in sys.path:
@@ -97,19 +97,25 @@ def specificity_metrics(
 
 def load_association_rows(
     path: Path, term_column: str = "go_term"
-) -> list[Mapping[str, str]]:
-    """Rows of a runner-written association TSV, keyed by header name."""
+) -> tuple[list[dict[str, str]], list[str]]:
+    """Rows and header of a runner-written association TSV.
+
+    The header comes back separately (``DictReader.fieldnames``) so callers
+    can validate columns on an empty-but-valid table — a header-only TSV is a
+    legitimate zero-association run, not a schema error.
+    """
     import csv
 
     with open(path, newline="") as handle:
         reader = csv.DictReader(handle, delimiter="\t")
+        fieldnames = list(reader.fieldnames or [])
         rows = list(reader)
-    if rows and term_column not in rows[0]:
-        raise SystemExit(f"{path}: no {term_column!r} column in header {list(rows[0])}")
-    return rows
+    if term_column not in fieldnames:
+        raise SystemExit(f"{path}: no {term_column!r} column in header {fieldnames}")
+    return rows, fieldnames
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     import argparse
 
     parser = argparse.ArgumentParser(
@@ -154,18 +160,38 @@ def main() -> int:
         "pipeline applies --min-ic after BH, each floored view here is exactly "
         "that floored run's reported set (default: 0, no floor)",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     from src.ontology_processor import OntologyProcessor
 
-    rows = load_association_rows(args.associations, args.term_column)
+    rows, fieldnames = load_association_rows(args.associations, args.term_column)
     if args.domain_type != "any":
-        rows = [
-            r
-            for r in rows
-            if (r.get("domain_type") == "single") == (args.domain_type == "single")
-        ]
-    if any(floor > 0 for floor in args.min_ic) and (not rows or "ic" not in rows[0]):
+        if "domain_type" not in fieldnames:
+            raise SystemExit(
+                f"{args.associations}: --domain-type needs a domain_type "
+                f"column; header is {fieldnames}"
+            )
+        # The runner writes DomainType values; anything else (a missing cell,
+        # a foreign table) must fail loudly rather than land in a family by
+        # accident of a truth-table trick.
+        known_types = {"single", "supra_pair", "supra_triple"}
+        unrecognised = {r["domain_type"] for r in rows} - known_types
+        if unrecognised:
+            raise SystemExit(
+                f"{args.associations}: unrecognised domain_type values "
+                f"{sorted(str(v) for v in unrecognised)}; "
+                f"expected {sorted(known_types)}"
+            )
+        wanted = (
+            {"single"}
+            if args.domain_type == "single"
+            else {"supra_pair", "supra_triple"}
+        )
+        rows = [r for r in rows if r["domain_type"] in wanted]
+    # Validated on the header, not rows[0]: an empty-but-valid TSV (a run with
+    # zero significant associations) sweeps to zero-count rows, it does not
+    # crash or masquerade as a schema problem.
+    if any(floor > 0 for floor in args.min_ic) and "ic" not in fieldnames:
         raise SystemExit(
             f"{args.associations}: a --min-ic sweep needs the ic column "
             "(written by runs since the --min-ic feature)"
@@ -177,6 +203,26 @@ def main() -> int:
         if term not in processor.go_graph:
             return set()
         return processor.get_ancestors(term)
+
+    # A table measured against the wrong ontology looks *perfect* — every term
+    # contributes an empty closure, so 0.0% on-chain and no roots. Refuse the
+    # vacuous case outright and flag partial mismatches.
+    table_terms = {r[args.term_column] for r in rows}
+    if table_terms:
+        known_terms = sum(1 for term in table_terms if term in processor.go_graph)
+        if known_terms == 0:
+            raise SystemExit(
+                f"{args.associations}: none of its {len(table_terms):,} distinct "
+                f"terms are in {args.obo} — wrong ontology for this table; every "
+                "metric would be a vacuous zero"
+            )
+        if known_terms / len(table_terms) < 0.5:
+            print(
+                f"WARNING: only {known_terms:,}/{len(table_terms):,} distinct "
+                f"terms are in {args.obo}; the metrics treat the rest as having "
+                "no ancestors",
+                file=sys.stderr,
+            )
 
     print("min_ic\tsignificant\tmean_ancestors\ton_chain_share\troots_present")
     for floor in args.min_ic:
