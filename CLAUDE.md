@@ -193,9 +193,16 @@ tables); enumerating co-occurring pairs makes it 9.5M tables and 268 s.
   filter it used to run alongside for GO is the paper's separate *relative
   inference* (Step 2, vs. the true-path rule at Step 3) and is now
   `--enable-relative-inference`, available for all 12 ontologies with a
-  hierarchy, and it *removes* associations rather than adding them. Our version is still a post-hoc `alpha < 0.05` filter
-  applied after BH, where the paper combines the overall and relative p-values
-  *before* correcting; that gap is VALIDATION_PLAN next-steps item 2.
+  hierarchy, and it *removes* associations rather than adding them.
+- **Relative inference now matches the paper** (was VALIDATION_PLAN next-steps
+  item 2). It runs *before* the BH correction: each candidate pair gets a
+  parental-background p-value, and BH corrects `max(overall_p, relative_p)` —
+  an intersection-union statistic, hence a valid p-value without further
+  correction. The reported h-score is correspondingly `min(overall, relative)`.
+  It was previously a post-hoc `alpha < 0.05` filter applied after BH, which
+  gave the relative dimension no FDR control at all. On human GO single domains
+  this takes FDR<0.01 associations from 44,453 to **3,876**, because the
+  relative p-value is now held to the same standard as the overall one.
 - **The §4 ablation cannot attribute its True Path result to either stage.** It
   was run when one flag drove both, so "the True Path Rule is significantly
   worse in 12/12 cells" is a statement about filter-plus-propagation, measured

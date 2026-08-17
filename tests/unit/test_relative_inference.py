@@ -288,3 +288,130 @@ class TestGuards:
             filter_by_parental_background(
                 [Assoc("IPR_A", "T:leaf")], {}, {}, parents_of, ancestors_of
             )
+
+
+class TestVectorisedMatchesTheLoop:
+    """The pre-BH path must compute the same p-values as the post-hoc one.
+
+    The loop tests a handful of already-significant associations with scipy and
+    set algebra; the vectorised path tests every co-occurring pair with sparse
+    matmuls. They must agree exactly, or "combine before BH" is not the same
+    statistic the filter was applying.
+    """
+
+    @staticmethod
+    def _vectorised(protein_domains, protein_terms, min_background_size=3):
+        from src.relative_inference import compute_relative_p_values
+        from src.sparse_fisher import (
+            build_sparse_matrices,
+            compute_cooccurring_contingency_tables,
+        )
+
+        domain_list = sorted({d for ds in protein_domains.values() for d in ds})
+        term_list = sorted({t for ts in protein_terms.values() for t in ts})
+        pdm, ptm, _ = build_sparse_matrices(
+            {p: set(ds) for p, ds in protein_domains.items()},
+            protein_terms,
+            domain_list,
+            term_list,
+        )
+        _, pair_index, _ = compute_cooccurring_contingency_tables(pdm, ptm)
+        relative_p, _tables, rejections = compute_relative_p_values(
+            pdm,
+            ptm,
+            pair_index,
+            term_list,
+            parents_of,
+            ancestors_of,
+            min_background_size=min_background_size,
+        )
+        n_terms = len(term_list)
+        by_pair = {
+            (domain_list[int(idx) // n_terms], term_list[int(idx) % n_terms]): p
+            for idx, p in zip(pair_index, relative_p)
+        }
+        return by_pair, rejections
+
+    @staticmethod
+    def _loop(protein_domains, protein_terms, pairs, min_background_size=3):
+        index = BackgroundIndex(protein_domains, protein_terms, ancestors_of)
+        return {
+            (domain, term): relative_p_value(
+                domain, term, index, parents_of, min_background_size
+            )
+            for domain, term in pairs
+        }
+
+    def test_every_cooccurring_pair_agrees(self, maps):
+        protein_domains, protein_terms = maps
+        vectorised, _ = self._vectorised(protein_domains, protein_terms)
+        looped = self._loop(protein_domains, protein_terms, vectorised)
+
+        assert vectorised.keys() == looped.keys()
+        for pair, p in sorted(vectorised.items()):
+            assert p == pytest.approx(looped[pair], abs=1e-12), pair
+
+    def test_untestable_parents_become_p_one(self, maps):
+        """The vectorised spelling of the loop's conservative rejection."""
+        protein_domains, protein_terms = maps
+        vectorised, rejections = self._vectorised(
+            protein_domains, protein_terms, min_background_size=99
+        )
+        assert rejections["InsufficientBackgroundError"] > 0
+        # Every term here has a parent, so nothing escapes the guard.
+        assert set(vectorised.values()) == {1.0}
+
+    def test_a_root_term_scores_zero(self, maps):
+        """max(overall, 0.0) leaves a parentless term to the overall inference."""
+        protein_domains, protein_terms = maps
+        # Annotate directly to the root so it becomes a column of its own.
+        terms = dict(protein_terms)
+        terms["P1"] = {"T:root"}
+        vectorised, _ = self._vectorised(protein_domains, terms)
+        assert vectorised[("IPR_A", "T:root")] == 0.0
+
+
+class TestPropagatedTermMatrix:
+    def test_ancestors_absent_from_the_annotation_map_gain_a_column(self, maps):
+        """The #46 defect in matrix form: a parent nobody is annotated to.
+
+        Nothing is annotated to T:root directly, so it is not a column of the
+        annotation matrix. Without extending the axis it would have an empty
+        background and every child of it would be rejected untested.
+        """
+        from src.relative_inference import build_propagated_term_matrix
+        from src.sparse_fisher import build_sparse_matrices
+
+        protein_domains, protein_terms = maps
+        term_list = sorted({t for ts in protein_terms.values() for t in ts})
+        assert "T:root" not in term_list
+
+        _, ptm, _ = build_sparse_matrices(
+            {p: set(ds) for p, ds in protein_domains.items()},
+            protein_terms,
+            sorted({d for ds in protein_domains.values() for d in ds}),
+            term_list,
+        )
+        propagated, extended, index_of = build_propagated_term_matrix(
+            ptm, term_list, ancestors_of
+        )
+        assert "T:root" in index_of
+        counts = propagated.sum(axis=0).A1
+        assert counts[index_of["T:root"]] == len(protein_terms)
+        assert counts[index_of["T:mid"]] == 8
+
+    def test_multiple_routes_to_one_ancestor_count_the_protein_once(self):
+        """A binary matrix, not a multiplicity count."""
+        from src.relative_inference import build_propagated_term_matrix
+        from src.sparse_fisher import build_sparse_matrices
+
+        # Both children of T:root, one protein annotated to both.
+        protein_terms = {"P1": {"T:mid", "T:other"}}
+        term_list = ["T:mid", "T:other"]
+        _, ptm, _ = build_sparse_matrices(
+            {"P1": {"IPR_A"}}, protein_terms, ["IPR_A"], term_list
+        )
+        propagated, _, index_of = build_propagated_term_matrix(
+            ptm, term_list, ancestors_of
+        )
+        assert propagated.sum(axis=0).A1[index_of["T:root"]] == 1

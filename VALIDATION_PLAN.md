@@ -62,12 +62,15 @@ terms. Remaining, in rough priority:
    against the *current* InterPro2GO. Fetch a dated (~2021) `interpro2go` and pass
    it as `--reference` so it becomes a true held-out temporal test (mirrors §2 on
    the domain side). Small.
-2. **Fold the method into the pipeline (paper-parity, end-to-end).** The relative
-   inference + p-score are applied post-hoc here. Wire the relative
-   (parental-background) test into `run_dcgo_human.py` inference itself (combine
-   overall/relative then FDR<1e-3, per the paper — currently a post-hoc
-   `alpha<0.05` filter), and expose the p-score predictor as the standard
-   protein-prediction path. Makes "dcGO-2.0 == dcGO Predictor" defensible.
+2. ~~**Fold the relative inference into the pipeline (paper parity).**~~ —
+   **done.** `--enable-relative-inference` now computes a parental-background
+   p-value for every candidate pair *before* the FDR correction and applies BH
+   to `max(overall_p, relative_p)`, with `min(overall, relative)` as the
+   h-score, exactly as the paper specifies. It was a post-hoc `alpha<0.05`
+   filter, which gave the relative dimension no FDR control. On human GO single
+   domains, FDR<0.01 associations go 44,453 → 3,876.
+   *(The p-score protein-prediction path is deliberately **not** pursued: the
+   deliverable is domain→term annotation, not protein-centric prediction.)*
 3. **§4 ablation** — now that the yardstick is trusted, run the temporal benchmark
    per pipeline config (single-domain / +supra / +shrinkage / +TPR).
 4. ~~**§3 original-dcGO comparison**~~ — **done** (2026-08-04), see §3.1.

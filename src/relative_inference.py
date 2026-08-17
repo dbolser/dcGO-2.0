@@ -17,16 +17,26 @@ characteristic way:
 * Relative alone rests on a background that can be small and idiosyncratic, and
   root terms have no parents to test against at all.
 
-The module implements the *test*. How its verdict is combined with the overall
-p-value is the caller's business, and the two current callers differ:
+The paper combines the two inferences by taking ``max(overall_p, relative_p)``
+and applying BH to *that*. The maximum is an intersection-union statistic: the
+null is "fails at least one inference", rejecting requires rejecting both, and
+the maximum of the individual p-values is itself a valid p-value for that null
+with no multiplicity correction (Berger 1982). So it is exactly the quantity BH
+is entitled to correct — which is why the combination has to happen *before* the
+correction, not as a filter afterwards.
 
-* ``run_dcgo_human.py --enable-relative-inference`` applies it as a post-hoc
-  ``alpha`` filter after BH. **This is not the paper's method** — the paper
-  takes ``max(overall_p, relative_p)`` (an intersection-union statistic, valid
-  as a p-value without correction) and applies BH to that. Tracked as
-  ``VALIDATION_PLAN.md`` next-steps item 2.
-* Callers wanting paper parity should use :func:`relative_p_values` and combine
-  before correcting.
+Two implementations of the same test live here:
+
+* :func:`compute_relative_p_values` — vectorised over every co-occurring pair,
+  via sparse matmuls. This is what ``run_dcgo_human.py`` uses, because paper
+  parity needs a relative p-value for all ~10^6-10^7 candidate pairs.
+* :func:`relative_p_value` and friends — the scalar, set-algebra reference
+  implementation. Kept because it is obviously correct by inspection and the
+  vectorised path is validated against it, pair for pair, in the tests.
+
+:func:`filter_by_parental_background` applies the test as a post-hoc ``alpha``
+filter instead. That is **not** the paper's method and is no longer reachable
+from the CLI; it survives only as the scalar path's driver.
 
 Hierarchy access is injected as two functions — ``parents_fn`` (direct parents,
 what the test ranges over) and ``ancestors_fn`` (transitive, what the background
@@ -36,7 +46,12 @@ use this, not only GO.
 
 from __future__ import annotations
 
-from typing import Callable, Dict, Iterable, List, Sequence, Set, Tuple
+from typing import TYPE_CHECKING, Callable, Dict, Iterable, List, Sequence, Set, Tuple
+
+import numpy as np
+
+if TYPE_CHECKING:
+    from scipy import sparse
 
 from loguru import logger
 from scipy.stats import fisher_exact
@@ -291,3 +306,210 @@ def filter_by_parental_background(
             "expects."
         )
     return kept
+
+
+# ---------------------------------------------------------------------------- #
+# Vectorised path: relative p-values for every enumerated pair, before BH       #
+# ---------------------------------------------------------------------------- #
+#
+# The loop above tests a handful of already-significant associations. Paper
+# parity needs the relative p-value for *every* co-occurring pair, because the
+# quantity BH corrects is ``max(overall_p, relative_p)`` — so the loop's ~10^4
+# scipy calls become ~10^6-10^7 and have to be vectorised.
+#
+# The algebra collapses nicely. Under the True Path Rule a child's proteins are
+# a subset of its parent's, so within the parent background:
+#
+#     a = |proteins(d) & proteins(c)|            (propagated co-occurrence)
+#     b = |proteins(c)| - a
+#     c = |proteins(d) & proteins(p)| - a        (propagated co-occurrence)
+#     d = |proteins(p)| - |proteins(c)| - |proteins(d) & proteins(p)| + a
+#
+# Every term is either a propagated column sum or an entry of the propagated
+# domain x term co-occurrence product — the same sparse matmul the overall test
+# already uses, just against a propagated term matrix.
+
+
+def build_propagated_term_matrix(
+    protein_term_matrix: "sparse.csr_matrix",
+    term_ids: Sequence[str],
+    ancestors_fn: AncestorsFn,
+) -> Tuple["sparse.csr_matrix", List[str], Dict[str, int]]:
+    """Propagate a protein x term matrix up the hierarchy.
+
+    The term axis is *extended* with every ancestor of an annotated term, even
+    ancestors nothing is annotated to directly. That is the whole point: a
+    parent with no direct annotation still needs a background, and building it
+    from the unpropagated map is the defect that made the filter reject 54,951
+    associations untested (#46).
+
+    The extension is internal to this test. The hypothesis space BH corrects
+    over stays exactly ``term_ids``.
+
+    Returns:
+        ``(propagated, extended_ids, index_of)`` — a binary
+        (n_proteins, n_extended) matrix, the extended term list, and its
+        term → column lookup.
+    """
+    from scipy import sparse
+
+    extended: List[str] = list(term_ids)
+    index_of: Dict[str, int] = {term: i for i, term in enumerate(extended)}
+    for term in term_ids:
+        for ancestor in ancestors_fn(term):
+            if ancestor not in index_of:
+                index_of[ancestor] = len(extended)
+                extended.append(ancestor)
+
+    # Incidence matrix: row t marks t itself and all of its ancestors.
+    rows: List[int] = []
+    cols: List[int] = []
+    for i, term in enumerate(term_ids):
+        rows.append(i)
+        cols.append(i)
+        for ancestor in ancestors_fn(term):
+            rows.append(i)
+            cols.append(index_of[ancestor])
+    incidence = sparse.csr_matrix(
+        (np.ones(len(rows), dtype=np.int32), (rows, cols)),
+        shape=(len(term_ids), len(extended)),
+    )
+
+    propagated = (protein_term_matrix.astype(np.int32) @ incidence).tocsr()
+    # A protein reaching one ancestor by several routes must still count once.
+    propagated.data[:] = 1
+    return propagated, extended, index_of
+
+
+def compute_relative_p_values(
+    protein_domain_matrix: "sparse.csr_matrix",
+    protein_term_matrix: "sparse.csr_matrix",
+    pair_index: "np.ndarray",
+    term_ids: Sequence[str],
+    parents_fn: ParentsFn,
+    ancestors_fn: AncestorsFn,
+    min_background_size: int = 3,
+    domain_block: int = 4096,
+    fisher_batch_size: int = 50000,
+) -> Tuple["np.ndarray", "np.ndarray", Dict[str, int]]:
+    """Relative p-value and governing 2x2 table for every enumerated pair.
+
+    Args:
+        pair_index: dense domain-major indices as returned by
+            ``compute_cooccurring_contingency_tables``.
+
+    Returns:
+        ``(relative_p, tables, rejections)``. ``relative_p[i]`` is the largest
+        p-value over the pair's direct parents — the association must survive
+        every one of them, the same intersection-union logic the paper uses to
+        combine the overall and relative inferences. A pair whose term has no
+        parents scores 0.0, so ``max(overall_p, relative_p)`` leaves it to the
+        overall inference. A pair with any untestable parent scores 1.0, which
+        is the vectorised spelling of the loop's "conservatively reject".
+        ``tables[i]`` is the governing parent's table (zeros where untested).
+    """
+    from scipy import sparse
+
+    from src.vectorized_fisher import fisher_exact_parallel
+
+    n_terms = len(term_ids)
+    n_pairs = len(pair_index)
+
+    propagated, extended_ids, index_of = build_propagated_term_matrix(
+        protein_term_matrix, term_ids, ancestors_fn
+    )
+    logger.info(
+        f"  propagated term axis: {n_terms:,} annotated -> "
+        f"{len(extended_ids):,} with ancestors"
+    )
+    term_counts = np.asarray(propagated.sum(axis=0)).ravel().astype(np.int64)
+
+    # Propagated domain x term co-occurrence, blocked over domains for the same
+    # allocation reason compute_cooccurring_contingency_tables blocks.
+    domain_csc = protein_domain_matrix.astype(np.int32).tocsc()
+    n_domains = protein_domain_matrix.shape[1]
+    blocks = []
+    for start in range(0, n_domains, domain_block):
+        stop = min(start + domain_block, n_domains)
+        blocks.append((domain_csc[:, start:stop].T @ propagated).tocsr())
+    cooccurrence = sparse.vstack(blocks, format="csr") if blocks else None
+    del blocks, domain_csc
+
+    domain_idx = pair_index // n_terms
+    term_idx = pair_index % n_terms
+
+    # Flatten (pair, parent) into one axis, remembering each parent's pair.
+    parent_cols: List[int] = []
+    owner: List[int] = []
+    for i in range(n_pairs):
+        for parent in parents_fn(term_ids[term_idx[i]]):
+            column = index_of.get(parent)
+            if column is not None:
+                parent_cols.append(column)
+                owner.append(i)
+
+    relative_p = np.zeros(n_pairs, dtype=np.float64)  # no parents -> 0.0
+    tables = np.zeros((n_pairs, 2, 2), dtype=np.int32)
+    rejections: Dict[str, int] = {}
+    if not owner:
+        return relative_p, tables, rejections
+
+    owner_arr = np.asarray(owner, dtype=np.int64)
+    parent_arr = np.asarray(parent_cols, dtype=np.int64)
+    del owner, parent_cols
+
+    child_arr = term_idx[owner_arr]
+    dom_arr = domain_idx[owner_arr]
+
+    a = np.asarray(cooccurrence[dom_arr, child_arr]).ravel().astype(np.int64)
+    dp = np.asarray(cooccurrence[dom_arr, parent_arr]).ravel().astype(np.int64)
+    n_child = term_counts[child_arr]
+    n_parent = term_counts[parent_arr]
+
+    b = n_child - a
+    c = dp - a
+    d = n_parent - n_child - dp + a
+
+    # Guards, in the same order and with the same verdicts as the loop.
+    too_small = n_parent < min_background_size
+    invalid = d < 0
+    untestable = too_small | invalid
+    if too_small.any():
+        rejections["InsufficientBackgroundError"] = int(too_small.sum())
+    if invalid.any():
+        rejections["InvalidContingencyTableError"] = int(invalid.sum())
+
+    # a == 0 or an empty margin means no association is possible: p = 1 exactly.
+    trivial = (a == 0) | ((a + b) == 0) | ((a + c) == 0)
+
+    p_per_parent = np.ones(len(owner_arr), dtype=np.float64)
+    testable = ~(untestable | trivial)
+    if testable.any():
+        sub = np.empty((int(testable.sum()), 2, 2), dtype=np.int32)
+        sub[:, 0, 0] = a[testable]
+        sub[:, 0, 1] = b[testable]
+        sub[:, 1, 0] = c[testable]
+        sub[:, 1, 1] = d[testable]
+        _, p_sub = fisher_exact_parallel(
+            sub, alternative="greater", batch_size=fisher_batch_size
+        )
+        p_per_parent[testable] = p_sub
+
+    # An untestable parent is conservatively fatal for its association.
+    p_per_parent[untestable] = 1.0
+
+    # Group maximum, and the governing parent's table alongside it.
+    order = np.lexsort((p_per_parent, owner_arr))
+    sorted_owner = owner_arr[order]
+    last = np.ones(len(order), dtype=bool)
+    last[:-1] = sorted_owner[:-1] != sorted_owner[1:]
+    winners = order[last]
+    winning_pairs = sorted_owner[last]
+
+    relative_p[winning_pairs] = p_per_parent[winners]
+    tables[winning_pairs, 0, 0] = a[winners]
+    tables[winning_pairs, 0, 1] = b[winners]
+    tables[winning_pairs, 1, 0] = c[winners]
+    tables[winning_pairs, 1, 1] = np.maximum(d[winners], 0)
+
+    return relative_p, tables, rejections
