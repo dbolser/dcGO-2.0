@@ -467,11 +467,21 @@ def parse_obo_child_parents(
             elif line.startswith("id:"):
                 term_id = line[3:].strip()
             elif line.startswith("is_a:"):
-                # "is_a: CHEBI:24431 ! chemical entity"
-                parents.add(line[5:].split("!")[0].strip())
+                # "is_a: CHEBI:24431 ! chemical entity". Mondo and EFO write
+                # trailing OBO qualifier blocks before the comment —
+                # "is_a: MONDO:0000001 {source=\"DOID:4\"} ! disease" — and a
+                # target id never contains '{', so everything from the first
+                # brace is stripped too. Left in place, the qualifier welds
+                # itself onto the parent id and the edge silently misses the
+                # real parent (42% of Mondo terms lost every parent this way).
+                target = line[5:].split("!")[0].split("{")[0].strip()
+                if target:
+                    parents.add(target)
             elif line.startswith("is_obsolete:"):
                 obsolete = line.split(":", 1)[1].strip().lower() == "true"
             elif line.startswith("relationship:"):
+                # Whitespace-split, so a trailing {qualifier} block lands in
+                # fields[2:] and cannot contaminate the id.
                 fields = line[13:].split("!")[0].split()
                 if len(fields) >= 2 and fields[0] in wanted:
                     parents.add(fields[1].strip())
