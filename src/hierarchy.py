@@ -34,6 +34,7 @@ from __future__ import annotations
 import gzip
 import re
 from collections import defaultdict
+from dataclasses import dataclass
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
@@ -93,28 +94,80 @@ def parents_from_map(
     return parents
 
 
+@dataclass(frozen=True)
+class PropagationCoverage:
+    """What propagating an annotation map did — and what it could not reach.
+
+    Terms absent from the hierarchy (obsolete ids still present in the
+    annotation file, alt_ids, malformed ids) silently fail to propagate:
+    ``ancestors_fn`` returns nothing for them, which is indistinguishable from
+    a genuine root without a membership test. When the caller supplies
+    ``known_term_fn`` those terms are tallied here; when it cannot (a hierarchy
+    exposed only as an ancestors function), the unknown counts are ``None`` —
+    "not assessed", not zero.
+
+    Attributes:
+        pairs_before: (protein, term) pairs in the input map.
+        pairs_after: pairs after closure over the hierarchy.
+        unknown_terms: distinct terms the hierarchy does not contain.
+        unknown_pairs: input pairs carrying such a term.
+    """
+
+    pairs_before: int
+    pairs_after: int
+    unknown_terms: int | None = None
+    unknown_pairs: int | None = None
+
+
 def propagate_annotation_map(
     protein_terms: Dict[str, Set[str]],
     ancestors_fn: Callable[[str], Iterable[str]],
-) -> Dict[str, Set[str]]:
+    known_term_fn: Callable[[str], bool] | None = None,
+) -> tuple[Dict[str, Set[str]], PropagationCoverage]:
     """Apply the True Path Rule to a ``{protein: {terms}}`` annotation map.
 
     Each protein's term set is closed over ``ancestors_fn``: an annotation to a
     child term implies its ancestors by definition. Ancestors are looked up
     once per distinct term, not once per (protein, term) — the annotation map
     has ~10^6 pairs over ~10^4 terms. The input map is not mutated.
+
+    Args:
+        known_term_fn: membership test for the hierarchy, if the caller has
+            one. Terms it rejects are counted in the returned
+            :class:`PropagationCoverage` (they cannot propagate); without it
+            the unknown tallies are ``None``.
+
+    Returns:
+        ``(propagated_map, coverage)``.
     """
     cache: Dict[str, frozenset] = {}
     propagated: Dict[str, Set[str]] = {}
+    pairs_before = 0
+    pairs_after = 0
+    unknown: Set[str] = set()
+    unknown_pairs = 0
     for protein, terms in protein_terms.items():
+        pairs_before += len(terms)
         closure = set(terms)
         for term in terms:
             cached = cache.get(term)
             if cached is None:
                 cached = cache[term] = frozenset(ancestors_fn(term))
+                if known_term_fn is not None and not known_term_fn(term):
+                    unknown.add(term)
+            if term in unknown:
+                unknown_pairs += 1
             closure |= cached
         propagated[protein] = closure
-    return propagated
+        pairs_after += len(closure)
+
+    coverage = PropagationCoverage(
+        pairs_before=pairs_before,
+        pairs_after=pairs_after,
+        unknown_terms=len(unknown) if known_term_fn is not None else None,
+        unknown_pairs=unknown_pairs if known_term_fn is not None else None,
+    )
+    return propagated, coverage
 
 
 def nearest_parents(

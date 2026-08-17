@@ -839,15 +839,25 @@ def main(argv: list[str] | None = None) -> int:
     # propagate its backgrounds (#46), so without this the overall and relative
     # p-values combined by --enable-relative-inference were computed against two
     # different definitions of "annotated to T".
+    input_coverage = None
     if args.propagate_annotations:
         if ontology_entry.build_ancestors is None:
-            input_ancestors = OntologyProcessor(args.go_ontology).get_ancestors
+            input_processor = OntologyProcessor(args.go_ontology)
+            input_ancestors = input_processor.get_ancestors
+            # Membership test so terms the hierarchy no longer contains
+            # (obsolete GAF ids, alt_ids) are tallied instead of silently
+            # failing to propagate. Registry hierarchies expose only an
+            # ancestors function, so the tally is GO-only for now.
+            known_term_fn = input_processor.go_graph.__contains__
         else:
             input_ancestors = ontology_entry.build_ancestors(ontology_paths)
+            known_term_fn = None
 
-        before = sum(len(terms) for terms in protein_go_map.values())
-        protein_go_map = propagate_annotation_map(protein_go_map, input_ancestors)
-        after = sum(len(terms) for terms in protein_go_map.values())
+        protein_go_map, input_coverage = propagate_annotation_map(
+            protein_go_map, input_ancestors, known_term_fn
+        )
+        before = input_coverage.pairs_before
+        after = input_coverage.pairs_after
         # With an empty GAF ∩ InterPro intersection there is nothing to
         # propagate and no ratio to report; the run still has to reach its
         # clean "no pairs to test" abort rather than divide by zero here.
@@ -856,6 +866,13 @@ def main(argv: list[str] | None = None) -> int:
             f"  True Path Rule on input annotations: {before:,} → {after:,} "
             f"(protein, term) pairs{ratio}"
         )
+        if input_coverage.unknown_terms:
+            logger.info(
+                f"  {input_coverage.unknown_terms:,} annotated terms are not in "
+                f"the hierarchy (obsolete ids or alt_ids) and could not be "
+                f"propagated ({input_coverage.unknown_pairs:,} (protein, term) "
+                f"pairs affected — kept as direct annotations)"
+            )
 
     # Calibration control. Comparing two ontology layers by their significant
     # counts is only meaningful if neither count is manufactured by its
@@ -1465,24 +1482,30 @@ def main(argv: list[str] | None = None) -> int:
     if propagated_annotations:
         output_files.append((annotations_file, "propagated_annotations"))
     logger.info("Hashing outputs and finalizing the run manifest...")
+    summary = {
+        "ontology": ontology_label,
+        "proteins": len(proteins_with_both),
+        "domains": len(domain_list),
+        "terms": len(go_list),
+        "tests": int(n_hypotheses),
+        # Tables actually built and passed to Fisher. Everything else in the
+        # hypothesis space has a=0 and therefore p=1 exactly under the
+        # one-sided 'greater' test, so it is corrected for but not computed.
+        "tests_evaluated": int(len(pvalues)),
+        "significant_associations": n_significant,
+        # One cutoff per hypothesis family, not one overall.
+        "bh_threshold_pvalue": {k: float(v) for k, v in thresholds.items()},
+        "propagated_annotations": len(propagated_annotations),
+        "runtime_seconds": round(total_time, 2),
+    }
+    if input_coverage is not None and input_coverage.unknown_terms is not None:
+        # Input terms --propagate-annotations could not reach: they are not in
+        # the hierarchy (obsolete ids, alt_ids), so they stayed direct-only.
+        summary["input_terms_not_in_hierarchy"] = input_coverage.unknown_terms
+        summary["input_pairs_not_propagated"] = input_coverage.unknown_pairs
     manifest.complete(
         outputs=[describe_file(path, role=role) for path, role in output_files],
-        summary={
-            "ontology": ontology_label,
-            "proteins": len(proteins_with_both),
-            "domains": len(domain_list),
-            "terms": len(go_list),
-            "tests": int(n_hypotheses),
-            # Tables actually built and passed to Fisher. Everything else in the
-            # hypothesis space has a=0 and therefore p=1 exactly under the
-            # one-sided 'greater' test, so it is corrected for but not computed.
-            "tests_evaluated": int(len(pvalues)),
-            "significant_associations": n_significant,
-            # One cutoff per hypothesis family, not one overall.
-            "bh_threshold_pvalue": {k: float(v) for k, v in thresholds.items()},
-            "propagated_annotations": len(propagated_annotations),
-            "runtime_seconds": round(total_time, 2),
-        },
+        summary=summary,
     )
 
     logger.info("Output files:")

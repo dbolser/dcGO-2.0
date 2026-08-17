@@ -44,8 +44,10 @@ class TestClosureAncestors:
 class TestPropagateAnnotationMap:
     def test_closure_over_ancestors(self):
         anc = closure_ancestors({"c": {"b"}, "b": {"a"}})
-        result = propagate_annotation_map({"P1": {"c"}, "P2": {"b"}}, anc)
+        result, coverage = propagate_annotation_map({"P1": {"c"}, "P2": {"b"}}, anc)
         assert result == {"P1": {"c", "b", "a"}, "P2": {"b", "a"}}
+        assert coverage.pairs_before == 2
+        assert coverage.pairs_after == 5
 
     def test_input_map_not_mutated(self):
         anc = closure_ancestors({"c": {"b"}})
@@ -56,11 +58,41 @@ class TestPropagateAnnotationMap:
     def test_empty_map(self):
         # The run script computes an expansion ratio from these totals; an
         # empty intersection must yield an empty map, not a crash.
-        assert propagate_annotation_map({}, closure_ancestors({})) == {}
+        result, coverage = propagate_annotation_map({}, closure_ancestors({}))
+        assert result == {}
+        assert coverage.pairs_before == 0
+        assert coverage.pairs_after == 0
 
     def test_term_without_ancestors_kept(self):
         anc = closure_ancestors({})
-        assert propagate_annotation_map({"P1": {"root"}}, anc) == {"P1": {"root"}}
+        result, _ = propagate_annotation_map({"P1": {"root"}}, anc)
+        assert result == {"P1": {"root"}}
+
+    def test_unknown_terms_tallied_with_membership_test(self):
+        # "obsolete" is not in the hierarchy: with a membership test it is
+        # counted as unpropagatable rather than passing as a silent root.
+        anc = closure_ancestors({"c": {"b"}})
+        known = {"c", "b"}.__contains__
+        result, coverage = propagate_annotation_map(
+            {"P1": {"c", "obsolete"}, "P2": {"obsolete"}}, anc, known
+        )
+        assert coverage.unknown_terms == 1
+        assert coverage.unknown_pairs == 2
+        # The unknown term is kept as a direct annotation, not dropped.
+        assert result == {"P1": {"c", "b", "obsolete"}, "P2": {"obsolete"}}
+
+    def test_roots_are_not_counted_unknown(self):
+        anc = closure_ancestors({"c": {"b"}})
+        known = {"c", "b"}.__contains__
+        _, coverage = propagate_annotation_map({"P1": {"b"}}, anc, known)
+        assert coverage.unknown_terms == 0
+        assert coverage.unknown_pairs == 0
+
+    def test_no_membership_test_means_not_assessed(self):
+        anc = closure_ancestors({})
+        _, coverage = propagate_annotation_map({"P1": {"zzz"}}, anc)
+        assert coverage.unknown_terms is None
+        assert coverage.unknown_pairs is None
 
 
 class TestPropagateViaAncestors:
