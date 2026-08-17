@@ -595,11 +595,11 @@ def build_argument_parser() -> argparse.ArgumentParser:
         metavar="FLOAT",
         help="Discard associations whose term's information content is below "
         "this floor. IC(t) = -log2(fraction of the analysed universe annotated "
-        "to t, True-Path propagated), so DAG roots have IC 0 by construction "
-        "and any positive floor removes them. Applied AFTER the FDR "
-        "correction, exactly like --min-support, so it never alters the "
-        "hypothesis family. Default 0 (no filter); the ic column is exported "
-        "either way",
+        "to t, True-Path propagated), so universal terms have IC 0 and DAG "
+        "roots sit at (GO: near) 0 — a floor of 1 keeps only terms carried by "
+        "under half the universe. Applied AFTER the FDR correction, exactly "
+        "like --min-support, so it never alters the hypothesis family. "
+        "Default 0 (no filter); the ic column is exported either way",
     )
     parser.add_argument(
         "--num-cores",
@@ -1491,9 +1491,10 @@ def main(argv: list[str] | None = None) -> int:
     # Information-content floor: same post-BH placement as --min-support, for
     # the same reason — filtering beforehand would shrink the hypothesis family
     # by a property of the outcome, so applied here it only narrows what is
-    # reported and changes no q-value. Roots have IC 0 by construction, so any
-    # positive floor removes the vacuous top of the DAG — the terms the
-    # relative inference can never test because they have no parents.
+    # reported and changes no q-value. Universal terms have IC 0 by
+    # construction and DAG roots sit at (GO: near) it, so a floor clear of
+    # that band removes the vacuous top of the DAG — the terms the relative
+    # inference can never test because they have no parents.
     if args.min_ic > 0:
         dropped = int((significant & (pair_ic < args.min_ic)).sum())
         significant &= pair_ic >= args.min_ic

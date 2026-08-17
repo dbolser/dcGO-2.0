@@ -14,9 +14,12 @@ Two properties matter to callers:
   non-leaf term and inflates its IC. For a flat vocabulary the direct map *is*
   the propagated map. The caller owns propagation (see
   :func:`src.hierarchy.propagate_annotation_map`); this module just counts.
-* **Roots have IC 0 by construction**: a term carried by every protein has
-  ``P(t) = 1``. That is what makes IC a usable floor against vacuous
-  associations to the top of a DAG — any positive floor removes them.
+* **Universal terms have IC 0 by construction**: a term carried by every
+  protein has ``P(t) = 1``. A single-rooted ontology's root is exactly there;
+  GO's three aspect roots sit just above it (each aspect covers most but not
+  all of the universe — ≈0.09–0.17 bits on human GO). That is what makes IC a
+  usable floor against vacuous associations to the top of a DAG: any floor
+  clear of that band removes them.
 """
 
 from __future__ import annotations

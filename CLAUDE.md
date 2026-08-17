@@ -109,6 +109,13 @@ uv run python run_dcgo_human.py --num-cores 8 \
 # used to do for GO.
 uv run python run_dcgo_human.py --enable-relative-inference
 
+# Paper-parity run with the IC reporting floor: --min-ic drops terms whose
+# annotation-frequency information content (the exported ic column) is below
+# the floor, after BH — the fix for roots/near-universal terms dominating
+# relative-inference output. See VALIDATION_PLAN next-steps item 2.
+uv run python run_dcgo_human.py --propagate-annotations \
+    --enable-relative-inference --enable-true-path --min-ic 1
+
 # Other ontologies (see src/ontology_registry.py or --help for all 28)
 uv run python run_dcgo_human.py --ontology subcellular --enable-true-path
 uv run python run_dcgo_human.py --ontology ligand      # FT /ligand_id (ChEBI)
@@ -222,15 +229,24 @@ tables); enumerating co-occurring pairs makes it 9.5M tables and 268 s.
   inference* (Step 2, vs. the true-path rule at Step 3) and is now
   `--enable-relative-inference`, available for all 19 ontologies with a
   hierarchy, and it *removes* associations rather than adding them.
-- **Relative inference (`--enable-relative-inference`, opt-in) is implemented
-  but not usable yet.** The combination matches the paper — BH corrects
-  `max(overall_p, relative_p)`, h-score is `min(overall, relative)`, the
-  parental background is the union of a term's direct parents, and the input
-  map is true-path propagated (`--propagate-annotations`). But parentless terms
-  skip the test entirely and pass on the overall inference alone, so the GO
-  roots dominate the output and the layer makes results *less* specific rather
-  than more. Needs an IC floor, and possibly `elim`-style decorrelation. See
-  `VALIDATION_PLAN.md` next-steps item 2.
+- **Relative inference (`--enable-relative-inference`, opt-in) needs the
+  `--min-ic` floor to be usable.** The combination matches the paper — BH
+  corrects `max(overall_p, relative_p)`, h-score is `min(overall, relative)`,
+  the parental background is the union of a term's direct parents, and the
+  input map is true-path propagated (`--propagate-annotations`). But
+  parentless terms skip the test entirely and pass on the overall inference
+  alone, so the DAG roots dominate the output. `--min-ic` is the fix for that
+  specific defect: a *reporting* floor on the term's annotation-frequency IC
+  (shared convention in `src/information_content.py`, exported as the `ic`
+  column, always estimated from the propagated map when a hierarchy is in
+  play), applied after BH exactly like `--min-support`. `--min-ic 1` (keep
+  terms carried by <50% of the universe) removes the three GO roots and the
+  near-universal band ("biological regulation", "cytoplasm", "organelle") for
+  1.2% of associations; it does not resolve the residual ancestor-chain
+  cascade (52.7% → 50.2% of single-domain associations on a chain), for which
+  `elim`-style decorrelation remains the open idea. Sweep and numbers in
+  `VALIDATION_PLAN.md` next-steps item 2; metric via
+  `validation/specificity_metrics.py`.
 - **The §4 ablation cannot attribute its True Path result to either stage.** It
   was run when one flag drove both, so "the True Path Rule is significantly
   worse in 12/12 cells" is a statement about filter-plus-propagation, measured
