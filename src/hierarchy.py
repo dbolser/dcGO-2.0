@@ -43,6 +43,7 @@ from typing import (
     Callable,
     Dict,
     Iterable,
+    Iterator,
     List,
     Sequence,
     Set,
@@ -127,6 +128,91 @@ class PropagationCoverage:
     unknown_pairs: int | None = None
 
 
+class _ClosureBuilder:
+    """Per-term-set True Path closure with shared ancestor cache and tallies.
+
+    The single implementation behind :func:`propagate_annotation_map` (which
+    materialises a full propagated map plus coverage) and
+    :func:`iter_propagated_term_sets` (which streams closures one set at a
+    time), so the two can never disagree on unknown-term handling.
+    """
+
+    __slots__ = (
+        "_ancestors_fn",
+        "_known_term_fn",
+        "_drop_unknown",
+        "_cache",
+        "unknown",
+        "unknown_pairs",
+        "pairs_before",
+        "pairs_after",
+    )
+
+    def __init__(
+        self,
+        ancestors_fn: Callable[[str], Iterable[str]],
+        known_term_fn: Callable[[str], bool] | None,
+        drop_unknown: bool,
+    ) -> None:
+        self._ancestors_fn = ancestors_fn
+        self._known_term_fn = known_term_fn
+        self._drop_unknown = drop_unknown
+        self._cache: Dict[str, frozenset[str]] = {}
+        self.unknown: Set[str] = set()
+        self.unknown_pairs = 0
+        self.pairs_before = 0
+        self.pairs_after = 0
+
+    def close(self, terms: Iterable[str]) -> Set[str]:
+        """One term set's closure over the ancestors function."""
+        closure: Set[str] = set()
+        for term in terms:
+            self.pairs_before += 1
+            cached = self._cache.get(term)
+            if cached is None:
+                cached = self._cache[term] = frozenset(self._ancestors_fn(term))
+                if self._known_term_fn is not None and not self._known_term_fn(term):
+                    self.unknown.add(term)
+            if term in self.unknown:
+                self.unknown_pairs += 1
+                if self._drop_unknown:
+                    continue
+            closure.add(term)
+            closure |= cached
+        self.pairs_after += len(closure)
+        return closure
+
+    def coverage(self) -> PropagationCoverage:
+        """The tallies accumulated so far, as a :class:`PropagationCoverage`."""
+        assessed = self._known_term_fn is not None
+        return PropagationCoverage(
+            pairs_before=self.pairs_before,
+            pairs_after=self.pairs_after,
+            unknown_terms=len(self.unknown) if assessed else None,
+            unknown_pairs=self.unknown_pairs if assessed else None,
+        )
+
+
+def iter_propagated_term_sets(
+    term_sets: Iterable[Iterable[str]],
+    ancestors_fn: Callable[[str], Iterable[str]],
+    known_term_fn: Callable[[str], bool] | None = None,
+    drop_unknown: bool = False,
+) -> Iterator[Set[str]]:
+    """Stream each term set's True Path closure, one set at a time.
+
+    Identical semantics to :func:`propagate_annotation_map` — same ancestor
+    cache, same unknown-term counting and ``drop_unknown`` policy — minus the
+    dict assembly: nothing here ever holds more than one closure. That is the
+    point: consumers that only need a per-set reduction (term frequencies for
+    information content) must not pay for a full propagated copy of the
+    annotation map, which is a multi-GB transient at allspecies scale.
+    """
+    builder = _ClosureBuilder(ancestors_fn, known_term_fn, drop_unknown)
+    for terms in term_sets:
+        yield builder.close(terms)
+
+
 def propagate_annotation_map(
     protein_terms: Dict[str, Set[str]],
     ancestors_fn: Callable[[str], Iterable[str]],
@@ -156,37 +242,11 @@ def propagate_annotation_map(
     Returns:
         ``(propagated_map, coverage)``.
     """
-    cache: Dict[str, frozenset] = {}
-    propagated: Dict[str, Set[str]] = {}
-    pairs_before = 0
-    pairs_after = 0
-    unknown: Set[str] = set()
-    unknown_pairs = 0
-    for protein, terms in protein_terms.items():
-        pairs_before += len(terms)
-        closure = set()
-        for term in terms:
-            cached = cache.get(term)
-            if cached is None:
-                cached = cache[term] = frozenset(ancestors_fn(term))
-                if known_term_fn is not None and not known_term_fn(term):
-                    unknown.add(term)
-            if term in unknown:
-                unknown_pairs += 1
-                if drop_unknown:
-                    continue
-            closure.add(term)
-            closure |= cached
-        propagated[protein] = closure
-        pairs_after += len(closure)
-
-    coverage = PropagationCoverage(
-        pairs_before=pairs_before,
-        pairs_after=pairs_after,
-        unknown_terms=len(unknown) if known_term_fn is not None else None,
-        unknown_pairs=unknown_pairs if known_term_fn is not None else None,
-    )
-    return propagated, coverage
+    builder = _ClosureBuilder(ancestors_fn, known_term_fn, drop_unknown)
+    propagated = {
+        protein: builder.close(terms) for protein, terms in protein_terms.items()
+    }
+    return propagated, builder.coverage()
 
 
 def nearest_parents(

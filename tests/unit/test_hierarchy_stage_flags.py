@@ -28,6 +28,7 @@ def _args(**overrides) -> argparse.Namespace:
         num_cores=8,
         species="human",
         min_support=0,
+        min_ic=0.0,
         ontology="go",
         enable_relative_inference=False,
         propagate_annotations=False,
@@ -184,3 +185,37 @@ class TestInputPropagationIsAThirdIndependentStage:
         assert request.propagate_annotations is True
         assert request.enable_relative_inference is True
         assert request.enable_true_path is True
+
+
+class TestEngagesHierarchyPredicate:
+    """One shared answer to "does this run read the hierarchy?".
+
+    Input resolution, the manifest's hierarchy_inputs record, and the
+    ic_source decision must never disagree, so they all read
+    RunRequest.engages_hierarchy rather than re-spelling the disjunction.
+    """
+
+    def test_a_bare_run_does_not_engage_the_hierarchy(self) -> None:
+        assert parse_run_request([]).engages_hierarchy is False
+
+    @pytest.mark.parametrize(
+        "argv",
+        [
+            ["--enable-true-path"],
+            ["--enable-relative-inference"],
+            ["--propagate-annotations"],
+            # The floor alone: its frequencies are estimated over the
+            # propagated map, so it too must pull in the hierarchy inputs.
+            ["--min-ic", "1"],
+        ],
+    )
+    def test_each_engaging_option_flips_it(self, argv: list[str]) -> None:
+        assert parse_run_request(argv).engages_hierarchy is True
+
+    def test_min_ic_alone_requires_the_hierarchy_input(self) -> None:
+        from src.runner import resolve_inputs
+
+        request = parse_run_request(
+            ["--min-ic", "1", "--go-ontology", "does-not-exist.obo"]
+        )
+        assert "go_obo" in " ".join(resolve_inputs(request).missing_inputs)

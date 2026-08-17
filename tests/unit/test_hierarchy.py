@@ -9,6 +9,7 @@ from src.hierarchy import (
     alpha_prefix_ancestors,
     closure_ancestors,
     dotted_ancestors,
+    iter_propagated_term_sets,
     parse_obo_child_parents,
     propagate_annotation_map,
     propagate_via_ancestors,
@@ -118,6 +119,39 @@ class TestPropagateAnnotationMap:
             {"P1": {"zzz"}}, anc, None, drop_unknown=True
         )
         assert result == {"P1": {"zzz"}}
+
+
+class TestIterPropagatedTermSets:
+    """The streaming twin of propagate_annotation_map: same closures, no map."""
+
+    def test_yields_the_same_closures_as_the_map_builder(self):
+        anc = closure_ancestors({"c": {"b"}, "b": {"a"}})
+        known = {"a", "b", "c"}.__contains__
+        annotation_map = {"P1": {"c", "obsolete"}, "P2": {"b"}, "P3": set()}
+
+        expected, _ = propagate_annotation_map(
+            annotation_map, anc, known, drop_unknown=True
+        )
+        streamed = list(
+            iter_propagated_term_sets(
+                annotation_map.values(), anc, known, drop_unknown=True
+            )
+        )
+        assert streamed == [expected[p] for p in annotation_map]
+
+    def test_is_lazy(self):
+        # One closure at a time — nothing consumed before it is asked for.
+        seen = []
+
+        def term_sets():
+            for terms in ({"c"}, {"b"}):
+                seen.append(terms)
+                yield terms
+
+        anc = closure_ancestors({"c": {"b"}})
+        stream = iter_propagated_term_sets(term_sets(), anc)
+        assert next(stream) == {"c", "b"}
+        assert seen == [{"c"}]
 
 
 class TestPropagateViaAncestors:

@@ -399,6 +399,12 @@ def main() -> int:  # pragma: no cover - I/O wiring
     tpr_domain_map = {
         p: protein_domains[p] for p in proteins_with_both if p in protein_domains
     }
+    # The ic column of the propagated file, matching the runner's convention
+    # exactly: annotation-frequency IC over the run's own analysable universe
+    # (the domain∩annotation intersection), propagated. Keeps this producer's
+    # domain_go_annotations_propagated.tsv on the same schema as
+    # run_dcgo_human.py's, so consumers reading ic by name never KeyError.
+    export_ic = tb.information_content(tpr_go_map, get_ancestors)
 
     @dataclass
     class _Assoc:
@@ -442,13 +448,14 @@ def main() -> int:  # pragma: no cover - I/O wiring
         with out_path.open("w") as handle:
             handle.write(
                 "domain\tgo_term\tq_value\tassociation_score\tannotation_type\t"
-                "direct_source_term\n"
+                "direct_source_term\tic\n"
             )
             for ann in annotations:
                 handle.write(
                     f"{ann.domain}\t{ann.go_term}\t{ann.q_value:.6e}\t"
                     f"{ann.association_score:.2f}\t{ann.annotation_type}\t"
-                    f"{ann.direct_source_term}\n"
+                    f"{ann.direct_source_term}\t"
+                    f"{export_ic.get(ann.go_term, 0.0):.10g}\n"
                 )
         logger.info(
             f"[{rung.name}] wrote {len(annotations):,} annotations -> {out_path}"

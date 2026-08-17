@@ -41,8 +41,19 @@ Notes / deliberate simplifications (documented so they are not oversold):
 from __future__ import annotations
 
 import math
+import sys
 from collections import defaultdict
+from pathlib import Path
 from typing import Callable, Iterable, Mapping
+
+# Runnable both as a package module and as a bare script (repo convention).
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+from src.information_content import (  # noqa: E402
+    information_content_from_term_sets as shared_information_content_from_term_sets,
+)
 
 # The three GO aspect roots — trivially true, excluded from scoring (CAFA does
 # the same). Also used to map a term to its aspect via namespace.
@@ -137,19 +148,16 @@ def information_content(
     propagating each protein's annotations to its ancestor closure. Terms never
     seen get IC 0 (they carry no information for weighting). The estimate is over
     the set of annotated proteins in ``annotation_map``.
+
+    The counting convention is the project-wide one in
+    :func:`src.information_content.information_content` (also behind the
+    pipeline's ``ic`` column and ``--min-ic`` floor); this wrapper adds the
+    propagation the benchmark's unpropagated maps need, streamed one closure
+    at a time so the full propagated map is never materialised.
     """
-    n_proteins = len(annotation_map)
-    if n_proteins == 0:
-        return {}
-    counts: dict[str, int] = defaultdict(int)
-    for terms in annotation_map.values():
-        for t in propagate_terms(terms, get_ancestors):
-            counts[t] += 1
-    ic: dict[str, float] = {}
-    for t, c in counts.items():
-        p = c / n_proteins
-        ic[t] = -math.log2(p) if 0.0 < p < 1.0 else 0.0
-    return ic
+    return shared_information_content_from_term_sets(
+        propagate_terms(terms, get_ancestors) for terms in annotation_map.values()
+    )
 
 
 # --------------------------------------------------------------------------- #

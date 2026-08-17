@@ -24,6 +24,7 @@ class RunRequest:
     output_dir: Path
     fdr_threshold: float
     min_support: int
+    min_ic: float
     enable_true_path: bool
     enable_relative_inference: bool
     propagate_annotations: bool
@@ -55,6 +56,25 @@ class RunRequest:
     fbbt_obo: Path
     fbcv_obo: Path
 
+    @property
+    def engages_hierarchy(self) -> bool:
+        """Whether any stage of this run reads the ontology's hierarchy.
+
+        True for input-map propagation (``--propagate-annotations``), either
+        Stage 5.5/4.5 hierarchy stage (``--enable-true-path``,
+        ``--enable-relative-inference``), and the ``--min-ic`` floor, whose
+        frequencies are estimated over the propagated map. The single
+        authority for "this run needs the hierarchy inputs": input
+        resolution, the manifest's hierarchy_inputs record, and the ic_source
+        decision all read this predicate.
+        """
+        return (
+            self.propagate_annotations
+            or self.enable_true_path
+            or self.enable_relative_inference
+            or self.min_ic > 0
+        )
+
     @classmethod
     def from_namespace(cls, args: argparse.Namespace) -> "RunRequest":
         """Translate the compatibility parser's namespace into generic names."""
@@ -66,6 +86,7 @@ class RunRequest:
             output_dir=args.output_dir,
             fdr_threshold=args.fdr_threshold,
             min_support=args.min_support,
+            min_ic=getattr(args, "min_ic", 0.0),
             enable_true_path=args.enable_true_path,
             enable_relative_inference=getattr(args, "enable_relative_inference", False),
             propagate_annotations=getattr(args, "propagate_annotations", False),
@@ -156,17 +177,13 @@ def resolve_inputs(request: RunRequest) -> InputResolution:
         true_path_unsupported=(
             request.enable_true_path and not entry.supports_true_path
         ),
-        # Relative inference reads the same hierarchy file propagation does, so
-        # either flag makes the hierarchy inputs mandatory up front.
+        # Anything that engages the hierarchy (see RunRequest.engages_hierarchy)
+        # makes the hierarchy inputs mandatory up front.
         missing_inputs=tuple(
             missing_inputs(
                 entry,
                 paths,
-                for_hierarchy=(
-                    request.enable_true_path
-                    or request.enable_relative_inference
-                    or request.propagate_annotations
-                ),
+                for_hierarchy=request.engages_hierarchy,
             )
         ),
     )

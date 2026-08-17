@@ -62,8 +62,8 @@ terms. Remaining, in rough priority:
    against the *current* InterPro2GO. Fetch a dated (~2021) `interpro2go` and pass
    it as `--reference` so it becomes a true held-out temporal test (mirrors §2 on
    the domain side). Small.
-2. **Relative inference (paper Step 2).** Implemented; **not usable yet**, and
-   opt-in for that reason.
+2. **Relative inference (paper Step 2).** Implemented; usable **with the
+   `--min-ic` floor** (see the sweep below), still opt-in.
 
    Matching the paper: the parental-background p-value is computed for every
    candidate pair *before* the correction, BH corrects
@@ -73,10 +73,11 @@ terms. Remaining, in rough priority:
    parents' proteins, per the Figure 1 caption's `N_pa`; and the input
    protein→term map is true-path propagated, which the paper states explicitly.
 
-   **Blocking: parentless terms skip the test.** They score `relative_p = 0` and
-   pass on the overall inference alone, so the DAG roots dominate the output —
-   `biological_process` is the single most frequent term on an allspecies run
-   (9,623 domains). Nothing in Steps 1–3 prevents it.
+   **The defect (now floored away): parentless terms skip the test.** They
+   score `relative_p = 0` and pass on the overall inference alone, so the DAG
+   roots dominate the output — `biological_process` is the single most
+   frequent term on an allspecies run (9,623 domains). Nothing in Steps 1–3
+   prevents it; `--min-ic` removes it at reporting time.
 
    The stated purpose is to report each domain at the most specific level it
    supports. It currently does the opposite (human GO single domains, FDR<0.01):
@@ -93,11 +94,38 @@ terms. Remaining, in rough priority:
    (term, parent) pairs). The per-parent-maximum background was also wrong and
    is fixed, which improved specificity but not the cascade.
 
-   **Next:** an information-content floor on reported terms — dcGO's own
-   IC/"meta-GO" analysis (their Figure 3) may be where level selection actually
-   happens, in which case our reading of the method is incomplete — and, if that
-   is not enough, `elim`-style decorrelation (Alexa et al. 2006): test specific
-   terms first, remove their proteins, retest ancestors on the residue.
+   **Done (2026-08-17): the information-content floor** — dcGO's own
+   IC/"meta-GO" analysis (their Figure 3) is plausibly where level selection
+   actually happens. `--min-ic` floors reported terms on the shared
+   annotation-frequency IC (`src/information_content.py`, estimated from the
+   propagated map, exported as the `ic` column), applied after BH exactly like
+   `--min-support` so the hypothesis family is untouched. Sweep on human GO
+   single domains, paper-parity config (`--propagate-annotations
+   --enable-relative-inference --enable-true-path`, post-regulates-fix;
+   computed with `validation/specificity_metrics.py`, which makes the ad hoc
+   chain numbers above reproducible; re-derived unchanged from a
+   full-precision `ic` export after the column moved from 4 decimals to
+   `%.10g`, so no row sits on a rounding boundary):
+
+   | --min-ic | significant | mean #ancestors | on an ancestor chain | GO roots |
+   |---:|---:|---:|---:|---|
+   | 0 (off) | 30,655 | 6.0 | 52.7% | all three |
+   | 1 | 30,302 | 6.1 | 50.2% | none |
+   | 2 | 28,348 | 6.3 | 46.4% | none |
+   | 3 | 26,401 | 6.4 | 42.8% | none |
+   | 5 | 18,888 | 7.3 | 33.3% | none |
+
+   The GO roots sit at IC 0.09–0.17 (each aspect covers most but not all of
+   the universe), so any floor ≥ 0.2 removes them; **IC ≥ 1** — keep terms
+   carried by under half the universe — also removes the near-universal band
+   just above them ("biological regulation" ×84, "cytoplasm" ×70, "organelle"
+   ×57, "cellular process", "binding") at a cost of 353 associations (1.2%).
+   That is the recommended setting: the floor's job is killing vacuous terms,
+   not making the method conservative. What it does *not* fix is the residual
+   cascade — half the surviving associations still sit on an ancestor chain —
+   so the remaining idea if that matters is `elim`-style decorrelation (Alexa
+   et al. 2006): test specific terms first, remove their proteins, retest
+   ancestors on the residue.
 
    *(The p-score protein-prediction path is deliberately **not** pursued: the
    deliverable is domain→term annotation, not protein-centric prediction.)*

@@ -44,6 +44,7 @@ def make_args(tmp_path, **overrides):
         evidence_filter="manual",
         fdr_threshold=0.01,
         min_support=0,
+        min_ic=0.0,
         enable_true_path=False,
         enable_relative_inference=False,
         propagate_annotations=False,
@@ -209,8 +210,54 @@ def test_thresholds_are_recorded(tmp_path, fake_inputs):
     assert thresholds["fdr_families"] == ["single", "supra"]
     # No support filter unless --min-support is given.
     assert thresholds["min_proteins_per_association"] is None
+    # No IC floor unless --min-ic is given; a bare run's ic column is estimated
+    # from the direct (unpropagated) map, and the manifest says so.
+    assert thresholds["min_ic"] is None
+    assert thresholds["ic_source"] == "direct"
     assert thresholds["max_supra_domain_length"] == 3
     assert thresholds["fisher_alternative"] == "greater"
     # Every parameter of the invocation is preserved verbatim as well.
     assert data["parameters"]["fdr_threshold"] == 0.05
     assert data["parameters"]["output_dir"] == str(tmp_path / "out")
+
+
+def test_ic_floor_is_recorded_and_pulls_in_the_hierarchy(tmp_path, fake_inputs):
+    """--min-ic alone reads the hierarchy: its frequencies must be propagated.
+
+    An unpropagated P(t) inflates mid-level IC, so a floored run estimates IC
+    from the propagated map even when --propagate-annotations is off — which
+    makes the OBO an input worth hashing, and the source worth recording.
+    """
+    _, data = run_manifest_json(tmp_path, fake_inputs, ontology="go", min_ic=2.0)
+
+    thresholds = data["analysis"]["thresholds"]
+    assert thresholds["min_ic"] == 2.0
+    assert thresholds["ic_source"] == "propagated"
+    assert [record["role"] for record in data["inputs"]] == [
+        "domain_annotations",
+        "gaf",
+        "go_obo",
+    ]
+    assert data["analysis"]["ontology"]["hierarchy_inputs"] == ["go_obo"]
+
+
+def test_ic_source_is_direct_for_a_flat_vocabulary_even_with_a_floor(
+    tmp_path, fake_inputs
+):
+    """No hierarchy → the direct map is the propagated map; the floor still runs."""
+    _, data = run_manifest_json(tmp_path, fake_inputs, ontology="disease", min_ic=1.0)
+
+    thresholds = data["analysis"]["thresholds"]
+    assert thresholds["min_ic"] == 1.0
+    assert thresholds["ic_source"] == "direct"
+    # A flat vocabulary has no hierarchy inputs for the floor to pull in.
+    assert data["analysis"]["ontology"]["hierarchy_inputs"] == []
+
+
+def test_hierarchy_stage_flags_make_the_ic_source_propagated(tmp_path, fake_inputs):
+    """Any hierarchy-engaging run estimates the ic column from the propagated map."""
+    _, data = run_manifest_json(
+        tmp_path, fake_inputs, ontology="go", enable_relative_inference=True
+    )
+    assert data["analysis"]["thresholds"]["ic_source"] == "propagated"
+    assert data["analysis"]["thresholds"]["min_ic"] is None
