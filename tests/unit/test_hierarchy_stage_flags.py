@@ -30,6 +30,7 @@ def _args(**overrides) -> argparse.Namespace:
         min_support=0,
         ontology="go",
         enable_relative_inference=False,
+        propagate_annotations=False,
     )
     defaults.update(overrides)
     return argparse.Namespace(**defaults)
@@ -126,3 +127,60 @@ class TestRunRequestCarriesBothStages:
             ["--enable-relative-inference", "--go-ontology", "does-not-exist.obo"]
         )
         assert "go_obo" in " ".join(resolve_inputs(request).missing_inputs)
+
+
+class TestInputPropagationIsAThirdIndependentStage:
+    """`--propagate-annotations` is the True Path Rule on the *input* map.
+
+    An annotation to a child term implies its parents by definition, so this is
+    not a method choice about the domain associations — it is the correct reading
+    of the protein annotation data, applied before any test is built. It is
+    distinct from `--enable-true-path`, which propagates the *inferred*
+    associations afterwards.
+    """
+
+    def test_it_defaults_off_and_is_independent(self) -> None:
+        args, _ = parse_arguments([])
+        assert args.propagate_annotations is False
+
+        args, _ = parse_arguments(["--propagate-annotations"])
+        assert args.propagate_annotations is True
+        assert args.enable_relative_inference is False
+        assert args.enable_true_path is False
+
+    @pytest.mark.parametrize(
+        "ontology", ["go", "ec", "reactome", "doid", "subcellular", "ligand"]
+    )
+    def test_hierarchical_ontologies_are_accepted(self, ontology: str) -> None:
+        parser = argparse.ArgumentParser(prog="dcgo")
+        validate_arguments(_args(ontology=ontology, propagate_annotations=True), parser)
+
+    @pytest.mark.parametrize("ontology", ["disease", "rhea", "xref"])
+    def test_a_flat_vocabulary_is_rejected(self, ontology: str) -> None:
+        """Without a hierarchy a child annotation implies nothing."""
+        parser = argparse.ArgumentParser(prog="dcgo")
+        with pytest.raises(SystemExit) as excinfo:
+            validate_arguments(
+                _args(ontology=ontology, propagate_annotations=True), parser
+            )
+        assert excinfo.value.code == 2
+
+    def test_it_alone_requires_the_hierarchy_input(self) -> None:
+        from src.runner import resolve_inputs
+
+        request = parse_run_request(
+            ["--propagate-annotations", "--go-ontology", "does-not-exist.obo"]
+        )
+        assert "go_obo" in " ".join(resolve_inputs(request).missing_inputs)
+
+    def test_the_request_carries_all_three_stages_separately(self) -> None:
+        request = parse_run_request(
+            [
+                "--propagate-annotations",
+                "--enable-relative-inference",
+                "--enable-true-path",
+            ]
+        )
+        assert request.propagate_annotations is True
+        assert request.enable_relative_inference is True
+        assert request.enable_true_path is True

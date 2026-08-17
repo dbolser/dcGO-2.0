@@ -26,6 +26,7 @@ class RunRequest:
     min_support: int
     enable_true_path: bool
     enable_relative_inference: bool
+    propagate_annotations: bool
     enable_supra_domains: bool
     xref_db: str | None
     go_ontology: Path
@@ -50,6 +51,7 @@ class RunRequest:
             min_support=args.min_support,
             enable_true_path=args.enable_true_path,
             enable_relative_inference=getattr(args, "enable_relative_inference", False),
+            propagate_annotations=getattr(args, "propagate_annotations", False),
             enable_supra_domains=args.enable_supra_domains,
             xref_db=getattr(args, "xref_db", None),
             go_ontology=args.go_ontology,
@@ -110,7 +112,9 @@ def resolve_inputs(request: RunRequest) -> InputResolution:
                 entry,
                 paths,
                 for_hierarchy=(
-                    request.enable_true_path or request.enable_relative_inference
+                    request.enable_true_path
+                    or request.enable_relative_inference
+                    or request.propagate_annotations
                 ),
             )
         ),

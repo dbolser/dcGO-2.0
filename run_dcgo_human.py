@@ -324,6 +324,14 @@ def validate_arguments(
     # ontology with a hierarchy now supplies them (`build_parents`); the flat
     # cross-reference layers have nothing to test against, so they are rejected
     # here rather than silently running the overall inference alone.
+    if args.propagate_annotations:
+        entry = get_ontology(args.ontology)
+        if not entry.supports_true_path:
+            parser.error(
+                f"--propagate-annotations is not available for --ontology "
+                f"{args.ontology}: it has no term hierarchy, so a child "
+                "annotation implies nothing."
+            )
     if args.enable_relative_inference:
         entry = get_ontology(args.ontology)
         if not entry.supports_relative_inference:
@@ -372,7 +380,11 @@ def start_run_manifest(
     # flag pulls the hierarchy inputs into the manifest.
     hierarchy_inputs = (
         list(ontology_entry.hierarchy_needs)
-        if (args.enable_true_path or args.enable_relative_inference)
+        if (
+            args.enable_true_path
+            or args.enable_relative_inference
+            or args.propagate_annotations
+        )
         else []
     )
     # dict.fromkeys de-duplicates while preserving order: an ontology may list
@@ -432,6 +444,7 @@ def start_run_manifest(
                 "parental_background_min_size": PARENTAL_MIN_BACKGROUND_SIZE,
                 # The relative p-value is combined with the overall one before
                 # BH (max of the two), so there is no separate alpha for it.
+                "input_annotations_propagated": bool(args.propagate_annotations),
                 "relative_inference_combination": (
                     "max_overall_relative_then_bh"
                     if args.enable_relative_inference
@@ -558,6 +571,14 @@ def build_argument_parser() -> argparse.ArgumentParser:
         "EC via its numbering, reactome/keyword via their hierarchy files; not "
         "available for disease/xref). For the parental-background test that "
         "used to run alongside this for GO, see --enable-relative-inference",
+    )
+    parser.add_argument(
+        "--propagate-annotations",
+        action="store_true",
+        help="Apply the True Path Rule to the *input* protein->term map before "
+        "any test is built: an annotation to a child term implies its parents. "
+        "Needs a term hierarchy. Pair it with --enable-relative-inference — "
+        "alone it makes every domain trivially enriched for near-root terms",
     )
     parser.add_argument(
         "--enable-relative-inference",
@@ -769,6 +790,47 @@ def main(argv: list[str] | None = None) -> int:
             f"  Restricted annotations to the domain-annotated universe: "
             f"{annotated_proteins:,} → {len(protein_go_map):,} proteins "
             f"({annotated_proteins - len(protein_go_map):,} dropped, no domain data)"
+        )
+
+    # True Path Rule on the *input*, before any test is built. An annotation to a
+    # child term implies its parents by definition, so a protein annotated to
+    # "glycolytic process" belongs in the background of "metabolic process". A
+    # GAF records what curators assigned — the specific term — so without this a
+    # protein annotated to a descendant of T is counted as evidence *against*
+    # the domain-T association, sitting in the `c` cell.
+    #
+    # This is also what lets the signal find its own level: many sparsely
+    # annotated sibling terms, none individually significant, pool into the
+    # parent where the association actually peaks. Deciding *which* level that
+    # is remains the relative inference's job, which is why the two belong
+    # together — propagating the input without --enable-relative-inference makes
+    # every domain trivially "enriched" for near-root terms.
+    #
+    # It also removes an inconsistency: the relative inference has always had to
+    # propagate its backgrounds (#46), so without this the overall and relative
+    # p-values combined by --enable-relative-inference were computed against two
+    # different definitions of "annotated to T".
+    if args.propagate_annotations:
+        if ontology_entry.build_ancestors is None:
+            input_ancestors = OntologyProcessor(args.go_ontology).get_ancestors
+        else:
+            input_ancestors = ontology_entry.build_ancestors(ontology_paths)
+
+        before = sum(len(terms) for terms in protein_go_map.values())
+        cache: dict = {}
+        propagated_map = {}
+        for protein, terms in protein_go_map.items():
+            closure = set(terms)
+            for term in terms:
+                if term not in cache:
+                    cache[term] = frozenset(input_ancestors(term))
+                closure |= cache[term]
+            propagated_map[protein] = closure
+        protein_go_map = propagated_map
+        after = sum(len(terms) for terms in protein_go_map.values())
+        logger.info(
+            f"  True Path Rule on input annotations: {before:,} → {after:,} "
+            f"(protein, term) pairs ({after / before:.1f}x)"
         )
 
     # Calibration control. Comparing two ontology layers by their significant
