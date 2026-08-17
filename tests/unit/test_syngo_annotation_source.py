@@ -108,6 +108,30 @@ class TestParseSynGOAnnotations:
         with pytest.raises(FileNotFoundError):
             parse_syngo_annotations(tmp_path / "gone.zip")
 
+    def test_renamed_column_raises_instead_of_an_empty_layer(self, tmp_path):
+        # A release that renames a column must fail loudly, naming the member
+        # and the expectation — not parse to a silently empty layer.
+        annotations = tmp_path / "annotations.xlsx"
+        _sheet(ANNOTATION_ROWS, ["hgnc", "symbol", "uniprot_id", "go_id"]).save(
+            annotations
+        )
+        path = tmp_path / "renamed.zip"
+        with zipfile.ZipFile(path, "w") as archive:
+            archive.write(annotations, "annotations.xlsx")
+        with pytest.raises(ValueError, match="annotations.xlsx.*hgnc_id"):
+            dict(parse_syngo_annotations(path)[0])
+
+    def test_empty_sheet_raises_a_value_error_not_a_runtime_error(self, tmp_path):
+        # PEP 479 would surface a bare next() on an empty sheet as an opaque
+        # RuntimeError from inside the generator.
+        empty = tmp_path / "annotations.xlsx"
+        openpyxl.Workbook().save(empty)  # a single sheet with no rows at all
+        path = tmp_path / "empty.zip"
+        with zipfile.ZipFile(path, "w") as archive:
+            archive.write(empty, "annotations.xlsx")
+        with pytest.raises(ValueError, match="empty"):
+            parse_syngo_annotations(path)
+
 
 class TestParseSynGOHierarchy:
     def test_child_to_parent_edges(self, zip_path):

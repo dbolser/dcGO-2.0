@@ -27,7 +27,7 @@ import io
 import zipfile
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Set, Tuple
+from typing import Dict, Iterable, Iterator, List, Optional, Set, Tuple
 
 from loguru import logger
 
@@ -48,8 +48,15 @@ _ANNOTATIONS_MEMBER = "annotations.xlsx"
 _ONTOLOGIES_MEMBER = "ontologies.xlsx"
 
 
-def _iter_sheet_rows(zip_path: Path, member: str) -> Iterator[Dict[str, object]]:
+def _iter_sheet_rows(
+    zip_path: Path, member: str, required: Iterable[str]
+) -> Iterator[Dict[str, object]]:
     """Yield each data row of one xlsx inside the SynGO zip, keyed by header.
+
+    The zip does not name a sheet, so the first sheet whose header row carries
+    every ``required`` column is parsed; a release that renames a column (or
+    ships an empty sheet) raises :class:`ValueError` naming the member and the
+    missing columns instead of yielding a silently empty layer.
 
     openpyxl needs a seekable stream, so the member is read into memory —
     the whole zip is under a megabyte.
@@ -62,10 +69,33 @@ def _iter_sheet_rows(zip_path: Path, member: str) -> Iterator[Dict[str, object]]
     with zipfile.ZipFile(zip_path) as archive:
         payload = archive.read(member)
     workbook = openpyxl.load_workbook(io.BytesIO(payload), read_only=True)
-    rows = workbook.active.iter_rows(values_only=True)
-    header: List[str] = [str(cell) for cell in next(rows)]
-    for row in rows:
-        yield dict(zip(header, row))
+    try:
+        seen_headers: Dict[str, List[str]] = {}
+        for sheet in workbook.worksheets:
+            rows = sheet.iter_rows(values_only=True)
+            # next(rows, None), not next(rows): inside a generator a bare
+            # StopIteration from an empty sheet would surface as an opaque
+            # RuntimeError (PEP 479) rather than the ValueError below.
+            first = next(rows, None)
+            if first is None:
+                continue
+            header = [str(cell) for cell in first]
+            seen_headers[sheet.title] = header
+            if set(required) <= set(header):
+                for row in rows:
+                    yield dict(zip(header, row))
+                return
+        raise ValueError(
+            f"{member} in {zip_path}: no sheet carries the expected "
+            f"column(s) {sorted(required)}; "
+            + (
+                f"headers found: {seen_headers}"
+                if seen_headers
+                else "every sheet is empty"
+            )
+        )
+    finally:
+        workbook.close()
 
 
 def _cell(row: Dict[str, object], column: str) -> str:
@@ -89,7 +119,9 @@ def parse_syngo_annotations(
     gene_terms: Dict[str, Set[str]] = defaultdict(set)
     symbols: Dict[str, str] = {}
     n_rows = 0
-    for row in _iter_sheet_rows(zip_path, _ANNOTATIONS_MEMBER):
+    for row in _iter_sheet_rows(
+        zip_path, _ANNOTATIONS_MEMBER, required=("hgnc_id", "hgnc_symbol", "go_id")
+    ):
         term = _cell(row, "go_id")
         gene_ids = [
             part.strip() for part in _cell(row, "hgnc_id").split(";") if part.strip()
@@ -117,7 +149,9 @@ def parse_syngo_hierarchy(zip_path: Path) -> Dict[str, Set[str]]:
     rows have no parent).
     """
     child_to_parents: Dict[str, Set[str]] = {}
-    for row in _iter_sheet_rows(zip_path, _ONTOLOGIES_MEMBER):
+    for row in _iter_sheet_rows(
+        zip_path, _ONTOLOGIES_MEMBER, required=("id", "parent_id")
+    ):
         term = _cell(row, "id")
         parent = _cell(row, "parent_id")
         if term and parent:
