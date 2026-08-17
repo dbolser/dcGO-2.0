@@ -46,6 +46,7 @@ def make_args(tmp_path, **overrides):
         min_support=0,
         enable_true_path=False,
         enable_relative_inference=False,
+        propagate_annotations=False,
         enable_supra_domains=True,
         num_cores=4,
         batch_size=50000,

@@ -33,6 +33,7 @@ def _args(**overrides) -> argparse.Namespace:
         min_support=0,
         ontology="go",
         enable_relative_inference=False,
+        propagate_annotations=False,
     )
     defaults.update(overrides)
     return argparse.Namespace(**defaults)
