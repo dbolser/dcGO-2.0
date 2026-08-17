@@ -29,6 +29,8 @@ def paths(tmp_path):
         "mondo_obo",
         "hpo_g2p",
         "hpo_obo",
+        "gwas_associations",
+        "efo_obo",
         "syngo_zip",
         "mgi_genepheno",
         "mgi_marker_swissprot",

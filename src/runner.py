@@ -41,6 +41,8 @@ class RunRequest:
     mondo_obo: Path
     hpo_g2p: Path
     hpo_obo: Path
+    gwas_associations: Path
+    efo_obo: Path
     syngo_zip: Path
     mgi_genepheno: Path
     mgi_marker_swissprot: Path
@@ -104,6 +106,8 @@ class RunRequest:
             mondo_obo=args.mondo_obo,
             hpo_g2p=args.hpo_genes_to_phenotype,
             hpo_obo=args.hpo_obo,
+            gwas_associations=args.gwas_associations,
+            efo_obo=args.efo_obo,
             syngo_zip=args.syngo_zip,
             mgi_genepheno=args.mgi_genepheno,
             mgi_marker_swissprot=args.mgi_marker_swissprot,
@@ -136,6 +140,8 @@ class RunRequest:
             "mondo_obo": self.mondo_obo,
             "hpo_g2p": self.hpo_g2p,
             "hpo_obo": self.hpo_obo,
+            "gwas_associations": self.gwas_associations,
+            "efo_obo": self.efo_obo,
             "syngo_zip": self.syngo_zip,
             "mgi_genepheno": self.mgi_genepheno,
             "mgi_marker_swissprot": self.mgi_marker_swissprot,

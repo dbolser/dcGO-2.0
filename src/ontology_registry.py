@@ -80,6 +80,11 @@ from src.flybase_annotation_source import (
     FBCV_SPEC,
     FlyBasePhenotypeAnnotationSource,
 )
+from src.gwas_annotation_source import (
+    EFO_SPEC,
+    GWASCatalogAnnotationSource,
+    parse_efo_child_parents,
+)
 from src.hpo_annotation_source import HPO_SPEC, HPOAnnotationSource
 from src.mgi_annotation_source import MP_SPEC, MGIAnnotationSource
 from src.wormbase_annotation_source import (
@@ -268,6 +273,11 @@ def _mondo_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
 
 def _hpo_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
     return _child_parents("hpo", paths["hpo_obo"], parse_obo_child_parents)
+
+
+def _efo_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
+    return _child_parents("efo", paths["efo_obo"], parse_efo_child_parents)
+
 
 def _mp_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
     return _child_parents("mp", paths["mp_obo"], parse_obo_child_parents)
@@ -482,6 +492,22 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
         build_parents=lambda paths: parents_from_map(_hpo_child_parents(paths)),
         needs=("hpo_g2p", "uniprot_dat"),
         hierarchy_needs=("hpo_obo",),
+    ),
+    # The loosest evidence type in the registry: genetic association, not
+    # curated function. Row policy (genome-wide significance, intergenic
+    # drops) documented with counts in src/gwas_annotation_source.py.
+    "efo": OntologyEntry(
+        key="efo",
+        spec=EFO_SPEC,
+        description="GWAS Catalog traits (EFO), mapped gene symbols re-keyed "
+        "to UniProt",
+        build_source=lambda paths, options: GWASCatalogAnnotationSource(
+            paths["gwas_associations"], paths["uniprot_dat"]
+        ),
+        build_ancestors=lambda paths: closure_ancestors(_efo_child_parents(paths)),
+        build_parents=lambda paths: parents_from_map(_efo_child_parents(paths)),
+        needs=("gwas_associations", "uniprot_dat"),
+        hierarchy_needs=("efo_obo",),
     ),
     "syngo": OntologyEntry(
         key="syngo",

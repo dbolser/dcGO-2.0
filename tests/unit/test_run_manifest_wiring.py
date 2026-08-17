@@ -67,6 +67,10 @@ def make_args(tmp_path, **overrides):
         mondo_obo=Path("data/raw/mondo/mondo.obo"),
         hpo_genes_to_phenotype=Path("data/raw/hpo/genes_to_phenotype.txt"),
         hpo_obo=Path("data/raw/hpo/hp.obo"),
+        gwas_associations=Path(
+            "data/raw/gwas_catalog/gwas-catalog-associations_ontology-annotated-full.zip"
+        ),
+        efo_obo=Path("data/raw/efo/efo.obo"),
         syngo_zip=Path("data/raw/syngo/syngo1.3_complete_data.zip"),
         mgi_genepheno=Path("data/raw/mgi_reports/MGI_GenePheno.rpt"),
         mgi_marker_swissprot=Path("data/raw/mgi_reports/MRK_SwissProt_TrEMBL.rpt"),

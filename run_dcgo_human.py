@@ -166,6 +166,8 @@ INPUT_SOURCE_NAMES = {
     "mondo_obo": "mondo_ontology",
     "hpo_g2p": "hpo_annotations",
     "hpo_obo": "hpo_ontology",
+    "gwas_associations": "gwas_catalog",
+    "efo_obo": "efo_ontology",
     "syngo_zip": "syngo",
     "mgi_genepheno": "mgi_genepheno",
     "mgi_marker_swissprot": "mgi_marker_swissprot",
@@ -764,6 +766,22 @@ def build_argument_parser() -> argparse.ArgumentParser:
         default=Path("data/raw/hpo/hp.obo"),
         help="Path to the Human Phenotype Ontology OBO, for --ontology hpo "
         "--enable-true-path",
+    )
+    parser.add_argument(
+        "--gwas-associations",
+        type=Path,
+        default=Path(
+            "data/raw/gwas_catalog/gwas-catalog-associations_ontology-annotated-full.zip"
+        ),
+        help="Path to the GWAS Catalog ontology-annotated association file "
+        "(zip or extracted TSV), for --ontology efo",
+    )
+    parser.add_argument(
+        "--efo-obo",
+        type=Path,
+        default=Path("data/raw/efo/efo.obo"),
+        help="Path to the Experimental Factor Ontology OBO, for --ontology "
+        "efo --enable-true-path",
     )
     parser.add_argument(
         "--syngo-zip",

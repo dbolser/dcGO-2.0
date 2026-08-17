@@ -397,6 +397,29 @@ class Config:
                 required=False,
                 subdir="hpo",
             ),
+            # GWAS Catalog association file, EFO-annotated, for --ontology efo
+            # (src/gwas_annotation_source.py). The per-file .tsv names on the
+            # FTP are gone; associations now ship as one zip under
+            # releases/latest/ (a moving target — the run manifest's SHA-256
+            # identifies the actual snapshot; 2026-08-02 at acquisition).
+            "gwas_catalog": DataSource(
+                name="gwas_catalog",
+                url="https://ftp.ebi.ac.uk/pub/databases/gwas/releases/latest/"
+                "gwas-catalog-associations_ontology-annotated-full.zip",
+                description="GWAS Catalog SNP → EFO trait associations (--ontology efo)",
+                required=False,
+                subdir="gwas_catalog",
+            ),
+            # EFO ships versioned releases on GitHub; pinned like the other
+            # ontology releases (bump URL and checksum together).
+            "efo_ontology": DataSource(
+                name="efo_ontology",
+                url="https://github.com/EBISPOT/efo/releases/download/v3.93.0/efo.obo",
+                description="Experimental Factor Ontology DAG (True Path for --ontology efo)",
+                required=False,
+                subdir="efo",
+                checksum="sha256:66e87fc65a6254c6d69281ed3d286784ee5f8265b1e57691efddd29b20570c46",
+            ),
             # SynGO bulk release: one zip carrying both the HGNC-keyed
             # annotations and the term hierarchy, for --ontology syngo
             # (src/syngo_annotation_source.py). Release 1.3 (2025-03) is the
