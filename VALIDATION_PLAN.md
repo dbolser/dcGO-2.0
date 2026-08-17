@@ -908,6 +908,15 @@ What is **not** established, and should not be claimed:
 > unaffected by that defect — though the shrinkage rung describes a step that
 > has since been removed (#44), on the strength of this ablation finding it
 > moved 0/12 cells.
+>
+> **Edge-type caveat (2026-08-17, #67).** Every stored artifact produced before
+> the is_a/part_of restriction was propagated over a DAG that also traversed
+> GO's ~7,800 regulates / positively_regulates / negatively_regulates edges —
+> in the STAGE 5.5 propagated outputs and in the relative-inference backgrounds
+> alike. Mixed-era comparisons are therefore confounded, and the ablation
+> re-run must be produced wholly post-fix. Run manifests now record the policy
+> as `analysis.ontology.propagation_relations`; a manifest without that key is
+> a pre-fix artifact.
 
 The supra-domain + shrinkage machinery is the main methodological novelty. It
 had to be shown to help, not just to exist. It does not.

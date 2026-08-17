@@ -94,7 +94,11 @@ from scipy.stats import hypergeom
 
 from src.annotation_source import restrict_to_universe
 from src.domain_annotation_parser import DOMAIN_KEYS, DomainAnnotationParser
-from src.hierarchy import propagate_annotation_map, propagate_via_ancestors
+from src.hierarchy import (
+    PROPAGATION_RELATIONS,
+    propagate_annotation_map,
+    propagate_via_ancestors,
+)
 from src.ontology_processor import OntologyProcessor
 from src.ontology_registry import (
     OntologyEntry,
@@ -430,6 +434,17 @@ def start_run_manifest(
                     if ontology_entry.external_propagation
                     else "ancestor_closure"
                     if ontology_entry.build_ancestors is not None
+                    else None
+                ),
+                # The edge types the GO DAG traverses. Artifacts produced
+                # before this key existed were propagated over a DAG that also
+                # included the ~7,800 regulates-family edges, so mixed-era
+                # comparisons are confounded — see VALIDATION_PLAN §4.
+                # Registry closures declare their edges in their own loaders
+                # (see hierarchy_inputs), so nothing is recorded for them here.
+                "propagation_relations": (
+                    list(PROPAGATION_RELATIONS)
+                    if ontology_entry.external_propagation
                     else None
                 ),
             },
