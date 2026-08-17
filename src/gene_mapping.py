@@ -30,7 +30,6 @@ Mapping policy, mirroring :mod:`src.disease_ontology`:
 
 from __future__ import annotations
 
-import gzip
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,6 +37,7 @@ from typing import Dict, Set, Tuple
 
 from loguru import logger
 
+from src.hierarchy import open_text
 from src.remap import RemapCoverage, remap_values
 from src.uniprot_annotation_source import iter_uniprot_entries
 
@@ -144,15 +144,10 @@ def parse_idmapping_accession_map(
     file inverted (gene id → every accession that carries it), so one-to-many
     gene ids are preserved for :func:`remap_gene_annotations`'s counted policy.
     """
-    path = Path(path)
-    if not path.exists():
-        raise FileNotFoundError(f"idmapping file not found: {path}")
-
     logger.info(f"Building {id_type} → accession map from {path}")
-    open_func = gzip.open if path.suffix == ".gz" else open
     mapping: Dict[str, Set[str]] = defaultdict(set)
     n_rows = 0
-    with open_func(path, "rt") as handle:
+    with open_text(path, label="idmapping file") as handle:
         for line in handle:
             fields = line.rstrip("\n").split("\t")
             if len(fields) == 3 and fields[1] == id_type:
@@ -164,6 +159,26 @@ def parse_idmapping_accession_map(
         f"({gene_map.n_one_to_many:,} one-to-many)"
     )
     return gene_map
+
+
+def parse_idmapping_accessions(path: Path) -> Set[str]:
+    """The distinct *canonical* accessions of a per-organism idmapping file.
+
+    The first column mixes canonical accessions with isoform ids
+    (``Q9N4D9-2``); 9% of the worm file's distinct first-column values are
+    isoform-suffixed at acquisition. ``protein2ipr`` is keyed by canonical
+    accession only, so isoform ids can never match a domain row — kept as-is
+    they silently deflate any coverage measured against the resulting set.
+    The suffix is stripped here (UniProt accessions contain no ``-`` except
+    the isoform separator) and the set de-duplicates the collapse.
+    """
+    accessions: Set[str] = set()
+    with open_text(path, label="idmapping file") as handle:
+        for line in handle:
+            accession = line.split("\t", 1)[0].strip()
+            if accession:
+                accessions.add(accession.split("-", 1)[0])
+    return accessions
 
 
 def _invert(mapping: Dict[str, Set[str]]) -> Dict[str, Set[str]]:

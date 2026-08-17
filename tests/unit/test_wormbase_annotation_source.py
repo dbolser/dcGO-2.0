@@ -4,7 +4,7 @@ import gzip
 
 import pytest
 
-from src.gene_mapping import parse_idmapping_accession_map
+from src.gene_mapping import parse_idmapping_accession_map, parse_idmapping_accessions
 from src.wormbase_annotation_source import (
     WormBasePhenotypeAnnotationSource,
     parse_wb_phenotype_association,
@@ -33,6 +33,8 @@ IDMAPPING = (
     "Q20655\tWormBase\tWBGene00000002\n"
     "Q20655\tGene_Name\taat-1\n"
     "A0A000\tWormBase\tWBGene00000001\n"
+    # Isoform rows: first column carries a -N suffix.
+    "Q20655-2\tWormBase_TRS\tF27C8.1b.1\n"
 )
 
 
@@ -88,6 +90,23 @@ class TestIdmappingAccessionMap:
     def test_missing_file_fails_loudly(self, tmp_path):
         with pytest.raises(FileNotFoundError):
             parse_idmapping_accession_map(tmp_path / "gone.dat.gz", "WormBase")
+
+
+class TestIdmappingAccessions:
+    """The accession-universe reader used by extract_species_interpro."""
+
+    def test_isoform_suffixes_collapse_to_canonical(self, idmapping):
+        # Q20655-2 must not survive as its own accession: protein2ipr is
+        # keyed by canonical accession, so isoform ids can never match.
+        assert parse_idmapping_accessions(idmapping) == {
+            "P41932",
+            "Q20655",
+            "A0A000",
+        }
+
+    def test_missing_file_fails_loudly(self, tmp_path):
+        with pytest.raises(FileNotFoundError):
+            parse_idmapping_accessions(tmp_path / "gone.dat.gz")
 
 
 class TestWormBasePhenotypeAnnotationSource:
