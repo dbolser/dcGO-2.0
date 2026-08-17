@@ -67,6 +67,10 @@ class DataSource:
     #: URL embeds a release name and therefore *will* break on upstream
     #: release turnover (WormBase, FlyBase).
     update_hint: Optional[str] = None
+    #: On-disk filename, when the URL's last path segment is not a usable one
+    #: (API endpoints like OncoTree's ``/api/tumorTypes``). Defaults to the
+    #: URL basename.
+    filename: Optional[str] = None
 
     def __post_init__(self) -> None:
         """Validate data source configuration."""
@@ -420,6 +424,37 @@ class Config:
                 required=False,
                 subdir="efo",
                 checksum="sha256:66e87fc65a6254c6d69281ed3d286784ee5f8265b1e57691efddd29b20570c46",
+            ),
+            # CIViC-derived cancer layers (--ontology ncit|oncotree,
+            # src/civic_annotation_source.py). CIViC's nightly is a moving
+            # target (CC0); the run manifest's SHA-256 identifies the snapshot.
+            "civic_evidence": DataSource(
+                name="civic_evidence",
+                url="https://civicdb.org/downloads/nightly/"
+                "nightly-ClinicalEvidenceSummaries.tsv",
+                description="CIViC clinical evidence, DOID-keyed (--ontology ncit/oncotree)",
+                required=False,
+                subdir="civic",
+            ),
+            # NCIt OBO edition, pinned to the release we validated against
+            # (248 MB; the OBO reader streams it). Bump URL+checksum together.
+            "ncit_ontology": DataSource(
+                name="ncit_ontology",
+                url="https://purl.obolibrary.org/obo/ncit/releases/2026-03-19/ncit.obo",
+                description="NCI Thesaurus OBO edition (True Path for --ontology ncit)",
+                required=False,
+                subdir="ncit",
+                checksum="sha256:8fdc2d29c9ebd91ada8330ed023b0c56ae787a31e6aedff453ee9bfef6fc18f6",
+            ),
+            # The OncoTree API endpoint has no filename in its path (and
+            # rejects HEAD, but serves GET); `filename` names the dump.
+            "oncotree_tumortypes": DataSource(
+                name="oncotree_tumortypes",
+                url="https://oncotree.mskcc.org/api/tumorTypes",
+                description="OncoTree tumour types + NCI/UMLS xrefs (--ontology oncotree)",
+                required=False,
+                subdir="oncotree",
+                filename="oncotree_tumortypes.json",
             ),
             # HPA single-cell expression matrix, for --ontology celltype
             # (src/hpa_annotation_source.py). Unversioned "current release"

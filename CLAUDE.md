@@ -116,7 +116,7 @@ uv run python run_dcgo_human.py --enable-relative-inference
 uv run python run_dcgo_human.py --propagate-annotations \
     --enable-relative-inference --enable-true-path --min-ic 1
 
-# Other ontologies (see src/ontology_registry.py or --help for all 28)
+# Other ontologies (see src/ontology_registry.py or --help for all 35)
 uv run python run_dcgo_human.py --ontology subcellular --enable-true-path
 uv run python run_dcgo_human.py --ontology ligand      # FT /ligand_id (ChEBI)
 uv run python run_dcgo_human.py --ontology doid --enable-true-path  # OMIM re-keyed to DO

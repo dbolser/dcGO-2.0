@@ -44,6 +44,9 @@ class RunRequest:
     gwas_associations: Path
     efo_obo: Path
     hpa_single_cell: Path
+    civic_evidence: Path
+    ncit_obo: Path
+    oncotree_json: Path
     syngo_zip: Path
     mgi_genepheno: Path
     mgi_marker_swissprot: Path
@@ -112,6 +115,9 @@ class RunRequest:
             gwas_associations=args.gwas_associations,
             efo_obo=args.efo_obo,
             hpa_single_cell=args.hpa_single_cell,
+            civic_evidence=args.civic_evidence,
+            ncit_obo=args.ncit_obo,
+            oncotree_json=args.oncotree_json,
             syngo_zip=args.syngo_zip,
             mgi_genepheno=args.mgi_genepheno,
             mgi_marker_swissprot=args.mgi_marker_swissprot,
@@ -149,6 +155,9 @@ class RunRequest:
             "gwas_associations": self.gwas_associations,
             "efo_obo": self.efo_obo,
             "hpa_single_cell": self.hpa_single_cell,
+            "civic_evidence": self.civic_evidence,
+            "ncit_obo": self.ncit_obo,
+            "oncotree_json": self.oncotree_json,
             "syngo_zip": self.syngo_zip,
             "mgi_genepheno": self.mgi_genepheno,
             "mgi_marker_swissprot": self.mgi_marker_swissprot,

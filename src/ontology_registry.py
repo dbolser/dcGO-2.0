@@ -69,6 +69,13 @@ from src.annotation_source import (
     GAFAnnotationSource,
     OntologySpec,
 )
+from src.civic_annotation_source import (
+    NCIT_SPEC,
+    ONCOTREE_SPEC,
+    CIViCNCItAnnotationSource,
+    CIViCOncoTreeAnnotationSource,
+    parse_oncotree_child_parents,
+)
 from src.disease_ontology import (
     DOID_SPEC,
     MONDO_SPEC,
@@ -271,6 +278,23 @@ def _mondo_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
         "mondo",
         paths["mondo_obo"],
         lambda path: parse_obo_child_parents(path, relations=()),
+    )
+
+
+def _ncit_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
+    """NCIt ``is_a`` graph. The OBO edition is 248 MB but the shared reader
+    streams it line by line; only the ~210k-term child→parents map is held
+    (and memoised per process by _child_parents)."""
+    return _child_parents(
+        "ncit",
+        paths["ncit_obo"],
+        lambda path: parse_obo_child_parents(path, relations=()),
+    )
+
+
+def _oncotree_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
+    return _child_parents(
+        "oncotree", paths["oncotree_json"], parse_oncotree_child_parents
     )
 
 
@@ -486,6 +510,40 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
         build_parents=lambda paths: parents_from_map(_mondo_child_parents(paths)),
         needs=("uniprot_dat", "mondo_obo"),
         hierarchy_needs=("mondo_obo",),
+    ),
+    # CIViC-derived cancer layers. Small by construction (CIViC curates ~500
+    # genes) and each chain stage is counted — src/civic_annotation_source.py
+    # carries the per-stage coverage; OncoTree in particular reaches only
+    # ~124 of CIViC's 299 DOIDs (it has no node for many DO classes).
+    "ncit": OntologyEntry(
+        key="ncit",
+        spec=NCIT_SPEC,
+        description="NCI Thesaurus cancer terms via CIViC evidence "
+        "(gene→DOID→NCIt; small clinical layer)",
+        build_source=lambda paths, options: CIViCNCItAnnotationSource(
+            paths["civic_evidence"], paths["doid_obo"], paths["uniprot_dat"]
+        ),
+        build_ancestors=lambda paths: closure_ancestors(_ncit_child_parents(paths)),
+        build_parents=lambda paths: parents_from_map(_ncit_child_parents(paths)),
+        needs=("civic_evidence", "doid_obo", "uniprot_dat"),
+        hierarchy_needs=("ncit_obo",),
+    ),
+    "oncotree": OntologyEntry(
+        key="oncotree",
+        spec=ONCOTREE_SPEC,
+        description="OncoTree tumour types via CIViC evidence "
+        "(gene→DOID→NCI/UMLS→code; thinner still — see module)",
+        build_source=lambda paths, options: CIViCOncoTreeAnnotationSource(
+            paths["civic_evidence"],
+            paths["doid_obo"],
+            paths["oncotree_json"],
+            paths["uniprot_dat"],
+        ),
+        build_ancestors=lambda paths: closure_ancestors(_oncotree_child_parents(paths)),
+        build_parents=lambda paths: parents_from_map(_oncotree_child_parents(paths)),
+        # The JSON is both the code mapping and the hierarchy (like syngo's zip).
+        needs=("civic_evidence", "doid_obo", "oncotree_json", "uniprot_dat"),
+        hierarchy_needs=("oncotree_json",),
     ),
     # ---- Gene-keyed layers (genes re-keyed to UniProt at parse time) -------
     "hpo": OntologyEntry(

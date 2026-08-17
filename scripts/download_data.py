@@ -104,6 +104,34 @@ DATASET_GROUPS: dict[str, list[str]] = {
         "worm_idmapping",
         "wbphenotype_ontology",
     ],
+    # Expression-based worm anatomy layer (--species worm --ontology wbbt).
+    "wbbt": [
+        "wormbase_anatomy",
+        "worm_idmapping",
+        "wbbt_ontology",
+    ],
+    # Mondo re-keys UniProt's disease layer, so it only needs the OBO on top
+    # of the standard uniprot_sprot_dat input.
+    "mondo": [
+        "mondo_ontology",
+    ],
+    # GWAS Catalog traits (--ontology efo): associations + the EFO DAG.
+    "efo": [
+        "gwas_catalog",
+        "efo_ontology",
+    ],
+    # HPA single-cell cell types (--ontology celltype); flat, so no OBO.
+    "celltype": [
+        "hpa_single_cell",
+    ],
+    # CIViC-derived cancer layers (--ontology ncit / oncotree). doid.obo
+    # supplies the cross-reference tables both chains hop through.
+    "civic-cancer": [
+        "civic_evidence",
+        "disease_ontology",
+        "ncit_ontology",
+        "oncotree_tumortypes",
+    ],
     "zfa": [
         "zfin_phenotype",
         "zfin_uniprot",
@@ -370,7 +398,9 @@ def main() -> int:
     for name in selected:
         ds = sources[name]
         url = ds.url
-        dest = raw_dir / (ds.subdir or name) / _filename_for(ds.url, name)
+        dest = (
+            raw_dir / (ds.subdir or name) / (ds.filename or _filename_for(ds.url, name))
+        )
         description = ds.description
 
         # GOA is per-species; retarget the pinned (human) URL for any other

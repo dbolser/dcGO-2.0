@@ -19,8 +19,9 @@ Options:
     --ontology STR           Ontology to associate domains with (default: go). See
                              src/ontology_registry.py, or --help, for the full list:
                              go, ec, reactome, keyword, disease, doid, orphanet,
-                             orphanet_doid, mondo, orphanet_mondo, hpo, syngo,
-                             mp, wbphenotype, zfa, fbcv, fbbt, tcdb, merops,
+                             orphanet_doid, mondo, orphanet_mondo, ncit,
+                             oncotree, hpo, efo, celltype, syngo, mp,
+                             wbphenotype, wbbt, zfa, fbcv, fbbt, tcdb, merops,
                              cazy, unipathway, complex, drugbank, pharos,
                              condensate, subcellular, ligand, cofactor, rhea, xref
     --doid-obo PATH          Path to doid.obo, used when --ontology doid|orphanet_doid
@@ -68,11 +69,16 @@ Examples:
     # Gene-keyed layers (genes re-keyed to UniProt accessions at parse time)
     uv run python run_dcgo_human.py --ontology hpo                # HPO phenotypes (NCBI GeneID)
     uv run python run_dcgo_human.py --ontology syngo              # SynGO synaptic terms (HGNC)
+    uv run python run_dcgo_human.py --ontology efo                # GWAS Catalog traits (gene symbols)
+    uv run python run_dcgo_human.py --ontology celltype           # HPA cell types (Ensembl genes; flat)
+    uv run python run_dcgo_human.py --ontology ncit               # CIViC cancer evidence -> NCIt
+    uv run python run_dcgo_human.py --ontology oncotree           # ... -> OncoTree tumour types
 
     # Model-organism phenotype layers: learn the domain association on the
     # model organism's own proteins (domains are species-agnostic)
     uv run python run_dcgo_human.py --species mouse --ontology mp
     uv run python run_dcgo_human.py --species worm --ontology wbphenotype
+    uv run python run_dcgo_human.py --species worm --ontology wbbt  # expression-based anatomy
     uv run python run_dcgo_human.py --species zebrafish --ontology zfa
     uv run python run_dcgo_human.py --species fly --ontology fbcv
 
@@ -170,6 +176,9 @@ INPUT_SOURCE_NAMES = {
     "gwas_associations": "gwas_catalog",
     "efo_obo": "efo_ontology",
     "hpa_single_cell": "hpa_single_cell",
+    "civic_evidence": "civic_evidence",
+    "ncit_obo": "ncit_ontology",
+    "oncotree_json": "oncotree_tumortypes",
     "syngo_zip": "syngo",
     "mgi_genepheno": "mgi_genepheno",
     "mgi_marker_swissprot": "mgi_marker_swissprot",
@@ -786,6 +795,27 @@ def build_argument_parser() -> argparse.ArgumentParser:
         default=Path("data/raw/efo/efo.obo"),
         help="Path to the Experimental Factor Ontology OBO, for --ontology "
         "efo --enable-true-path",
+    )
+    parser.add_argument(
+        "--civic-evidence",
+        type=Path,
+        default=Path("data/raw/civic/nightly-ClinicalEvidenceSummaries.tsv"),
+        help="Path to CIViC's nightly clinical evidence summaries TSV, for "
+        "--ontology ncit/oncotree",
+    )
+    parser.add_argument(
+        "--ncit-obo",
+        type=Path,
+        default=Path("data/raw/ncit/ncit.obo"),
+        help="Path to the NCI Thesaurus OBO edition, for --ontology ncit "
+        "--enable-true-path",
+    )
+    parser.add_argument(
+        "--oncotree-json",
+        type=Path,
+        default=Path("data/raw/oncotree/oncotree_tumortypes.json"),
+        help="Path to the OncoTree tumour-types JSON (API dump; supplies "
+        "both the NCI/UMLS code mapping and the tree), for --ontology oncotree",
     )
     parser.add_argument(
         "--hpa-single-cell",
