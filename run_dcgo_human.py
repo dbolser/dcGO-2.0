@@ -115,6 +115,12 @@ from src.ontology_registry import (
     ontology_keys,
 )
 from src.relative_inference import compute_relative_p_values
+from src.release_pins import (
+    FLYBASE_FBAL_TO_FBGN_FILENAME,
+    FLYBASE_FBGN_UNIPROT_FILENAME,
+    FLYBASE_GENOTYPE_PHENOTYPE_FILENAME,
+    WORMBASE_PHENOTYPE_FILENAME,
+)
 from src.run_manifest import RunManifest, describe_file, manifest_filename
 from src.runner import RunRequest, resolve_inputs
 from src.sparse_fisher import (
@@ -720,7 +726,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--wb-phenotype",
         type=Path,
-        default=Path("data/raw/wormbase/phenotype_association.WS298.wb.gz"),
+        default=Path("data/raw/wormbase") / WORMBASE_PHENOTYPE_FILENAME,
         help="Path to WormBase's phenotype_association GAF (the filename "
         "carries the WormBase release), for --ontology wbphenotype "
         "(run with --species worm)",
@@ -762,7 +768,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--fb-genotype-phenotype",
         type=Path,
-        default=Path("data/raw/flybase/genotype_phenotype_data_fb_2026_02.tsv.gz"),
+        default=Path("data/raw/flybase") / FLYBASE_GENOTYPE_PHENOTYPE_FILENAME,
         help="Path to FlyBase's genotype_phenotype_data table (the filename "
         "carries the FlyBase release), for --ontology fbcv/fbbt "
         "(run with --species fly)",
@@ -770,13 +776,13 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--fbal-to-fbgn",
         type=Path,
-        default=Path("data/raw/flybase/fbal_to_fbgn_fb_2026_02.tsv.gz"),
+        default=Path("data/raw/flybase") / FLYBASE_FBAL_TO_FBGN_FILENAME,
         help="Path to FlyBase's allele → gene table, for --ontology fbcv/fbbt",
     )
     parser.add_argument(
         "--fbgn-uniprot",
         type=Path,
-        default=Path("data/raw/flybase/fbgn_NAseq_Uniprot_fb_2026_02.tsv.gz"),
+        default=Path("data/raw/flybase") / FLYBASE_FBGN_UNIPROT_FILENAME,
         help="Path to FlyBase's FBgn → UniProt accession table, for "
         "--ontology fbcv/fbbt",
     )

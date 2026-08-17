@@ -89,10 +89,15 @@ DATASET_GROUPS: dict[str, list[str]] = {
     # the OBO each needs for --enable-true-path / --enable-relative-inference.
     # Run them with --species mouse/worm/zebrafish/fly respectively (see
     # scripts/extract_species_interpro.py for the matching domain universe).
+    # Each group carries the annotation files, the gene→UniProt mapping, the
+    # OBO, and the per-organism idmapping file that
+    # scripts/extract_species_interpro.py builds the species' domain universe
+    # from — everything the documented per-species chain needs.
     "mp": [
         "mgi_genepheno",
         "mgi_marker_swissprot",
         "mp_ontology",
+        "mouse_idmapping",
     ],
     "wbphenotype": [
         "wormbase_phenotype",
@@ -103,6 +108,7 @@ DATASET_GROUPS: dict[str, list[str]] = {
         "zfin_phenotype",
         "zfin_uniprot",
         "zfa_ontology",
+        "zebrafish_idmapping",
     ],
     # fbcv and fbbt share the same three FlyBase tables; only the OBO differs.
     "flybase-phenotype": [
@@ -111,6 +117,7 @@ DATASET_GROUPS: dict[str, list[str]] = {
         "flybase_fbgn_uniprot",
         "fbbt_ontology",
         "fbcv_ontology",
+        "fly_idmapping",
     ],
 }
 
@@ -409,6 +416,10 @@ def main() -> int:
                 verify_checksum(dest, expected)
         except (requests.RequestException, OSError, ChecksumError) as exc:
             print(f"  ✘ FAILED: {exc}")
+            # Release-stamped URLs (WormBase, FlyBase) break on upstream
+            # release turnover; their DataSource says what to update.
+            if ds.update_hint:
+                print(f"    hint: {ds.update_hint}")
             failures.append(name)
         print()
 
