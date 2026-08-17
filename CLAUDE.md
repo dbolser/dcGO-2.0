@@ -36,6 +36,13 @@ Key `src/` modules:
 - `ontology_registry.py` - the `--ontology` dispatch table: one `OntologyEntry` per ontology, holding its `AnnotationSource` factory, its ancestors factory (or `None` when it has no hierarchy), and the input files each needs so a run fails early on a missing input. Adding an ontology is one entry here.
 - `disease_ontology.py` - Disease Ontology adapter (`--ontology doid` / `orphanet_doid`). UniProt's disease layer is OMIM/Orphanet ids with no DAG; DO cross-references both (`xref: MIM:`, `xref: ORDO:`), so this re-keys the annotations onto DOID terms **at parse time** — sparse per-locus phenotypes pool into a DO class before the Fisher tests, then propagate up DO's `is_a` DAG. The module docstring states the policy for unmapped / one-to-many / obsolete ids, and every case is counted and logged (`XrefMapping`, `RemapCoverage`).
 - `ec_annotation_source.py` - Enzyme Commission adapter (`run_dcgo_human.py --ontology ec`): parses Expasy `enzyme.dat` (already UniProt-keyed, so no id mapping) and provides `propagate_ec_annotations`/`ec_ancestors` for EC True Path propagation (hierarchy is implicit in the numbering — no OBO). First non-GO ontology on the seam.
+- `gene_mapping.py`, `hpo_annotation_source.py`, `syngo_annotation_source.py` -
+  gene-keyed layers (`--ontology hpo` / `syngo`). HPO's `genes_to_phenotype.txt`
+  is NCBI-GeneID-keyed and SynGO's bulk zip is HGNC-keyed, so both re-key
+  gene → UniProt accession at parse time using the Swiss-Prot flat file's own
+  `DR GeneID` / `DR HGNC` lines (no idmapping download), with the DOID layer's
+  counted policy for unmapped/one-to-many ids. SynGO's term hierarchy ships in
+  the same zip (`ontologies.xlsx`); HPO propagates over `hp.obo`.
 - `uniprot_annotation_source.py` - UniProt-native adapters. Three layers of the Swiss-Prot flat file: `DR` cross-references (`reactome`, `disease`, `orphanet`, `tcdb`, `merops`, `cazy`, `unipathway`, `complex`, `drugbank`, `pharos`, `condensate`, plus `xref --xref-db NAME` for anything else), `KW` keywords, and — new — the layers curated into the entry *body*: `CC SUBCELLULAR LOCATION` (mapped to `SL-` terms via `subcell.txt`), `FT /ligand_id` ChEBI ligands, `CC COFACTOR` ChEBI cofactors and `CC CATALYTIC ACTIVITY` Rhea reactions. UniProt is the protein universe, so all of these are already accession-keyed — no id mapping. Also parses the Reactome/keyword/subcellular hierarchies for True Path propagation.
 - `hierarchy.py` - Shared, ontology-agnostic True Path engine: `closure_ancestors` (child→parents map → transitive-ancestors fn) and `propagate_via_ancestors`, plus the hierarchy *loaders* — `dotted_ancestors` (TCDB), `alpha_prefix_ancestors` (MEROPS/CAZy) and `parse_obo_child_parents` (a light OBO reader used for ChEBI). Everything except GO propagates through this engine (GO keeps its obonet `OntologyProcessor` path, which also does parental-background filtering).
 - `run_manifest.py` - Machine-readable run provenance (`run_manifest_<ontology>.json`): input/output SHA-256s and release headers, Git state, `uv.lock` hash, command line, every parameter and threshold, timestamps and summary counts. Written by `start_run_manifest`/`manifest.complete` in `run_dcgo_human.py`; checklist in `REPRODUCIBILITY.md`.
@@ -90,7 +97,7 @@ uv run python run_dcgo_human.py --num-cores 8 \
 # used to do for GO.
 uv run python run_dcgo_human.py --enable-relative-inference
 
-# Other ontologies (see src/ontology_registry.py or --help for all 21)
+# Other ontologies (see src/ontology_registry.py or --help for all 23)
 uv run python run_dcgo_human.py --ontology subcellular --enable-true-path
 uv run python run_dcgo_human.py --ontology ligand      # FT /ligand_id (ChEBI)
 uv run python run_dcgo_human.py --ontology doid --enable-true-path  # OMIM re-keyed to DO
@@ -193,7 +200,7 @@ tables); enumerating co-occurring pairs makes it 9.5M tables and 268 s.
   skipping. **It is propagation and nothing else.** The parental-background
   filter it used to run alongside for GO is the paper's separate *relative
   inference* (Step 2, vs. the true-path rule at Step 3) and is now
-  `--enable-relative-inference`, available for all 12 ontologies with a
+  `--enable-relative-inference`, available for all 14 ontologies with a
   hierarchy, and it *removes* associations rather than adding them.
 - **Relative inference (`--enable-relative-inference`, opt-in) is implemented
   but not usable yet.** The combination matches the paper — BH corrects

@@ -153,6 +153,8 @@ registered in `src/ontology_registry.py`:
 | `doid` | Disease Ontology | `DR MIM` re-keyed via `doid.obo` | `doid.obo` |
 | `orphanet` | rare diseases | `DR Orphanet` | — |
 | `orphanet_doid` | Disease Ontology | `DR Orphanet` re-keyed via `doid.obo` | `doid.obo` |
+| `hpo` | HPO phenotypes | `genes_to_phenotype.txt`, GeneID re-keyed via `DR GeneID` | `hp.obo` |
+| `syngo` | SynGO synaptic terms | SynGO release zip, HGNC re-keyed via `DR HGNC` | same zip (`ontologies.xlsx`) |
 | `unipathway` | metabolic pathways | `DR UniPathway` | — |
 | `complex` | protein complexes | `DR ComplexPortal` | — |
 | `drugbank` | drugs | `DR DrugBank` | — |

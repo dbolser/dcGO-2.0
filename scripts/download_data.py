@@ -79,6 +79,12 @@ DATASET_GROUPS: dict[str, list[str]] = {
         "scop_des",
         "scop_hie",
     ],
+    # run_dcgo_human.py --ontology hpo needs both files (annotations for the
+    # run, hp.obo for --enable-true-path / --enable-relative-inference).
+    "hpo": [
+        "hpo_annotations",
+        "hpo_ontology",
+    ],
 }
 
 # Dated GOA snapshots for the temporal benchmark (VALIDATION_PLAN §2) live in the

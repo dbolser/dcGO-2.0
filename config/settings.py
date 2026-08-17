@@ -351,6 +351,35 @@ class Config:
                 required=False,
                 checksum="sha256:5b9803aa17eeabf4c70f144c64216294d01e66335da3e560576d4eb2dc9ff490",
             ),
+            # Human Phenotype Ontology annotation and ontology files, for
+            # run_dcgo_human.py --ontology hpo (src/hpo_annotation_source.py).
+            # Both land in data/raw/hpo/. genes_to_phenotype.txt is NCBI-GeneID
+            # keyed; the GeneID → accession re-key uses the Swiss-Prot flat
+            # file (uniprot_sprot_dat above), so no idmapping download.
+            "hpo_annotations": DataSource(
+                name="hpo_annotations",
+                url="https://github.com/obophenotype/human-phenotype-ontology/releases/latest/download/genes_to_phenotype.txt",
+                description="HPO gene → phenotype annotations (--ontology hpo)",
+                required=False,
+                subdir="hpo",
+            ),
+            "hpo_ontology": DataSource(
+                name="hpo_ontology",
+                url="https://purl.obolibrary.org/obo/hp.obo",
+                description="Human Phenotype Ontology DAG (True Path for --ontology hpo)",
+                required=False,
+                subdir="hpo",
+            ),
+            # SynGO bulk release: one zip carrying both the HGNC-keyed
+            # annotations and the term hierarchy, for --ontology syngo
+            # (src/syngo_annotation_source.py). Release 1.3 (2025-03) is the
+            # current bulk download; the portal itself is a JS app.
+            "syngo": DataSource(
+                name="syngo",
+                url="https://www.syngoportal.org/data/syngo1.3_complete_data.zip",
+                description="SynGO synaptic annotations + ontology (--ontology syngo)",
+                required=False,
+            ),
             "goa_annotations": DataSource(
                 name="goa_annotations",
                 url="https://ftp.ebi.ac.uk/pub/databases/GO/goa/HUMAN/goa_human.gaf.gz",
