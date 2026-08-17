@@ -28,7 +28,6 @@ stream the raw file (~10 min).
 from __future__ import annotations
 
 import argparse
-import gzip
 import sys
 from pathlib import Path
 
@@ -38,24 +37,18 @@ from loguru import logger
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from extract_human_interpro import extract_species_proteins  # noqa: E402
+from src.gene_mapping import parse_idmapping_accessions  # noqa: E402
+from src.universe_provenance import (  # noqa: E402
+    ProvenanceConflictError,
+    ensure_overwrite_allowed,
+    write_marker,
+)
 
 logger.remove()
 logger.add(sys.stderr, level="INFO")
 
 ALLSPECIES_EXTRACT = Path("data/interim/protein2ipr_allspecies.dat.gz")
 RAW_PROTEIN2IPR = Path("data/raw/interpro_mappings/protein2ipr.dat.gz")
-
-
-def accessions_from_idmapping(path: Path) -> set[str]:
-    """Distinct accessions (first column) of a per-organism idmapping file."""
-    open_func = gzip.open if path.suffix == ".gz" else open
-    accessions: set[str] = set()
-    with open_func(path, "rt") as handle:
-        for line in handle:
-            accession = line.split("\t", 1)[0].strip()
-            if accession:
-                accessions.add(accession)
-    return accessions
 
 
 def main() -> int:
@@ -100,6 +93,13 @@ def main() -> int:
         default=None,
         help="Output path (default: data/interim/protein2ipr_<species>.dat.gz)",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite an existing extract even if its provenance marker "
+        "records a different selection rule (e.g. a GOA-selected extract "
+        "from extract_human_interpro.py)",
+    )
     args = parser.parse_args()
 
     source = args.source or (RAW_PROTEIN2IPR if args.full_scan else ALLSPECIES_EXTRACT)
@@ -109,13 +109,25 @@ def main() -> int:
 
     if args.idmapping:
         logger.info(f"Reading accession set from idmapping file {args.idmapping}")
-        accessions = accessions_from_idmapping(args.idmapping)
+        # Isoform ids (Q9N4D9-2) are collapsed to their canonical accession —
+        # protein2ipr is canonical-keyed, so they could never match a row.
+        accessions = parse_idmapping_accessions(args.idmapping)
+        selection_rule, selection_source = "idmapping", args.idmapping
     else:
         logger.info(f"Reading accession list {args.accession_list}")
-        accessions = {
-            line.strip() for line in open(args.accession_list) if line.strip()
-        }
+        with open(args.accession_list) as handle:
+            accessions = {line.strip() for line in handle if line.strip()}
+        selection_rule, selection_source = "accession_list", args.accession_list
     logger.info(f"  {len(accessions):,} accessions define the {args.species} universe")
+
+    output = args.output or Path(f"data/interim/protein2ipr_{args.species}.dat.gz")
+    # A GOA-selected extract (extract_human_interpro.py) at the same path is a
+    # different universe; refuse to clobber it without --force.
+    try:
+        ensure_overwrite_allowed(output, selection_rule, force=args.force)
+    except ProvenanceConflictError as exc:
+        logger.error(str(exc))
+        return 1
 
     accession_file = Path(f"data/interim/{args.species}_proteins.txt")
     accession_file.parent.mkdir(parents=True, exist_ok=True)
@@ -124,8 +136,16 @@ def main() -> int:
             handle.write(f"{accession}\n")
     logger.info(f"  Accession list written to {accession_file}")
 
-    output = args.output or Path(f"data/interim/protein2ipr_{args.species}.dat.gz")
-    extract_species_proteins(accession_file, source, output)
+    n_accessions, n_matched = extract_species_proteins(accession_file, source, output)
+    write_marker(
+        output,
+        selection_rule=selection_rule,
+        selection_sources=[selection_source],
+        interpro_source=source,
+        n_accessions=n_accessions,
+        n_matched_lines=n_matched,
+        tool="scripts/extract_species_interpro.py",
+    )
     return 0
 
 

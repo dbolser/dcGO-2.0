@@ -22,7 +22,7 @@ logger.add(sys.stderr, level="INFO")
 
 def extract_species_proteins(
     protein_set_file: Path, interpro_file: Path, output_file: Path
-):
+) -> tuple[int, int]:
     """
     Extract lines from protein2ipr.dat for specific proteins.
 
@@ -30,6 +30,10 @@ def extract_species_proteins(
         protein_set_file: Text file with one protein ID per line
         interpro_file: Full protein2ipr.dat.gz file
         output_file: Output file (will be gzipped)
+
+    Returns:
+        ``(n_selecting_accessions, n_matched_lines)``, for the caller's
+        provenance marker (see :mod:`src.universe_provenance`).
     """
     # Load protein set
     logger.info(f"Loading protein IDs from {protein_set_file}")
@@ -65,6 +69,7 @@ def extract_species_proteins(
     logger.info(f"  Matching lines found: {matched_lines:,}")
     logger.info(f"  Output file: {output_file}")
     logger.info(f"  Output size: {output_file.stat().st_size / 1e6:.1f} MB")
+    return len(protein_ids), matched_lines
 
 
 def main():
@@ -83,10 +88,22 @@ def main():
         choices=["all", "manual", "experimental"],
         help="Evidence filter used to select the protein set (default: manual)",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite an existing extract even if its provenance marker "
+        "records a different selection rule (e.g. an idmapping-selected "
+        "extract from scripts/extract_species_interpro.py)",
+    )
     args = parser.parse_args()
 
     # Parse GOA to get this species' protein IDs
     from src.goa_parser import parse_goa
+    from src.universe_provenance import (
+        ProvenanceConflictError,
+        ensure_overwrite_allowed,
+        write_marker,
+    )
 
     logger.info(f"Step 1: Parsing GOA to get {args.species} protein IDs...")
     goa_file = Path(f"data/raw/goa_annotations/goa_{args.species}.gaf.gz")
@@ -126,7 +143,26 @@ def main():
         return 1
     output_file = Path(f"data/interim/protein2ipr_{args.species}.dat.gz")
 
-    extract_species_proteins(protein_list_file, interpro_file, output_file)
+    # An extract selected by a different rule (idmapping / accession list, via
+    # scripts/extract_species_interpro.py) must not be silently clobbered.
+    try:
+        ensure_overwrite_allowed(output_file, "goa", force=args.force)
+    except ProvenanceConflictError as exc:
+        logger.error(str(exc))
+        return 1
+
+    n_accessions, n_matched = extract_species_proteins(
+        protein_list_file, interpro_file, output_file
+    )
+    write_marker(
+        output_file,
+        selection_rule="goa",
+        selection_sources=[goa_file],
+        interpro_source=interpro_file,
+        n_accessions=n_accessions,
+        n_matched_lines=n_matched,
+        tool="extract_human_interpro.py",
+    )
 
     logger.info("")
     logger.info("=" * 60)
