@@ -89,7 +89,9 @@ from src.hpa_annotation_source import CELLTYPE_SPEC, HPACellTypeAnnotationSource
 from src.hpo_annotation_source import HPO_SPEC, HPOAnnotationSource
 from src.mgi_annotation_source import MP_SPEC, MGIAnnotationSource
 from src.wormbase_annotation_source import (
+    WBBT_SPEC,
     WBPHENOTYPE_SPEC,
+    WormBaseAnatomyAnnotationSource,
     WormBasePhenotypeAnnotationSource,
 )
 from src.zfin_annotation_source import ZFA_SPEC, ZFINAnatomyAnnotationSource
@@ -288,6 +290,10 @@ def _wbphenotype_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
     return _child_parents(
         "wbphenotype", paths["wbphenotype_obo"], parse_obo_child_parents
     )
+
+
+def _wbbt_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
+    return _child_parents("wbbt", paths["wbbt_obo"], parse_obo_child_parents)
 
 
 def _zfa_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
@@ -570,6 +576,23 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
         build_parents=lambda paths: parents_from_map(_wbphenotype_child_parents(paths)),
         needs=("wb_phenotype", "worm_idmapping"),
         hierarchy_needs=("wbphenotype_obo",),
+    ),
+    # Expression, not phenotype: WormBase's anatomy associations derive from
+    # expression-pattern curation, so a WBbt annotation reads "expressed in
+    # this structure" (Uncertain-qualified rows dropped, counted — see
+    # src/wormbase_annotation_source.py).
+    "wbbt": OntologyEntry(
+        key="wbbt",
+        spec=WBBT_SPEC,
+        description="C. elegans anatomy where a gene is expressed, WBGene ids "
+        "re-keyed to UniProt (use with --species worm)",
+        build_source=lambda paths, options: WormBaseAnatomyAnnotationSource(
+            paths["wb_anatomy"], paths["worm_idmapping"]
+        ),
+        build_ancestors=lambda paths: closure_ancestors(_wbbt_child_parents(paths)),
+        build_parents=lambda paths: parents_from_map(_wbbt_child_parents(paths)),
+        needs=("wb_anatomy", "worm_idmapping"),
+        hierarchy_needs=("wbbt_obo",),
     ),
     # Anatomy, not a phenotype ontology: "abnormality of this structure". ZP
     # itself is not derivable from the on-disk files — see the assessment in

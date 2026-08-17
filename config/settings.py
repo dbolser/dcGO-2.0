@@ -21,6 +21,7 @@ from src.release_pins import (
     FLYBASE_FBGN_UNIPROT_FILENAME,
     FLYBASE_GENOTYPE_PHENOTYPE_FILENAME,
     FLYBASE_RELEASE,
+    WORMBASE_ANATOMY_FILENAME,
     WORMBASE_PHENOTYPE_FILENAME,
     WORMBASE_RELEASE,
 )
@@ -488,6 +489,29 @@ class Config:
                     "WORMBASE_RELEASE in src/release_pins.py (updates this URL "
                     "and the --wb-phenotype default together)"
                 ),
+            ),
+            # Same host and release-in-filename caveat as wormbase_phenotype
+            # above; expression-based anatomy associations for --ontology wbbt.
+            "wormbase_anatomy": DataSource(
+                name="wormbase_anatomy",
+                url="https://downloads.wormbase.org/releases/"
+                "current-production-release/ONTOLOGY/"
+                f"{WORMBASE_ANATOMY_FILENAME}",
+                description="WormBase gene → anatomy expression GAF (--ontology wbbt)",
+                required=False,
+                subdir="wormbase",
+                update_hint=(
+                    f"WormBase has likely moved past {WORMBASE_RELEASE}: bump "
+                    "WORMBASE_RELEASE in src/release_pins.py (updates this URL "
+                    "and the --wb-anatomy default together)"
+                ),
+            ),
+            "wbbt_ontology": DataSource(
+                name="wbbt_ontology",
+                url="https://purl.obolibrary.org/obo/wbbt.obo",
+                description="C. elegans Gross Anatomy Ontology DAG (True Path for --ontology wbbt)",
+                required=False,
+                subdir="wormbase_ontology",
             ),
             "wbphenotype_ontology": DataSource(
                 name="wbphenotype_ontology",

@@ -125,6 +125,7 @@ from src.release_pins import (
     FLYBASE_FBAL_TO_FBGN_FILENAME,
     FLYBASE_FBGN_UNIPROT_FILENAME,
     FLYBASE_GENOTYPE_PHENOTYPE_FILENAME,
+    WORMBASE_ANATOMY_FILENAME,
     WORMBASE_PHENOTYPE_FILENAME,
 )
 from src.run_manifest import RunManifest, describe_file, manifest_filename
@@ -174,8 +175,10 @@ INPUT_SOURCE_NAMES = {
     "mgi_marker_swissprot": "mgi_marker_swissprot",
     "mp_obo": "mp_ontology",
     "wb_phenotype": "wormbase_phenotype",
+    "wb_anatomy": "wormbase_anatomy",
     "worm_idmapping": "worm_idmapping",
     "wbphenotype_obo": "wbphenotype_ontology",
+    "wbbt_obo": "wbbt_ontology",
     "zfin_phenotype": "zfin_phenotype",
     "zfin_uniprot": "zfin_uniprot",
     "zfa_obo": "zfa_ontology",
@@ -825,6 +828,21 @@ def build_argument_parser() -> argparse.ArgumentParser:
         help="Path to WormBase's phenotype_association GAF (the filename "
         "carries the WormBase release), for --ontology wbphenotype "
         "(run with --species worm)",
+    )
+    parser.add_argument(
+        "--wb-anatomy",
+        type=Path,
+        default=Path("data/raw/wormbase") / WORMBASE_ANATOMY_FILENAME,
+        help="Path to WormBase's anatomy_association GAF (expression-based; "
+        "the filename carries the WormBase release), for --ontology wbbt "
+        "(run with --species worm)",
+    )
+    parser.add_argument(
+        "--wbbt-obo",
+        type=Path,
+        default=Path("data/raw/wormbase_ontology/wbbt.obo"),
+        help="Path to the C. elegans Gross Anatomy Ontology OBO, for "
+        "--ontology wbbt --enable-true-path",
     )
     parser.add_argument(
         "--worm-idmapping",

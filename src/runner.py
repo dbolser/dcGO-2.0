@@ -49,8 +49,10 @@ class RunRequest:
     mgi_marker_swissprot: Path
     mp_obo: Path
     wb_phenotype: Path
+    wb_anatomy: Path
     worm_idmapping: Path
     wbphenotype_obo: Path
+    wbbt_obo: Path
     zfin_phenotype: Path
     zfin_uniprot: Path
     zfa_obo: Path
@@ -115,8 +117,10 @@ class RunRequest:
             mgi_marker_swissprot=args.mgi_marker_swissprot,
             mp_obo=args.mp_obo,
             wb_phenotype=args.wb_phenotype,
+            wb_anatomy=args.wb_anatomy,
             worm_idmapping=args.worm_idmapping,
             wbphenotype_obo=args.wbphenotype_obo,
+            wbbt_obo=args.wbbt_obo,
             zfin_phenotype=args.zfin_phenotype,
             zfin_uniprot=args.zfin_uniprot,
             zfa_obo=args.zfa_obo,
@@ -150,8 +154,10 @@ class RunRequest:
             "mgi_marker_swissprot": self.mgi_marker_swissprot,
             "mp_obo": self.mp_obo,
             "wb_phenotype": self.wb_phenotype,
+            "wb_anatomy": self.wb_anatomy,
             "worm_idmapping": self.worm_idmapping,
             "wbphenotype_obo": self.wbphenotype_obo,
+            "wbbt_obo": self.wbbt_obo,
             "zfin_phenotype": self.zfin_phenotype,
             "zfin_uniprot": self.zfin_uniprot,
             "zfa_obo": self.zfa_obo,
