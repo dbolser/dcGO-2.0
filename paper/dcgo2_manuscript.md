@@ -15,6 +15,18 @@
 > not be traced to a repository artifact. Passages marked **PROVISIONAL** rest on
 > results that are known to be affected by an identified defect and must be
 > regenerated before submission.
+>
+> **Era marking (added 2026-08-17).** The pipeline now restricts GO annotation
+> propagation to `is_a` and `part_of` edges; previously it also traversed the
+> DAG's 7,799 regulates-family edges `[K3]`. Every number in this draft that
+> passed through GO propagation — on the inference side or inside the evaluation
+> code — was produced before that fix and is marked **PROVISIONAL —
+> pre-regulates-fix era**. Run manifests record the policy as
+> `analysis.ontology.propagation_relations`; a manifest without that key (or an
+> artifact with no manifest at all, which includes every run in this draft)
+> identifies a pre-fix artifact `[K12]`. Numbers that never touch GO propagation
+> (dataset scale counts, download and survey figures, non-GO hierarchies read by
+> the `is_a`/`part_of`-only OBO reader) are not marked.
 
 ---
 
@@ -135,9 +147,15 @@ its own.
   supply their own hierarchy in one of four forms (§2.6).
 
 All three are downloaded by a single script from URLs held in a central
-configuration module. **The retrieved releases are not currently pinned by
-identifier or checksum**, which is a reproducibility defect we state explicitly
-in §5 `[H8]`.
+configuration module. Non-GO vocabularies declare their own annotation and
+hierarchy inputs in the registry (§2.6), so a run fails before the statistics
+if an input is missing. Retrieved releases are still referenced through
+mutable "current" URLs `[H8]`, but every run now writes a machine-readable
+manifest (`run_manifest_<ontology>.json`) recording a SHA-256 digest and any
+release header for each input, the Git state, the dependency lock hash, the
+full command line and every threshold `[K12]`. **The numbers reported in this
+draft all predate the manifest machinery** and are therefore not covered by
+it; see §5.
 
 ### 2.2 Domain features and supra-domains
 
@@ -169,82 +187,223 @@ Two properties of this design are load-bearing for the interpretation of the
 results and are stated here rather than in the discussion. (i) The hypothesis
 family is strongly dependent — GO terms are nested, supra-domains contain their
 constituents, and domains co-occur — so BH control over it is a convention rather
-than a demonstrated guarantee `[H15]`. (ii) An optional empirical-Bayes shrinkage
-step for sparse supra-domains geometrically interpolates a supra-domain's
-observed *p*-value toward its constituents' with a hand-set decay constant; the
-resulting quantities have not been shown to be valid *p*-values, so BH applied to
-them does not guarantee nominal FDR. We therefore describe this step as a
-**heuristic**, not as a fitted empirical-Bayes model, and it is **off** in every
-run reported here `[H5]`.
+than a demonstrated guarantee `[H15]`. (ii) An earlier version of the method
+included an optional "empirical-Bayes shrinkage" step that geometrically
+interpolated a sparse supra-domain's observed *p*-value toward its
+constituents' with a hand-set decay constant. The resulting quantities were
+never shown to be valid *p*-values under any null — enabling the step took
+FDR < 0.01 rejections from 163,277 to 463,924 (+184%) by pulling thin evidence
+toward its well-supported parts — and the component ablation found no effect on
+prediction quality in any of 12 aspect × IC cells. **The step has been removed
+from the codebase** (2026-08-05) `[K7]`; it was already off in every run
+reported here `[H5]`, so no number in this draft depends on it.
 
 The current-release human run reports 165,823 associations at FDR < 0.01
 `[A8]`; the 2021 training run used for all temporal evaluation reports 164,549
 `[A7]` from 1,640,917,330 tests `[A5]` over 18,382 proteins and 16,055 GO terms
-`[A1, A4]`.
+`[A1, A4]`. (Both runs predate the propagation fix and the manifest machinery;
+see the era note in the draft conventions. The Fisher stage itself does not
+propagate, but these headline counts belong to a superseded configuration —
+the paper-parity configuration of §2.5 reports 30,655 single-domain
+associations `[K4]` — and will be regenerated from manifest-carrying runs.)
 
-No minimum-support or effect-size floor is applied beyond FDR significance. Odds
-ratios are emitted uncorrected, so they print as `0` when the *d* cell is empty
-and as `inf` when *b·c* = 0 `[H21]`; the ranking signal is the *p*-value, not the
-odds ratio.
+By default no minimum-support or effect-size floor is applied beyond FDR
+significance. Two opt-in **reporting** filters exist, both applied *after* the
+BH correction so the hypothesis family is never altered: `--min-support N`
+drops associations supported by fewer than *N* proteins, and `--min-ic X`
+drops associations to terms whose annotation-frequency information content —
+IC(*t*) = −log₂ P(*t*), estimated from the propagated annotation map and
+exported as an `ic` column — falls below *X* bits `[K11]`. The IC floor exists
+for a specific reason connected to relative inference and is motivated in
+§2.5. Odds ratios are emitted uncorrected, so they print as `0` when the *d*
+cell is empty and as `inf` when *b·c* = 0 `[H21]`; the ranking signal is the
+*p*-value, not the odds ratio.
 
 ### 2.4 True Path Rule
 
-Propagation up the term hierarchy is available (`--enable-true-path`) and applies
-to every registered vocabulary that has a hierarchy, through a shared engine that
-computes a transitive ancestor closure from a child→parent map. It is **opt-in
-and was disabled** in the runs reported here; propagation is nevertheless applied
-*within the evaluation code*, to both predictions and truth, wherever the metric
-requires it (§2.7). For GO the pipeline additionally offers a parental-background
-("optimal level") filter, discussed in §2.5.
+The True Path Rule appears in three distinct places, and the method now keeps
+them separate.
+
+**Input-side propagation** (`--propagate-annotations`) closes the input
+protein → term map over the hierarchy before any counting, which the original
+paper states as part of its design. Terms the hierarchy does not contain are
+handled explicitly rather than silently: GO `alt_id`s are remapped to their
+primary identifiers, and terms still unknown after the remap are dropped from
+the tested universe, with every case counted and recorded in the run manifest
+`[K11]`.
+
+**Output-side propagation** (`--enable-true-path`) adds ancestor associations
+to the significant set. It applies to every registered vocabulary that has a
+hierarchy, through a shared engine that computes a transitive ancestor closure
+from a child→parent map, and it now **fails explicitly** for a vocabulary with
+no hierarchy instead of degrading silently. It is propagation and nothing
+else: the parental-background filter that used to run under the same flag for
+GO is the paper's separate *relative inference* step and has its own flag
+(§2.5).
+
+**Evaluation-side propagation** is applied within the evaluation code, to both
+predictions and truth, wherever the metric requires it (§2.8).
+
+For GO, all three paths propagate over **`is_a` and `part_of` edges only** —
+the relations GO's own annotation-propagation rules license. Until 2026-08-17
+the propagation graph also traversed the ontology's 7,799 regulates-family
+edges, which put proteins annotated to "negative regulation of X" into X's
+propagated background `[K3]`. **This changes every previously quoted number
+that passed through GO propagation**, which is why the affected results below
+carry era markers. Run manifests record the edge policy as
+`analysis.ontology.propagation_relations` `[K12]`. The runs reported in this
+draft were made before the fix; output-side propagation was disabled in them,
+but evaluation-side propagation was not.
 
 ### 2.5 The relative (parental-background) test
 
 The original method combined the overall enrichment test with a *relative* test
-whose background is restricted to proteins annotated to all direct parent terms
-of *t*, keeping the weaker of the two `[G4]`. This is the mechanism that forces
-an association to be more specific than its parent. In dcGO-2.0 it is currently
-applied **post hoc**, as a filter over an already-computed association set, not
-folded into the inference. Its effect is measured in §3.4.
+whose background is restricted to proteins annotated to the direct parent terms
+of *t*, keeping the weaker of the two `[G4]`. This is the mechanism that is
+supposed to force an association to be more specific than its parent. In
+dcGO-2.0 it is now **folded into the inference** (`--enable-relative-inference`)
+rather than applied as a post-hoc filter, matching the published pipeline's
+structure `[K11]`:
 
-### 2.6 The annotation seam and nineteen vocabularies
+- the relative *p*-value is computed for every candidate pair before any
+  correction, against a background formed as the **union of the direct
+  parents'** protein sets (the paper's Figure-1 *N_pa*);
+- BH corrects `max(overall_p, relative_p)` — an intersection–union statistic,
+  and therefore a valid *p*-value without further adjustment — and the
+  reported h-score is `min(overall, relative)`;
+- the input annotation map is True-Path propagated (`--propagate-annotations`),
+  as the paper states;
+- the test is available for every registered vocabulary with a hierarchy
+  (19 of the 28 registry entries `[K2]`), not only GO.
+
+One structural defect remains and is handled by a reporting floor rather than
+by the test itself: a **parentless term skips the relative test entirely** and
+passes on the overall inference alone, so the DAG roots and the near-universal
+band just below them dominate the raw output. The `--min-ic` floor of §2.3
+exists for exactly this case: the GO aspect roots sit at 0.09–0.17 bits of
+annotation-frequency information `[K6]`, so any floor clear of that band
+removes them. The floor is applied to every deliverable, including the
+propagated annotations file, so output-side propagation cannot re-derive a
+floored-away ancestor. What the floor does and does not fix is measured in
+§3.8.
+
+The **paper-parity configuration** referred to throughout this draft is
+`--propagate-annotations --enable-relative-inference --enable-true-path`, with
+`--min-ic 1` as the recommended reporting floor; on human GO single domains it
+reports 30,655 significant associations at FDR < 0.01 before the floor `[K4]`.
+The measurement in §3.4 predates this design and evaluated the earlier
+post-hoc variant.
+
+### 2.6 The annotation seam and the vocabulary registry
 
 Annotations enter through a single interface that yields a `{protein → {term}}`
 map, so the inference engine never sees anything ontology-specific. A registry
-holds one entry per vocabulary: a source factory, an ancestors factory (or
-`None`), and the input files required, so a run fails early on a missing input.
-Nineteen vocabularies are registered `[A12]`: the Gene Ontology; Enzyme
-Commission (from Expasy `enzyme.dat`); and seventeen UniProt-native layers drawn
-from three parts of the Swiss-Prot flat file — `DR` cross-references (Reactome,
-OMIM phenotypes, Orphanet, TCDB, MEROPS, CAZy, UniPathway, ComplexPortal,
-DrugBank, Pharos, CD-CODE, and an escape hatch for any other `DR` database), `KW`
-keywords, and layers curated into the entry body (`CC SUBCELLULAR LOCATION`
-mapped to `SL-` terms, `FT /ligand_id` ChEBI ligands, `CC COFACTOR` ChEBI
-cofactors, `CC CATALYTIC ACTIVITY` Rhea reactions).
+holds one entry per vocabulary: a source factory, an ancestors factory and a
+direct-parents factory (or `None` when the vocabulary has no hierarchy), and
+the input files required, so a run fails early on a missing input.
+**Twenty-eight `--ontology` keys are registered** `[K1]` (nineteen at the time
+this draft was first compiled `[A12]`), in six kinds:
 
-Vocabularies were selected by a survey of all ~150 `DR` databases in the human
-Swiss-Prot subset, using proteins-per-term as the decisive statistic: a resource
-that mirrors the protein 1:1 (ratio ≈ 1) cannot support an enrichment test at
-all. Registered vocabularies range from 28.4 proteins/term (keywords) through
-5.0 (Reactome) to 1.5 (ComplexPortal) and 0.4 (DrugBank) `[F16]`; ~1:1 accession
-mirrors and domain databases (which would be circular) are deliberately excluded
-`[F15, F16]`.
+- the **Gene Ontology**, from the species GAF file;
+- **Enzyme Commission**, from Expasy `enzyme.dat` (UniProt-keyed already);
+- **UniProt-native layers** from three parts of the Swiss-Prot flat file —
+  twelve `DR` cross-reference vocabularies (Reactome, OMIM phenotypes,
+  Orphanet, TCDB, MEROPS, CAZy, UniPathway, ComplexPortal, DrugBank, Pharos,
+  CD-CODE, plus `KW` keywords) and four layers curated into the entry body
+  (`CC SUBCELLULAR LOCATION` mapped to `SL-` terms, `FT /ligand_id` ChEBI
+  ligands, `CC COFACTOR` ChEBI cofactors, `CC CATALYTIC ACTIVITY` Rhea
+  reactions);
+- **term re-keys**: the OMIM and Orphanet disease layers re-keyed onto Disease
+  Ontology terms at parse time (`doid`, `orphanet_doid`), which is what gives
+  the disease curation a hierarchy at all;
+- **gene-keyed human layers** (HPO, SynGO) and **model-organism phenotype
+  layers** (MP, WBPhenotype, ZFA, FBcv, FBbt), whose identifier mapping is the
+  subject of §2.7;
+- a generic `xref` escape hatch reaching any other `DR` database by name.
 
-Hierarchies come from four mechanisms: OBO graphs (GO, ChEBI), structure implicit
-in the identifier (EC, TCDB, MEROPS, CAZy), companion hierarchy files (Reactome,
-UniProt keywords, subcellular locations), and none at all — for which
-`--enable-true-path` now fails explicitly rather than degrading silently.
+UniProt-derived vocabularies were selected by a survey of all ~150 `DR`
+databases in the human Swiss-Prot subset, using proteins-per-term as the
+decisive statistic: a resource that mirrors the protein 1:1 (ratio ≈ 1) cannot
+support an enrichment test at all. Registered vocabularies range from 28.4
+proteins/term (keywords) through 5.0 (Reactome) to 1.5 (ComplexPortal) and 0.4
+(DrugBank) `[F16]`; ~1:1 accession mirrors and domain databases (which would be
+circular) are deliberately excluded `[F15, F16]`.
 
-> **PROVISIONAL — known defect.** The UniProt-native sources parse the entire
-> Swiss-Prot flat file with no taxonomic restriction, and the contingency-table
-> row space is built as the union of the annotation map and the domain map. The
-> protein universe for those vocabularies is therefore on the order of all of
-> Swiss-Prot (575,503 entries `[A11]`) rather than the ~20k human proteins,
-> inflating the "neither" cell and hence the apparent significance of every
-> association. GO (sourced from the species-specific GAF) and EC are not affected
-> by this defect. All multi-ontology results in §3.7 must be regenerated after
-> the fix; see `[F]` in the evidence ledger.
+Hierarchies come from five mechanisms: OBO graphs (GO via its own processor;
+ChEBI, DOID, HP, MP, WBPhenotype, ZFA, FBcv, FBbt via a light `is_a`/`part_of`
+reader), structure implicit in the identifier (EC, TCDB, MEROPS, CAZy),
+companion hierarchy files (Reactome, UniProt keywords, subcellular locations),
+a hierarchy sheet shipped inside the annotation release itself (SynGO), and
+none at all — for which `--enable-true-path` and `--enable-relative-inference`
+fail explicitly rather than degrading silently. Nineteen of the twenty-eight
+entries have a hierarchy `[K2]`.
 
-### 2.7 Evaluation designs
+> **Resolved defect (fixed 2026-08-04).** An earlier version of the
+> UniProt-native sources parsed the entire Swiss-Prot flat file with no
+> taxonomic restriction, and the contingency-table row space was built as the
+> union of the annotation and domain maps, inflating the protein universe for
+> those vocabularies toward all of Swiss-Prot (575,503 entries `[A11]`) rather
+> than the ~20k human proteins. The annotation map is now restricted to the
+> domain-annotated intersection, and every §3.7 row was regenerated after the
+> fix; the superseded values are retained there for comparison. GO (sourced
+> from the species-specific GAF) and EC were never affected. See `[F]` in the
+> evidence ledger for the audit trail.
+
+### 2.7 Gene-keyed annotation sources and identifier mapping
+
+The statistics join domains and annotations on UniProt accessions
+(`protein2ipr`'s key space), but the phenotype resources added in this round
+are keyed by *gene*: HPO's `genes_to_phenotype.txt` by NCBI GeneID, SynGO's
+bulk release by HGNC id, and the model-organism databases by their own gene
+identifiers (MGI, WBGene, ZDB-GENE, FBal/FBgn). Each layer re-keys
+gene → accession **at parse time**, before the statistics see anything, under
+one audited policy: an unmapped gene id is dropped, counted and logged, never
+silently discarded; a one-to-many id (real, for readthrough loci and
+unresolved paralogs) credits *all* of its accessions, since choosing one
+arbitrarily is not reproducible. Every count is exposed by the source and will
+be recorded in run manifests `[L0]`.
+
+The two human layers map through the Swiss-Prot flat file's own `DR GeneID`
+and `DR HGNC` lines, so no separate id-mapping download is needed: HPO maps
+5,196 of 5,274 gene ids (**98.5%**) and SynGO 1,787 of 1,789 (**99.9%**)
+`[L1, L2]`. The model-organism layers instead translate through each
+database's own mapping files — essential because model-organism proteomes are
+mostly unreviewed, so the map must include TrEMBL — with coverage of **85.0%**
+of MGI genes (14,033/16,509), **82.5%** of WBGene ids (8,704/10,550), and
+**68.6%** of ZDB-GENE ids (5,139/7,487) `[L3, L4, L5]`. The fly layers map
+**35.1%** (FBcv; 6,121/17,438) and **42.0%** (FBbt; 3,358/7,987) of FBgn ids
+`[L6]` — low by design rather than by defect: FlyBase issues gene identifiers
+to transgenic constructs and drivers that have no *Drosophila* protein
+product, and those dominate the unmapped tail `[L6a]`.
+
+Genotype-to-gene attribution is handled per database, and restrictively. MGI
+rows are kept only for **single-gene genotypes** (a phenotype observed on an
+*Atm*/*Rad50* double mutant cannot be attributed to either gene alone; the
+file is already overwhelmingly single-gene, with 2 of 283,003 rows dropped)
+`[L3]`. FlyBase rows are kept only for **single-allele genotypes**, which
+retains 199,921 of 399,972 data rows (50.0%) `[L6]`. WormBase publishes
+gene-level associations directly, with `NOT`-qualified rows dropped and
+counted as negative evidence `[L4]`.
+
+One layer deserves an explicit honesty note. ZFIN curates phenotypes as EQ
+post-compositions rather than pre-composed phenotype-ontology identifiers, and
+composing them to ZP terms is **not derivable from the released files**: the
+annotation file carries no ZP ids, and the OBO edition of `zp.obo` carries
+logical definitions for 0 of 43,521 non-obsolete terms (only ~2% have a
+machine-readable EQ signature in a comment) `[L5]`. The zebrafish layer is
+therefore an **affected-anatomy** layer — "proteins whose mutation produces an
+abnormality of anatomical structure S are enriched for domain D", propagated
+up the ZFA DAG — which loses only the quality dimension: all 169,887 rows in
+the current file are tagged `abnormal` `[L5]`.
+
+The model-organism layers are the original dcGO's central trick restated on
+this infrastructure: the domain → phenotype association is learned on the
+model organism's *own* protein universe (`--species mouse/worm/zebrafish/fly`,
+with the domain universe built by the same species-parameterised extraction),
+and because domains are species-agnostic the association annotates any protein
+carrying the domain — including human ones.
+
+### 2.8 Evaluation designs
 
 Three evaluations are reported, measuring different things.
 
@@ -301,7 +460,7 @@ conservative unit, since proteins within one association share an architecture)
 rankings act on one shared candidate pool and their independent intervals are
 correlated `[E9]`.
 
-### 2.8 The surprise score for emergent combinations
+### 2.9 The surprise score for emergent combinations
 
 Ranking supra-domain associations by raw significance is dominated by three
 artefacts: redundant InterPro signatures describing one region as if it were two
