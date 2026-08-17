@@ -844,6 +844,7 @@ name: root process
 [Term]
 id: GO:0000002
 name: whole process
+alt_id: GO:0000099
 is_a: GO:0000001 ! root process
 
 [Term]
@@ -902,6 +903,13 @@ class TestPropagationEdgeTypes:
         # 2 is_a edges from GO:0000004/GO:0000005, one from GO:0000002, one
         # part_of from GO:0000003; the 2 regulates-family edges are dropped.
         assert processor.go_graph.number_of_edges() == 4
+
+    def test_alt_ids_map_to_their_primary_term(self, regulates_obo_file):
+        """Merged ids are node data, not nodes: the map is how callers remap."""
+        processor = OntologyProcessor(regulates_obo_file)
+        assert processor.alt_id_map == {"GO:0000099": "GO:0000002"}
+        # An alt_id is not itself a graph node, so membership alone misses it.
+        assert "GO:0000099" not in processor.go_graph
 
     def test_propagate_annotations_ignores_regulates(self, regulates_obo_file):
         processor = OntologyProcessor(regulates_obo_file)

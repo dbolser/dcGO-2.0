@@ -94,6 +94,31 @@ class TestPropagateAnnotationMap:
         assert coverage.unknown_terms is None
         assert coverage.unknown_pairs is None
 
+    def test_drop_unknown_removes_the_pairs_from_the_universe(self):
+        # An unknown term can neither propagate nor face a parental
+        # background; dropped, it cannot pass the relative inference by
+        # default. The protein itself stays, with what survives.
+        anc = closure_ancestors({"c": {"b"}})
+        known = {"c", "b"}.__contains__
+        result, coverage = propagate_annotation_map(
+            {"P1": {"c", "obsolete"}, "P2": {"obsolete"}},
+            anc,
+            known,
+            drop_unknown=True,
+        )
+        assert result == {"P1": {"c", "b"}, "P2": set()}
+        assert coverage.unknown_terms == 1
+        assert coverage.unknown_pairs == 2
+        assert coverage.pairs_before == 3
+        assert coverage.pairs_after == 2
+
+    def test_drop_unknown_without_membership_test_is_a_no_op(self):
+        anc = closure_ancestors({})
+        result, _ = propagate_annotation_map(
+            {"P1": {"zzz"}}, anc, None, drop_unknown=True
+        )
+        assert result == {"P1": {"zzz"}}
+
 
 class TestPropagateViaAncestors:
     def test_direct_plus_ancestors(self):

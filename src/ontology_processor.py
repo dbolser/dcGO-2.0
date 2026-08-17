@@ -174,6 +174,17 @@ class OntologyProcessor:
                 f"(annotation propagation follows is_a/part_of only): {detail}"
             )
 
+        # Merged ids. When GO folds one term into another, the survivor's
+        # stanza lists the retired id as an alt_id; obonet keeps those as node
+        # *data*, not nodes, so a membership test alone would call them
+        # unknown. Annotation files can lag the ontology and still carry them,
+        # and an alt_id is not a dead annotation — it has an exact live
+        # replacement. go-basic 2026 carries ~3,300 of them.
+        self.alt_id_map: Dict[str, str] = {}
+        for term, data in self.go_graph.nodes(data=True):
+            for alt in data.get("alt_id", ()):
+                self.alt_id_map[alt] = term
+
         # obonet emits edges child -> parent (each term points to its is_a
         # target). Reverse so edges run parent -> child, which is the direction
         # the rest of this module assumes: predecessors() are parents,

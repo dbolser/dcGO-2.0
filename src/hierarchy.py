@@ -130,6 +130,7 @@ def propagate_annotation_map(
     protein_terms: Dict[str, Set[str]],
     ancestors_fn: Callable[[str], Iterable[str]],
     known_term_fn: Callable[[str], bool] | None = None,
+    drop_unknown: bool = False,
 ) -> tuple[Dict[str, Set[str]], PropagationCoverage]:
     """Apply the True Path Rule to a ``{protein: {terms}}`` annotation map.
 
@@ -143,6 +144,13 @@ def propagate_annotation_map(
             one. Terms it rejects are counted in the returned
             :class:`PropagationCoverage` (they cannot propagate); without it
             the unknown tallies are ``None``.
+        drop_unknown: exclude the unknown terms from the output instead of
+            carrying them as direct annotations. A term the hierarchy does not
+            contain can neither propagate nor be tested against a parental
+            background — carried forward it passes the relative inference by
+            default. A no-op without ``known_term_fn``. Proteins whose only
+            terms were unknown are kept with an empty set: they are still part
+            of the analysable universe, their annotations are just dead ids.
 
     Returns:
         ``(propagated_map, coverage)``.
@@ -155,7 +163,7 @@ def propagate_annotation_map(
     unknown_pairs = 0
     for protein, terms in protein_terms.items():
         pairs_before += len(terms)
-        closure = set(terms)
+        closure = set()
         for term in terms:
             cached = cache.get(term)
             if cached is None:
@@ -164,6 +172,9 @@ def propagate_annotation_map(
                     unknown.add(term)
             if term in unknown:
                 unknown_pairs += 1
+                if drop_unknown:
+                    continue
+            closure.add(term)
             closure |= cached
         propagated[protein] = closure
         pairs_after += len(closure)
