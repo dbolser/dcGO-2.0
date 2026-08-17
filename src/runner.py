@@ -40,6 +40,20 @@ class RunRequest:
     hpo_g2p: Path
     hpo_obo: Path
     syngo_zip: Path
+    mgi_genepheno: Path
+    mgi_marker_swissprot: Path
+    mp_obo: Path
+    wb_phenotype: Path
+    worm_idmapping: Path
+    wbphenotype_obo: Path
+    zfin_phenotype: Path
+    zfin_uniprot: Path
+    zfa_obo: Path
+    fb_genotype_phenotype: Path
+    fbal_to_fbgn: Path
+    fbgn_uniprot: Path
+    fbbt_obo: Path
+    fbcv_obo: Path
 
     @classmethod
     def from_namespace(cls, args: argparse.Namespace) -> "RunRequest":
@@ -68,6 +82,20 @@ class RunRequest:
             hpo_g2p=args.hpo_genes_to_phenotype,
             hpo_obo=args.hpo_obo,
             syngo_zip=args.syngo_zip,
+            mgi_genepheno=args.mgi_genepheno,
+            mgi_marker_swissprot=args.mgi_marker_swissprot,
+            mp_obo=args.mp_obo,
+            wb_phenotype=args.wb_phenotype,
+            worm_idmapping=args.worm_idmapping,
+            wbphenotype_obo=args.wbphenotype_obo,
+            zfin_phenotype=args.zfin_phenotype,
+            zfin_uniprot=args.zfin_uniprot,
+            zfa_obo=args.zfa_obo,
+            fb_genotype_phenotype=args.fb_genotype_phenotype,
+            fbal_to_fbgn=args.fbal_to_fbgn,
+            fbgn_uniprot=args.fbgn_uniprot,
+            fbbt_obo=args.fbbt_obo,
+            fbcv_obo=args.fbcv_obo,
         )
 
     def ontology_paths(self) -> dict[str, Path]:
@@ -85,6 +113,20 @@ class RunRequest:
             "hpo_g2p": self.hpo_g2p,
             "hpo_obo": self.hpo_obo,
             "syngo_zip": self.syngo_zip,
+            "mgi_genepheno": self.mgi_genepheno,
+            "mgi_marker_swissprot": self.mgi_marker_swissprot,
+            "mp_obo": self.mp_obo,
+            "wb_phenotype": self.wb_phenotype,
+            "worm_idmapping": self.worm_idmapping,
+            "wbphenotype_obo": self.wbphenotype_obo,
+            "zfin_phenotype": self.zfin_phenotype,
+            "zfin_uniprot": self.zfin_uniprot,
+            "zfa_obo": self.zfa_obo,
+            "fb_genotype_phenotype": self.fb_genotype_phenotype,
+            "fbal_to_fbgn": self.fbal_to_fbgn,
+            "fbgn_uniprot": self.fbgn_uniprot,
+            "fbbt_obo": self.fbbt_obo,
+            "fbcv_obo": self.fbcv_obo,
         }
 
 

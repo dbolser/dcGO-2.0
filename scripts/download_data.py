@@ -85,6 +85,33 @@ DATASET_GROUPS: dict[str, list[str]] = {
         "hpo_annotations",
         "hpo_ontology",
     ],
+    # Model-organism phenotype layers: annotations + gene→UniProt id-mapping +
+    # the OBO each needs for --enable-true-path / --enable-relative-inference.
+    # Run them with --species mouse/worm/zebrafish/fly respectively (see
+    # scripts/extract_species_interpro.py for the matching domain universe).
+    "mp": [
+        "mgi_genepheno",
+        "mgi_marker_swissprot",
+        "mp_ontology",
+    ],
+    "wbphenotype": [
+        "wormbase_phenotype",
+        "worm_idmapping",
+        "wbphenotype_ontology",
+    ],
+    "zfa": [
+        "zfin_phenotype",
+        "zfin_uniprot",
+        "zfa_ontology",
+    ],
+    # fbcv and fbbt share the same three FlyBase tables; only the OBO differs.
+    "flybase-phenotype": [
+        "flybase_genotype_phenotype",
+        "flybase_fbal_to_fbgn",
+        "flybase_fbgn_uniprot",
+        "fbbt_ontology",
+        "fbcv_ontology",
+    ],
 }
 
 # Dated GOA snapshots for the temporal benchmark (VALIDATION_PLAN §2) live in the

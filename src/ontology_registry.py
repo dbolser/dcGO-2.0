@@ -44,6 +44,15 @@ These re-key gene → UniProt accession at parse time using the flat file's own
 protein axis this time, but the same counted policy for unmapped and
 one-to-many ids.
 
+A sixth kind is the *model-organism phenotype* layers (``mp``,
+``wbphenotype``, ``zfa``, ``fbcv``, ``fbbt``): gene-keyed like HPO, but keyed
+by MGI / WBGene / ZDB-GENE / FBal ids and translated through their database's
+own id-mapping files rather than the Swiss-Prot flat file (model-organism
+proteomes are mostly TrEMBL). They are meant to run against their organism's
+protein universe (``--species mouse`` etc.) — the domain → phenotype
+association is learned there and transfers through the species-agnostic
+domains.
+
 Adding an ontology is now a single :class:`OntologyEntry` — the Fisher/FDR
 engine and the True Path machinery are untouched.
 """
@@ -62,7 +71,18 @@ from src.annotation_source import (
 )
 from src.disease_ontology import DOID_SPEC, DiseaseOntologyAnnotationSource
 from src.ec_annotation_source import EC_SPEC, ECAnnotationSource, ec_ancestors
+from src.flybase_annotation_source import (
+    FBBT_SPEC,
+    FBCV_SPEC,
+    FlyBasePhenotypeAnnotationSource,
+)
 from src.hpo_annotation_source import HPO_SPEC, HPOAnnotationSource
+from src.mgi_annotation_source import MP_SPEC, MGIAnnotationSource
+from src.wormbase_annotation_source import (
+    WBPHENOTYPE_SPEC,
+    WormBasePhenotypeAnnotationSource,
+)
+from src.zfin_annotation_source import ZFA_SPEC, ZFINAnatomyAnnotationSource
 from src.hierarchy import (
     alpha_prefix_ancestors,
     closure_ancestors,
@@ -234,6 +254,28 @@ def _hpo_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
     return _child_parents("hpo", paths["hpo_obo"], parse_obo_child_parents)
 
 
+def _mp_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
+    return _child_parents("mp", paths["mp_obo"], parse_obo_child_parents)
+
+
+def _wbphenotype_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
+    return _child_parents(
+        "wbphenotype", paths["wbphenotype_obo"], parse_obo_child_parents
+    )
+
+
+def _zfa_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
+    return _child_parents("zfa", paths["zfa_obo"], parse_obo_child_parents)
+
+
+def _fbbt_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
+    return _child_parents("fbbt", paths["fbbt_obo"], parse_obo_child_parents)
+
+
+def _fbcv_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
+    return _child_parents("fbcv", paths["fbcv_obo"], parse_obo_child_parents)
+
+
 def _syngo_child_parents(paths: Dict[str, Path]) -> Dict[str, set]:
     return _child_parents("syngo", paths["syngo_zip"], parse_syngo_hierarchy)
 
@@ -402,6 +444,87 @@ ONTOLOGIES: Dict[str, OntologyEntry] = {
         # input and the hierarchy input (like subcellular's subcell.txt).
         needs=("syngo_zip", "uniprot_dat"),
         hierarchy_needs=("syngo_zip",),
+    ),
+    # ---- Model-organism phenotype layers (the dcGO trick) ------------------
+    # Each of these runs against its organism's own protein universe
+    # (--species mouse/worm/zebrafish/fly): the domain → phenotype association
+    # is learned on the model organism's proteins, and because domains are
+    # species-agnostic the associations transfer to any proteome.
+    "mp": OntologyEntry(
+        key="mp",
+        spec=MP_SPEC,
+        description="Mammalian Phenotype terms, MGI mouse genes re-keyed to "
+        "UniProt (use with --species mouse)",
+        build_source=lambda paths, options: MGIAnnotationSource(
+            paths["mgi_genepheno"], paths["mgi_marker_swissprot"]
+        ),
+        build_ancestors=lambda paths: closure_ancestors(_mp_child_parents(paths)),
+        build_parents=lambda paths: parents_from_map(_mp_child_parents(paths)),
+        needs=("mgi_genepheno", "mgi_marker_swissprot"),
+        hierarchy_needs=("mp_obo",),
+    ),
+    "wbphenotype": OntologyEntry(
+        key="wbphenotype",
+        spec=WBPHENOTYPE_SPEC,
+        description="WormBase phenotype terms, WBGene ids re-keyed to UniProt "
+        "(use with --species worm)",
+        build_source=lambda paths, options: WormBasePhenotypeAnnotationSource(
+            paths["wb_phenotype"], paths["worm_idmapping"]
+        ),
+        build_ancestors=lambda paths: closure_ancestors(
+            _wbphenotype_child_parents(paths)
+        ),
+        build_parents=lambda paths: parents_from_map(_wbphenotype_child_parents(paths)),
+        needs=("wb_phenotype", "worm_idmapping"),
+        hierarchy_needs=("wbphenotype_obo",),
+    ),
+    # Anatomy, not a phenotype ontology: "abnormality of this structure". ZP
+    # itself is not derivable from the on-disk files — see the assessment in
+    # src/zfin_annotation_source.py.
+    "zfa": OntologyEntry(
+        key="zfa",
+        spec=ZFA_SPEC,
+        description="Zebrafish anatomy affected by mutation (ZFIN EQ rows), "
+        "ZDB-GENE ids re-keyed to UniProt (use with --species zebrafish)",
+        build_source=lambda paths, options: ZFINAnatomyAnnotationSource(
+            paths["zfin_phenotype"], paths["zfin_uniprot"]
+        ),
+        build_ancestors=lambda paths: closure_ancestors(_zfa_child_parents(paths)),
+        build_parents=lambda paths: parents_from_map(_zfa_child_parents(paths)),
+        needs=("zfin_phenotype", "zfin_uniprot"),
+        hierarchy_needs=("zfa_obo",),
+    ),
+    "fbcv": OntologyEntry(
+        key="fbcv",
+        spec=FBCV_SPEC,
+        description="FlyBase phenotype classes, single-allele genotypes "
+        "re-keyed FBal→FBgn→UniProt (use with --species fly)",
+        build_source=lambda paths, options: FlyBasePhenotypeAnnotationSource(
+            paths["fb_genotype_phenotype"],
+            paths["fbal_to_fbgn"],
+            paths["fbgn_uniprot"],
+            spec=FBCV_SPEC,
+        ),
+        build_ancestors=lambda paths: closure_ancestors(_fbcv_child_parents(paths)),
+        build_parents=lambda paths: parents_from_map(_fbcv_child_parents(paths)),
+        needs=("fb_genotype_phenotype", "fbal_to_fbgn", "fbgn_uniprot"),
+        hierarchy_needs=("fbcv_obo",),
+    ),
+    "fbbt": OntologyEntry(
+        key="fbbt",
+        spec=FBBT_SPEC,
+        description="Drosophila anatomy manifesting a phenotype, same FlyBase "
+        "table as fbcv (use with --species fly)",
+        build_source=lambda paths, options: FlyBasePhenotypeAnnotationSource(
+            paths["fb_genotype_phenotype"],
+            paths["fbal_to_fbgn"],
+            paths["fbgn_uniprot"],
+            spec=FBBT_SPEC,
+        ),
+        build_ancestors=lambda paths: closure_ancestors(_fbbt_child_parents(paths)),
+        build_parents=lambda paths: parents_from_map(_fbbt_child_parents(paths)),
+        needs=("fb_genotype_phenotype", "fbal_to_fbgn", "fbgn_uniprot"),
+        hierarchy_needs=("fbbt_obo",),
     ),
     "tcdb": OntologyEntry(
         key="tcdb",

@@ -66,6 +66,22 @@ def make_args(tmp_path, **overrides):
         hpo_genes_to_phenotype=Path("data/raw/hpo/genes_to_phenotype.txt"),
         hpo_obo=Path("data/raw/hpo/hp.obo"),
         syngo_zip=Path("data/raw/syngo/syngo1.3_complete_data.zip"),
+        mgi_genepheno=Path("data/raw/mgi_reports/MGI_GenePheno.rpt"),
+        mgi_marker_swissprot=Path("data/raw/mgi_reports/MRK_SwissProt_TrEMBL.rpt"),
+        mp_obo=Path("data/raw/mp_ontology/mp.obo"),
+        wb_phenotype=Path("data/raw/wormbase/phenotype_association.WS298.wb.gz"),
+        worm_idmapping=Path("data/raw/uniprot_idmapping/CAEEL_6239_idmapping.dat.gz"),
+        wbphenotype_obo=Path("data/raw/wormbase_ontology/wbphenotype.obo"),
+        zfin_phenotype=Path("data/raw/zfin/phenoGeneCleanData_fish.txt"),
+        zfin_uniprot=Path("data/raw/zfin/uniprot.txt"),
+        zfa_obo=Path("data/raw/zfin_ontology/zfa.obo"),
+        fb_genotype_phenotype=Path(
+            "data/raw/flybase/genotype_phenotype_data_fb_2026_02.tsv.gz"
+        ),
+        fbal_to_fbgn=Path("data/raw/flybase/fbal_to_fbgn_fb_2026_02.tsv.gz"),
+        fbgn_uniprot=Path("data/raw/flybase/fbgn_NAseq_Uniprot_fb_2026_02.tsv.gz"),
+        fbbt_obo=Path("data/raw/flybase_ontology/fbbt.obo"),
+        fbcv_obo=Path("data/raw/flybase_ontology/fbcv.obo"),
     )
     defaults.update(overrides)
     return argparse.Namespace(**defaults)

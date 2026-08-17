@@ -29,6 +29,20 @@ def paths(tmp_path):
         "hpo_g2p",
         "hpo_obo",
         "syngo_zip",
+        "mgi_genepheno",
+        "mgi_marker_swissprot",
+        "mp_obo",
+        "wb_phenotype",
+        "worm_idmapping",
+        "wbphenotype_obo",
+        "zfin_phenotype",
+        "zfin_uniprot",
+        "zfa_obo",
+        "fb_genotype_phenotype",
+        "fbal_to_fbgn",
+        "fbgn_uniprot",
+        "fbbt_obo",
+        "fbcv_obo",
     ):
         path = tmp_path / name
         path.write_text("")
@@ -77,6 +91,11 @@ class TestTruePathSupport:
             "orphanet_doid",
             "hpo",
             "syngo",
+            "mp",
+            "wbphenotype",
+            "zfa",
+            "fbcv",
+            "fbbt",
         ],
     )
     def test_hierarchical_ontologies_can_propagate(self, key):
@@ -218,3 +237,69 @@ class TestGeneKeyedPreflight:
         assert entry.hierarchy_needs == ("syngo_zip",)
         paths["syngo_zip"] = tmp_path / "gone.zip"
         assert missing_inputs(entry, paths)
+
+
+class TestModelOrganismLayers:
+    """The mouse/worm/zebrafish/fly phenotype layers and their inputs."""
+
+    def test_mp_reads_the_mgi_reports(self, paths):
+        source = get_ontology("mp").build_source(paths, {})
+        assert source.genepheno_path == paths["mgi_genepheno"]
+        assert source.marker_map_path == paths["mgi_marker_swissprot"]
+
+    def test_wbphenotype_reads_the_gaf_and_the_idmapping(self, paths):
+        source = get_ontology("wbphenotype").build_source(paths, {})
+        assert source.association_path == paths["wb_phenotype"]
+        assert source.idmapping_path == paths["worm_idmapping"]
+
+    def test_zfa_reads_the_zfin_files(self, paths):
+        source = get_ontology("zfa").build_source(paths, {})
+        assert source.phenotype_path == paths["zfin_phenotype"]
+        assert source.uniprot_map_path == paths["zfin_uniprot"]
+
+    def test_fbcv_and_fbbt_share_the_flybase_tables(self, paths):
+        fbcv = get_ontology("fbcv").build_source(paths, {})
+        fbbt = get_ontology("fbbt").build_source(paths, {})
+        for source in (fbcv, fbbt):
+            assert source.genotype_phenotype_path == paths["fb_genotype_phenotype"]
+            assert source.fbal_to_fbgn_path == paths["fbal_to_fbgn"]
+            assert source.fbgn_uniprot_path == paths["fbgn_uniprot"]
+        assert fbcv.spec.term_prefix == "FBcv:"
+        assert fbbt.spec.term_prefix == "FBbt:"
+
+    @pytest.mark.parametrize(
+        "key,obo_key",
+        [
+            ("mp", "mp_obo"),
+            ("wbphenotype", "wbphenotype_obo"),
+            ("zfa", "zfa_obo"),
+            ("fbcv", "fbcv_obo"),
+            ("fbbt", "fbbt_obo"),
+        ],
+    )
+    def test_obo_only_required_when_propagating(self, paths, tmp_path, key, obo_key):
+        entry = get_ontology(key)
+        assert entry.hierarchy_needs == (obo_key,)
+        paths[obo_key] = tmp_path / "gone.obo"
+        assert missing_inputs(entry, paths) == []
+        assert missing_inputs(entry, paths, for_hierarchy=True)
+
+    @pytest.mark.parametrize("key", ["mp", "wbphenotype", "zfa", "fbcv", "fbbt"])
+    def test_missing_annotation_input_fails_preflight(self, paths, tmp_path, key):
+        entry = get_ontology(key)
+        paths[entry.needs[0]] = tmp_path / "gone"
+        assert missing_inputs(entry, paths)
+
+    def test_ancestors_and_parents_come_from_the_obo(self, paths, tmp_path):
+        obo = tmp_path / "mp.obo"
+        obo.write_text(
+            "[Term]\nid: MP:0000002\nis_a: MP:0000001 ! root\n"
+            "\n[Term]\nid: MP:0000003\nis_a: MP:0000002 ! mid\n"
+        )
+        paths["mp_obo"] = obo
+        entry = get_ontology("mp")
+        assert entry.build_ancestors(paths)("MP:0000003") == {
+            "MP:0000001",
+            "MP:0000002",
+        }
+        assert entry.build_parents(paths)("MP:0000003") == {"MP:0000002"}
