@@ -32,7 +32,6 @@ Flat-file entry shape (``//``-delimited)::
 
 from __future__ import annotations
 
-import gzip
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -42,6 +41,7 @@ from typing import Dict, Iterator, List, Optional, Set, Tuple
 from loguru import logger
 
 from src.annotation_source import AnnotationSource, OntologySpec
+from src.hierarchy import open_text
 
 # Reactome stable ids look like "R-HSA-71384"; keywords carry no id prefix.
 REACTOME_SPEC = OntologySpec(
@@ -77,10 +77,7 @@ _RHEA_RE = re.compile(r"Rhea:(RHEA:\d+)")
 
 
 def _open_text(path: Path):
-    path = Path(path)
-    if not path.exists():
-        raise FileNotFoundError(f"UniProt flat file not found: {path}")
-    return gzip.open(path, "rt") if path.suffix == ".gz" else open(path, "rt")
+    return open_text(path, label="UniProt flat file")
 
 
 def _split_keywords(kw_parts: List[str]) -> List[str]:

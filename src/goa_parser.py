@@ -57,6 +57,21 @@ ALL_EVIDENCE = (
 )
 
 
+def has_not_qualifier(qualifier: str) -> bool:
+    """True when a GAF qualifier field negates the annotation.
+
+    GAF qualifiers are ``|``-separated tokens, and negation is the literal
+    token ``NOT`` (``NOT|enables``, ``NOT|involved_in`` …). This checks for
+    that exact token rather than the substring ``"NOT"``: on the GAF 2.2
+    qualifier vocabulary the two are equivalent (measured on the 2026 human
+    GOA: every qualifier containing "NOT" is a ``NOT|…`` composite — 0 lines
+    differ), but the token check cannot be fooled by a future relation that
+    merely contains those letters. Shared by the GOA parser and the WormBase
+    phenotype layer, whose file is GAF too.
+    """
+    return "NOT" in qualifier.upper().split("|")
+
+
 @dataclass
 class GOAAnnotation:
     """Represents a single GO annotation from a GAF file."""
@@ -165,9 +180,9 @@ class GOAParser:
                     protein_id = db_object_id
 
                     # Apply filters
-                    # 1. Exclude qualifiers like 'NOT' if requested
+                    # 1. Exclude negated ('NOT') annotations if requested
                     if self.exclude_qualifiers and qualifier:
-                        if "NOT" in qualifier.upper():
+                        if has_not_qualifier(qualifier):
                             self.statistics["excluded_qualifiers"] += 1
                             continue
 

@@ -339,6 +339,23 @@ def alpha_prefix_ancestors(term: str) -> List[str]:
     return ancestors
 
 
+def open_text(path: Path, *, label: str = "file"):
+    """Open ``path`` for text reading, transparently gunzipping ``.gz`` files.
+
+    The idiom every annotation loader repeats — existence check, then
+    ``gzip.open`` or ``open`` by suffix — hoisted to one place. ``label`` names
+    the file kind in the error so a missing input says what it was supposed to
+    be, not just where it was not.
+
+    Raises:
+        FileNotFoundError: when ``path`` does not exist.
+    """
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"{label} not found: {path}")
+    return gzip.open(path, "rt") if path.suffix == ".gz" else open(path, "rt")
+
+
 def parse_obo_child_parents(
     path: Path,
     relations: Iterable[str] = ("part_of",),

@@ -24,7 +24,6 @@ The hierarchy is ``wbphenotype.obo``, read by the shared light OBO reader.
 
 from __future__ import annotations
 
-import gzip
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, Optional, Set
@@ -33,6 +32,8 @@ from loguru import logger
 
 from src.annotation_source import AnnotationSource, OntologySpec
 from src.gene_mapping import parse_idmapping_accession_map, remap_gene_annotations
+from src.goa_parser import has_not_qualifier
+from src.hierarchy import open_text
 from src.remap import RemapCoverage
 
 #: WormBase phenotype ontology terms, e.g. ``WBPhenotype:0000061``.
@@ -54,19 +55,12 @@ def parse_wb_phenotype_association(path: Path) -> Dict[str, Set[str]]:
     ``NOT``-qualified rows are dropped and counted (negative evidence); any row
     whose term column is not a ``WBPhenotype:`` id is counted as malformed.
     """
-    path = Path(path)
-    if not path.exists():
-        raise FileNotFoundError(
-            f"WormBase phenotype association file not found: {path}"
-        )
-
     logger.info(f"Parsing WormBase phenotype annotations from {path}")
-    open_func = gzip.open if path.suffix == ".gz" else open
     gene_terms: Dict[str, Set[str]] = defaultdict(set)
     n_rows = 0
     n_not = 0
     n_malformed = 0
-    with open_func(path, "rt") as handle:
+    with open_text(path, label="WormBase phenotype association file") as handle:
         for line in handle:
             if line.startswith("!"):
                 continue
@@ -79,7 +73,7 @@ def parse_wb_phenotype_association(path: Path) -> Dict[str, Set[str]]:
             if not gene.startswith("WBGene") or not term.startswith("WBPhenotype:"):
                 n_malformed += 1
                 continue
-            if "NOT" in fields[_QUALIFIER_COL].split("|"):
+            if has_not_qualifier(fields[_QUALIFIER_COL]):
                 n_not += 1
                 continue
             n_rows += 1
