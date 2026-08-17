@@ -144,6 +144,9 @@ class MGIAnnotationSource(AnnotationSource):
         gene_terms = parse_mgi_genepheno(self.genepheno_path)
         gene_map = parse_mrk_swissprot(self.marker_map_path)
         remapped, self.coverage = remap_gene_annotations(
-            gene_terms, gene_map, label="MGI→UniProt (MP)"
+            gene_terms,
+            gene_map,
+            label="MGI→UniProt (MP)",
+            target_label="UniProt accession",
         )
         return remapped

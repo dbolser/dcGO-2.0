@@ -117,6 +117,9 @@ class WormBasePhenotypeAnnotationSource(AnnotationSource):
             self.idmapping_path, "WormBase", id_space="WBGene"
         )
         remapped, self.coverage = remap_gene_annotations(
-            gene_terms, gene_map, label="WBGene→UniProt (WBPhenotype)"
+            gene_terms,
+            gene_map,
+            label="WBGene→UniProt (WBPhenotype)",
+            target_label="UniProt accession",
         )
         return remapped

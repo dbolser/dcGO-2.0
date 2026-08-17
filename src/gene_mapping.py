@@ -178,6 +178,8 @@ def remap_gene_annotations(
     gene_terms: Dict[str, Set[str]],
     gene_map: GeneAccessionMap,
     label: str,
+    *,
+    target_label: str = "reviewed UniProt accession",
 ) -> Tuple[Dict[str, Set[str]], RemapCoverage]:
     """Re-key a ``{gene id: {term}}`` map onto ``{accession: {term}}``.
 
@@ -187,6 +189,11 @@ def remap_gene_annotations(
     gene ids being remapped (``value_coverage`` is the fraction of genes that
     mapped, ``unmapped_values`` the genes that mapped to nothing) and its
     *keys* are the ontology terms.
+
+    ``target_label`` names the accession space in the unmapped-ids warning.
+    The default suits the Swiss-Prot-flat-file maps (HPO, SynGO); the
+    model-organism layers map through TrEMBL-inclusive tables and pass a
+    plain "UniProt accession" so the log does not overclaim review status.
     """
     remapped, coverage = remap_values(
         _invert(gene_terms),
@@ -194,6 +201,6 @@ def remap_gene_annotations(
         label,
         key_label="term",
         value_label="gene",
-        target_label="reviewed UniProt accession",
+        target_label=target_label,
     )
     return _invert(remapped), coverage

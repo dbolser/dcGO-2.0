@@ -165,6 +165,9 @@ class ZFINAnatomyAnnotationSource(AnnotationSource):
         gene_terms = parse_pheno_gene_clean_data(self.phenotype_path)
         gene_map = parse_zfin_uniprot(self.uniprot_map_path)
         remapped, self.coverage = remap_gene_annotations(
-            gene_terms, gene_map, label="ZDB-GENE→UniProt (ZFA)"
+            gene_terms,
+            gene_map,
+            label="ZDB-GENE→UniProt (ZFA)",
+            target_label="UniProt accession",
         )
         return remapped

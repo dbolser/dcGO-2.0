@@ -212,5 +212,6 @@ class FlyBasePhenotypeAnnotationSource(AnnotationSource):
             dict(gene_terms),
             gene_map,
             label=f"FBgn→UniProt ({self.spec.ontology_id})",
+            target_label="UniProt accession",
         )
         return remapped
