@@ -57,7 +57,7 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, FrozenSet, List, Optional, Set, Tuple
+from typing import Dict, FrozenSet, List, Optional, Protocol, Set, Tuple
 
 from loguru import logger
 
@@ -72,6 +72,16 @@ DOID_SPEC = OntologySpec(
 _ID_RE = re.compile(r"^id:\s*(\S+)")
 _REPLACED_BY_RE = re.compile(r"^replaced_by:\s*(\S+)")
 _XREF_RE = re.compile(r"^xref:\s*([^\s:]+):(\S+)")
+
+
+class SupportsTargets(Protocol):
+    """A source-id → target-ids translation table, as :func:`remap_protein_terms` sees it.
+
+    :class:`XrefMapping` is the DOID implementation; the gene→accession maps in
+    :mod:`src.gene_mapping` are another.
+    """
+
+    def targets(self, source_id: str) -> Set[str]: ...
 
 
 @dataclass(frozen=True)
@@ -297,20 +307,32 @@ def build_doid_xref_map(path: Path, xref_prefix: str = "MIM") -> XrefMapping:
 
 def remap_protein_terms(
     protein_terms: Dict[str, Set[str]],
-    mapping: XrefMapping,
+    mapping: "SupportsTargets",
     label: str = "OMIM→DOID",
+    *,
+    key_label: str = "protein",
+    value_label: str = "term",
+    target_label: str = "Disease Ontology term",
 ) -> Tuple[Dict[str, Set[str]], RemapCoverage]:
-    """Re-key a ``{protein: {source id}}`` map onto DO terms.
+    """Re-key the *values* of a ``{key: {source id}}`` map through ``mapping``.
 
     One-to-many source ids expand to every target; unmapped ones are dropped
-    (and counted); proteins left with no term at all disappear from the map, as
+    (and counted); keys left with no value at all disappear from the map, as
     they must — the Fisher engine treats an absent protein as having no
     annotation, which is exactly right for a protein whose only diseases are
     outside DO.
 
+    The defaults describe the DOID use (proteins keyed, disease ids as values).
+    ``mapping`` can be any object with a ``targets(source_id) -> Set[str]``
+    method; the gene-keyed layers (:mod:`src.gene_mapping`) reuse this with the
+    axes swapped, and pass ``key_label``/``value_label``/``target_label`` so the
+    log lines name what was actually remapped.
+
     Returns:
         ``(remapped map, coverage)``. The coverage report is returned rather than
-        only logged so callers and tests can assert on it.
+        only logged so callers and tests can assert on it. Its "term" counters
+        range over the *values* being remapped and its "protein" counters over
+        the *keys* — for an axis-swapped caller, read them accordingly.
     """
     result: Dict[str, Set[str]] = {}
     source_term_use: Dict[str, int] = defaultdict(int)
@@ -351,20 +373,21 @@ def remap_protein_terms(
 
     logger.info(f"Re-keyed annotations {label}:")
     logger.info(
-        f"  term coverage: {coverage.n_mapped_terms:,} / "
+        f"  {value_label} coverage: {coverage.n_mapped_terms:,} / "
         f"{coverage.n_source_terms:,} distinct source ids "
         f"({coverage.term_coverage:.1%})"
     )
     logger.info(
         f"  annotation coverage: {coverage.n_mapped_annotations:,} / "
-        f"{coverage.n_source_annotations:,} protein-term annotations "
-        f"({coverage.annotation_coverage:.1%})"
+        f"{coverage.n_source_annotations:,} {key_label}-{value_label} "
+        f"annotations ({coverage.annotation_coverage:.1%})"
     )
     logger.info(
-        f"  proteins: {coverage.n_source_proteins:,} → "
-        f"{coverage.n_result_proteins:,}; terms: {coverage.n_source_terms:,} → "
-        f"{coverage.n_result_terms:,}; annotations: "
-        f"{coverage.n_source_annotations:,} → {coverage.n_result_annotations:,}"
+        f"  {key_label}s: {coverage.n_source_proteins:,} → "
+        f"{coverage.n_result_proteins:,}; {value_label}s: "
+        f"{coverage.n_source_terms:,} → {coverage.n_result_terms:,}; "
+        f"annotations: {coverage.n_source_annotations:,} → "
+        f"{coverage.n_result_annotations:,}"
     )
     if coverage.n_expanded_annotations:
         logger.info(
@@ -373,7 +396,7 @@ def remap_protein_terms(
         )
     if unmapped:
         logger.warning(
-            f"  {len(unmapped):,} source ids had no Disease Ontology term and "
+            f"  {len(unmapped):,} source ids had no {target_label} and "
             f"were dropped (covering "
             f"{coverage.n_source_annotations - coverage.n_mapped_annotations:,} "
             "annotations); most used: "
