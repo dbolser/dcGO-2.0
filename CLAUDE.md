@@ -193,9 +193,20 @@ tables); enumerating co-occurring pairs makes it 9.5M tables and 268 s.
   filter it used to run alongside for GO is the paper's separate *relative
   inference* (Step 2, vs. the true-path rule at Step 3) and is now
   `--enable-relative-inference`, available for all 12 ontologies with a
-  hierarchy, and it *removes* associations rather than adding them. Our version is still a post-hoc `alpha < 0.05` filter
-  applied after BH, where the paper combines the overall and relative p-values
-  *before* correcting; that gap is VALIDATION_PLAN next-steps item 2.
+  hierarchy, and it *removes* associations rather than adding them.
+- **Relative inference runs before the BH correction** (`--enable-relative-inference`,
+  opt-in). Each candidate pair gets a parental-background p-value and BH corrects
+  `max(overall_p, relative_p)` — an intersection-union statistic, hence a valid
+  p-value without further correction; the h-score is `min(overall, relative)`.
+  That part matches the paper. **Two things do not, and the layer is not usable
+  yet — see `VALIDATION_PLAN.md` next-steps item 2:**
+  - the parental background is our max over per-parent tests, where the paper's
+    Figure 1 caption defines it as one test against the *union* of the direct
+    parents' proteins (56.1% of GO terms have more than one parent, and ours is
+    the conservative direction);
+  - terms with no parents are exempt from the test entirely, so `relative_p = 0`
+    and they pass on the overall inference alone. The three GO roots come out as
+    the top three results on an allspecies run.
 - **The §4 ablation cannot attribute its True Path result to either stage.** It
   was run when one flag drove both, so "the True Path Rule is significantly
   worse in 12/12 cells" is a statement about filter-plus-propagation, measured

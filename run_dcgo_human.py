@@ -40,7 +40,7 @@ Options:
     --permute-annotations N  Calibration control: shuffle protein↔term-set assignment (null run)
     --enable-true-path       True Path propagation *only* (GO via OBO DAG, EC via numbering, reactome/keyword via hierarchy files)
     --enable-relative-inference
-                             Parental-background filter (any ontology with a hierarchy). Independent of --enable-true-path
+                             Relative inference: combine with a parental-background p-value before FDR (any ontology with a hierarchy)
     --go-ontology PATH       Path to GO ontology file (default: data/raw/go_ontology/go-basic.obo)
 
 Examples:
@@ -66,10 +66,10 @@ Examples:
     # Run with True Path Rule propagation (paper Step 3)
     uv run python run_dcgo_human.py --enable-true-path --go-ontology data/raw/go_ontology/go-basic.obo
 
-    # Run with the parental-background filter (paper Step 2 "relative inference")
+    # Run with relative inference (paper Step 2's parental-background test)
     uv run python run_dcgo_human.py --enable-relative-inference
 
-    # Both, which is what --enable-true-path alone used to do for GO
+    # Both inferences plus propagation: the paper's full method
     uv run python run_dcgo_human.py --enable-relative-inference --enable-true-path
 
     # Key domains by SCOP superfamily instead of InterPro entry, to compare
@@ -98,7 +98,7 @@ from src.ontology_registry import (
     get_ontology,
     ontology_keys,
 )
-from src.relative_inference import filter_by_parental_background
+from src.relative_inference import compute_relative_p_values
 from src.run_manifest import RunManifest, describe_file, manifest_filename
 from src.runner import RunRequest, resolve_inputs
 from src.sparse_fisher import (
@@ -121,8 +121,7 @@ logger.add(sys.stderr, level="INFO")
 MAX_SUPRA_DOMAIN_LENGTH = 3  # longest contiguous domain combination tested
 MIN_DOMAIN_LENGTH = 10  # residues; shorter InterPro matches are discarded
 FISHER_ALTERNATIVE = "greater"  # one-sided: enrichment only
-PARENTAL_MIN_BACKGROUND_SIZE = 3  # GO parental-background (optimal-level) test
-PARENTAL_ALPHA_THRESHOLD = 0.05  # raw-p cutoff for that parent/child test
+PARENTAL_MIN_BACKGROUND_SIZE = 3  # smallest usable parental background
 
 #: ``ontology_paths`` key → the ``config/settings.py`` data source it is
 #: downloaded from. Used only to *label* manifest inputs with where they came
@@ -431,7 +430,13 @@ def start_run_manifest(
                 "max_supra_domain_length": MAX_SUPRA_DOMAIN_LENGTH,
                 "enable_supra_domains": bool(args.enable_supra_domains),
                 "parental_background_min_size": PARENTAL_MIN_BACKGROUND_SIZE,
-                "parental_background_alpha": PARENTAL_ALPHA_THRESHOLD,
+                # The relative p-value is combined with the overall one before
+                # BH (max of the two), so there is no separate alpha for it.
+                "relative_inference_combination": (
+                    "max_overall_relative_then_bh"
+                    if args.enable_relative_inference
+                    else None
+                ),
             },
         },
         command=[sys.executable, *sys.argv],
@@ -557,12 +562,12 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--enable-relative-inference",
         action="store_true",
-        help="Enable the parental-background (relative inference) filter: keep "
-        "an association only if it is still enriched within the proteins "
-        "annotated to the term's direct parents. Needs a term hierarchy. "
-        "This is a filter, "
-        "not propagation — it deletes associations and is independent of "
-        "--enable-true-path",
+        help="Enable relative inference (the dcGO paper's second statistical "
+        "inference): also test each association within the background of "
+        "proteins annotated to its term's direct parents, and correct the "
+        "larger of the two p-values. Applied before the FDR correction, so it "
+        "changes which associations are significant rather than filtering them "
+        "afterwards. Needs a term hierarchy; independent of --enable-true-path",
     )
     parser.add_argument(
         "--go-ontology",
@@ -910,6 +915,105 @@ def main(argv: list[str] | None = None) -> int:
     )
     logger.info(f"  Rate: {len(pvalues) / test_time:,.0f} tests/second")
 
+    # STAGE 4.5: Relative inference (paper Step 2's second inference)
+    #
+    # The paper computes an overall p-value against the whole analysable
+    # background *and* a relative p-value against only the proteins annotated to
+    # the term's direct parents, then "first took the larger one of the overall
+    # and relative p-values to indicate the likelihood of associations" before
+    # applying BH. That maximum is an intersection-union statistic: the null is
+    # "fails at least one inference", rejecting requires rejecting both, and
+    # max(p1, p2) is a valid p-value for it with no multiplicity correction. So
+    # it is exactly the quantity BH is entitled to correct.
+    #
+    # This must therefore happen BEFORE the correction. Applying the relative
+    # test as a post-hoc filter (which is what --enable-relative-inference used
+    # to do) gives the relative dimension no FDR control at all and perturbs the
+    # realised FDR of whatever survives.
+    ontology_processor = None
+    relative_tables = None
+    if args.enable_relative_inference or args.enable_true_path:
+        # GO's hierarchy comes from the obonet graph, every other ontology's
+        # from the registry. Loaded once here and reused by Stage 5.5.
+        if ontology_entry.build_ancestors is None:
+            logger.info(f"Loading GO ontology from: {args.go_ontology}")
+            ontology_processor = OntologyProcessor(args.go_ontology)
+
+    if args.enable_relative_inference:
+        logger.info("")
+        logger.info("STAGE 4.5: Relative Inference (parental backgrounds)")
+        logger.info("─" * 70)
+        start_time = time.time()
+
+        if ontology_processor is not None:
+            parents_fn = ontology_processor.get_parents
+            relative_ancestors_fn = ontology_processor.get_ancestors
+        else:
+            parents_fn = ontology_entry.build_parents(ontology_paths)
+            relative_ancestors_fn = ontology_entry.build_ancestors(ontology_paths)
+
+        logger.info(
+            f"Testing {len(pvalues):,} co-occurring pairs against their "
+            "direct-parent backgrounds..."
+        )
+        relative_pvalues, relative_tables, relative_rejections = (
+            compute_relative_p_values(
+                protein_domain_matrix,
+                protein_go_matrix,
+                pair_index,
+                go_list,
+                parents_fn,
+                relative_ancestors_fn,
+                min_background_size=PARENTAL_MIN_BACKGROUND_SIZE,
+                fisher_batch_size=args.batch_size,
+            )
+        )
+
+        n_root = int((relative_pvalues == 0.0).sum())
+        combined = np.maximum(pvalues, relative_pvalues)
+        n_weakened = int((combined > pvalues).sum())
+        logger.info(
+            f"  {n_weakened:,} pairs governed by the relative inference; "
+            f"{n_root:,} have no parent to test against"
+        )
+        if relative_rejections:
+            detail = ", ".join(
+                f"{n:,} x {kind}" for kind, n in sorted(relative_rejections.items())
+            )
+            logger.info(
+                f"  {sum(relative_rejections.values()):,} parent tests could not "
+                f"be evaluated ({detail}); those pairs are conservatively set to "
+                "p = 1"
+            )
+        pvalues = combined
+
+        logger.info(
+            f"✓ Relative inference completed in {time.time() - start_time:.2f}s"
+        )
+
+    def combined_hyper_score(idx: int, a: int, b: int, c: int, d: int) -> float:
+        """The paper's h-score: the *smaller* of the overall and relative scores.
+
+        "We also took the smaller of the overall and relative hypergeometric
+        scores ... to indicate the strength of associations, denoted as
+        h-score." The same conservative direction as taking the larger of the
+        two p-values — the weaker evidence governs. With relative inference off,
+        or for a term with no parent to test against (an all-zero relative
+        table), the overall score stands alone.
+        """
+        overall = calculate_hypergeometric_score(a, b, c, d)
+        if relative_tables is None:
+            return overall
+        table = relative_tables[idx]
+        if not table.any():
+            return overall
+        return min(
+            overall,
+            calculate_hypergeometric_score(
+                int(table[0, 0]), int(table[0, 1]), int(table[1, 0]), int(table[1, 1])
+            ),
+        )
+
     # Apply FDR correction
     logger.info("")
     logger.info("STAGE 5: FDR Correction")
@@ -1031,7 +1135,7 @@ def main(argv: list[str] | None = None) -> int:
                     go_term=go_list[go_idx],
                     p_value=float(pvalues[idx]),
                     q_value=float(adjusted_pvalues[idx]),
-                    hyper_score=calculate_hypergeometric_score(a, b, c, d),
+                    hyper_score=combined_hyper_score(idx, a, b, c, d),
                     a=a,
                     b=b,
                     c=c,
@@ -1039,49 +1143,10 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
 
-        # The GO branch is the only one that can load an OntologyProcessor, and
-        # it is the only branch that offers relative inference. It is also the
-        # branch whose OBO DAG supplies the ancestors for propagation, so both
-        # stages share one processor when both are enabled.
-        ontology_processor = None
-        if ontology_entry.build_ancestors is None:
-            logger.info(f"Loading GO ontology from: {args.go_ontology}")
-            ontology_processor = OntologyProcessor(args.go_ontology)
-
-        # --- Stage A: relative inference (paper Step 2) — removes associations
-        if args.enable_relative_inference:
-            logger.info(
-                f"Relative inference: testing {len(significant_associations):,} "
-                "associations against their direct-parent backgrounds..."
-            )
-            # GO's hierarchy comes from the obonet graph, every other ontology's
-            # from the registry. The test itself is the same code either way.
-            if ontology_processor is not None:
-                parents_fn = ontology_processor.get_parents
-                relative_ancestors_fn = ontology_processor.get_ancestors
-            else:
-                parents_fn = ontology_entry.build_parents(ontology_paths)
-                relative_ancestors_fn = ontology_entry.build_ancestors(ontology_paths)
-
-            # alpha_threshold is a raw Fisher p-value, not FDR-corrected: this
-            # is a post-hoc filter applied after BH, which is *not* what the
-            # paper does (it combines overall and relative p-values and then
-            # corrects). See VALIDATION_PLAN.md next-steps item 2.
-            significant_associations = filter_by_parental_background(
-                significant_associations,
-                protein_domain_map,
-                protein_go_map,
-                parents_fn=parents_fn,
-                ancestors_fn=relative_ancestors_fn,
-                min_background_size=PARENTAL_MIN_BACKGROUND_SIZE,
-                alpha_threshold=PARENTAL_ALPHA_THRESHOLD,
-            )
-            logger.info(
-                f"✓ Relative inference retained "
-                f"{len(significant_associations):,} associations"
-            )
-
-        # --- Stage B: True Path Rule (paper Step 3) — adds ancestor annotations
+        # --- True Path Rule (paper Step 3) — adds ancestor annotations.
+        # Relative inference (Step 2) is no longer here: it now runs before the
+        # BH correction, in STAGE 4.5, because the paper corrects the *combined*
+        # p-value rather than filtering on the relative one afterwards.
         if args.enable_true_path:
             if ontology_processor is not None:
                 logger.info(
@@ -1184,7 +1249,7 @@ def main(argv: list[str] | None = None) -> int:
             table = tables[idx]
             a, b = int(table[0, 0]), int(table[0, 1])
             c, d = int(table[1, 0]), int(table[1, 1])
-            hyper_score = calculate_hypergeometric_score(a, b, c, d)
+            hyper_score = combined_hyper_score(idx, a, b, c, d)
 
             # Get domain metadata
             meta = domain_metadata[domain_id]
@@ -1227,7 +1292,7 @@ def main(argv: list[str] | None = None) -> int:
             table = tables[idx]
             a, b = int(table[0, 0]), int(table[0, 1])
             c, d = int(table[1, 0]), int(table[1, 1])
-            hyper_score = calculate_hypergeometric_score(a, b, c, d)
+            hyper_score = combined_hyper_score(idx, a, b, c, d)
 
             # Get domain metadata
             meta = domain_metadata[domain_id]

@@ -190,7 +190,7 @@ and this pipeline exposes them as two flags:
 
 | Flag | Paper step | What it does | Direction |
 |------|-----------|--------------|-----------|
-| `--enable-relative-inference` | Step 2, "relative inference" | Fisher test of the association within the background of proteins annotated to the term's **direct parents**; associations failing it are dropped | **Removes** associations |
+| `--enable-relative-inference` | Step 2, "relative inference" | Also tests each association within the background of proteins annotated to its term's **direct parents**, and corrects the larger of the two p-values | **Removes** associations |
 | `--enable-true-path` | Step 3, "true-path rule" | Propagates each association to its **ancestor** terms | **Adds** annotations |
 
 Only Step 3 is the True Path Rule. The parental-background test is a separate
@@ -200,30 +200,68 @@ calculation*", then "*following the true-path rule to obtain the complete
 domain-centric GO annotations*"), but it is easy to miss in a dense methods
 section.
 
-On the human GO run (`--disable-supra-domains`, 44,453 significant
-associations) the two behave completely differently:
+#### Why the *larger* p-value
+
+The paper "*first took the larger one of the overall and relative p-values*",
+then applied BH to that. Each inference alone fails in a characteristic way:
+the overall test cannot locate which level of the DAG the signal lives at (a
+domain associated with a broad term makes every descendant look enriched for
+free), while the relative test rests on a background that can be small and
+idiosyncratic, and roots have no parents at all. Requiring **both** is the
+claim "real globally, *and* specific to this term rather than inherited".
+
+Taking the maximum is also the statistically valid way to say that. It is an
+**intersection-union test**: the null is "fails at least one inference",
+rejection requires rejecting both, and `max(p₁, p₂)` is itself a valid p-value
+for that null with no multiplicity correction (Berger 1982). `min(p₁, p₂)` is
+not. So the maximum is exactly the quantity BH is entitled to correct — which
+is why the combination happens *before* the correction. Consistently, the
+h-score reported is the **smaller** of the overall and relative scores: the
+weaker evidence governs in both directions.
+
+#### What each stage does to the numbers
+
+Human GO, `--disable-supra-domains`, FDR < 0.01:
+
+| Configuration | Significant associations |
+|---|---:|
+| overall inference only | 44,453 |
+| `--enable-relative-inference` | **3,876** |
+
+The drop is large because the relative p-value is now held to the same FDR
+standard as the overall one (a threshold of 1.2e-07 on this run), rather than
+to a loose uncorrected cutoff. 623,092 of the 655,659 candidate pairs are
+governed by the relative inference — that is, their relative p-value exceeds
+their overall one — which is the inherited-association cascade the test exists
+to remove.
+
+Propagation, being additive, works the other way:
 
 ```
---enable-true-path                                44,453 → 328,486 annotations (44,453 direct + 284,033 propagated)
---enable-relative-inference                       44,453 →  21,582 annotations (all direct; 51.4% dropped)
---enable-relative-inference --enable-true-path    44,453 →  21,582 → 148,212  (21,582 direct + 126,630 propagated)
+--enable-true-path                                44,453 -> 328,486 annotations
+--enable-relative-inference --enable-true-path     3,876 ->  21,634 annotations
 ```
 
 Two caveats worth knowing:
 
-- **Our relative inference is not yet the paper's.** The paper computes the
-  relative p-value alongside the overall one, takes the *larger* of the two,
-  and applies BH-FDR to that. We apply it as a post-hoc `alpha < 0.05` filter
-  *after* BH has already run. Those are different methods with different error
-  control — see `VALIDATION_PLAN.md` next-steps item 2.
 - **`--enable-relative-inference` works for every ontology with a hierarchy** —
   all 12 of them (`go`, `ec`, `reactome`, `keyword`, `doid`, `orphanet_doid`,
   `tcdb`, `merops`, `cazy`, `subcellular`, `ligand`, `cofactor`). The 9 flat
   cross-reference layers (`disease`, `orphanet`, `unipathway`, `complex`,
   `drugbank`, `pharos`, `condensate`, `rhea`, `xref`) have no parental
   background to test against and are rejected with an explicit error.
+- **The relative inference is not usable yet, and both stages are off by
+  default.** Two known deviations from the paper block it: our parental
+  background is the maximum over per-parent tests where the paper's Figure 1
+  caption specifies one test against the *union* of the direct parents'
+  proteins, and terms with no parents skip the test entirely so the DAG roots
+  pass untested. In practice enabling it makes the output *less* specific, which
+  is the opposite of its purpose. See `VALIDATION_PLAN.md` next-steps item 2 for
+  the measurements, including the widened-universe experiment that failed.
+- **Neither stage is on by default yet.** Both are opt-in while the numbers
+  they change are re-measured.
 
-#### Disease: re-keying OMIM onto the Disease Ontology
+### Disease: re-keying OMIM onto the Disease Ontology
 
 OMIM is a catalogue, not an ontology. Its ids have no DAG, and it splits one
 disease across many locus-specific entries, so `--ontology disease` is both
