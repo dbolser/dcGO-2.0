@@ -8,6 +8,20 @@ manuscript only if it has a row here with verdict *supported* or *provisional*
 
 Compiled: 2026-08-04. Repository: `/home/danbolser/Build/dcGO-2.0`,
 branch `feature/surprise-score-and-ontology-breadth`, HEAD `a334b0b`.
+Updated: 2026-08-17, against `main` HEAD `16dec71` (PRs #61–#70 merged), adding
+blocks **K** (method parity and the current pipeline) and **L** (the
+multi-vocabulary expansion) and era annotations throughout.
+
+**Era convention (added 2026-08-17).** PR #67 restricted GO annotation
+propagation to `is_a`/`part_of`, dropping the 7,799 regulates-family edges the
+DAG previously traversed (K3). Every artifact produced before that fix that
+passed through GO propagation — inference-side or evaluation-side — is
+**pre-regulates-fix era** and must be regenerated before its numbers are
+quoted as current. Run manifests record the policy as
+`analysis.ontology.propagation_relations`; an artifact without a manifest (all
+runs in blocks A–H) is pre-fix by definition (K12). Block-level era notes
+below say which blocks are affected; rows that never touch GO propagation are
+not marked.
 
 **Verdict key**
 
@@ -34,12 +48,12 @@ run manifest pinning input releases and checksums
 | A4 | GO terms in the t0 run | 16,055 | `logs/t0_2021_run.log` : same line as A1 | Distinct GO terms annotated to at least one protein in the intersection | supported |
 | A5 | Fisher tests performed, t0 run | 1,640,917,330 | `logs/t0_2021_run.log` (`main:278` "Total tests") | `n_features × n_terms` (102,206 × 16,055) | supported |
 | A6 | Single-domain annotations / supra-domain annotations, t0 run | 230,275 / 405,928 | `logs/t0_2021_run.log` (`main:260`, `main:262`) | (protein, feature) incidences | supported |
-| A7 | Significant domain–GO associations, t0 run, FDR < 0.01 | 164,549 | `logs/t0_2021_run.log` (`main:512`); `results_t0_2021/domain_go_associations_significant.tsv` = 164,550 lines incl. header | BH-adjusted Fisher p < 0.01 | supported |
-| A8 | Significant domain–GO associations, current-release run, FDR < 0.01 | 165,823 | `results/domain_go_associations_significant.tsv` (165,824 lines incl. header); also `VALIDATION_PLAN.md` §1 | As A7, on the current GOA/InterPro release | supported |
+| A7 | Significant domain–GO associations, t0 run, FDR < 0.01 | 164,549 | `logs/t0_2021_run.log` (`main:512`); `results_t0_2021/domain_go_associations_significant.tsv` = 164,550 lines incl. header | BH-adjusted Fisher p < 0.01 | supported as a record of that run; **era-stale (2026-08-17)** — manifest-less, pre-parity configuration; the Fisher stage does not propagate, so the count is not corrupted, but it is quoted as PROVISIONAL in the text pending regeneration (see K4) |
+| A8 | Significant domain–GO associations, current-release run, FDR < 0.01 | 165,823 | `results/domain_go_associations_significant.tsv` (165,824 lines incl. header); also `VALIDATION_PLAN.md` §1 | As A7, on the current GOA/InterPro release | supported as a record of that run; **era-stale** as A7 |
 | A9 | Human proteins carrying InterPro domains | 18,908 | `SURPRISE_SCORE.md` L103; `docs/uniprot_ontology_survey.md` L136 | Protein universe for the current-release run | provisional — stated identically in two prose documents; no run log located that emits this figure |
-| A10 | GO DAG size used for propagation | 38,245 terms / 71,895 relationships | `logs/bench_A.log` … `logs/bench_primary.log` (`_prepare_graph:143`) | `go-basic.obo` after obsolete-term removal | supported |
+| A10 | GO DAG size used for propagation | 38,245 terms / 71,895 relationships | `logs/bench_A.log` … `logs/bench_primary.log` (`_prepare_graph:143`) | `go-basic.obo` after obsolete-term removal | supported as a record of those runs; **era note**: the 71,895 relationships include the regulates-family edges the propagation graph now drops (K3), so a post-fix graph is smaller |
 | A11 | Swiss-Prot flat file scale | 575,503 entries, of which 20,431 human (`OX NCBI_TaxID=9606`) | `docs/uniprot_ontology_survey.md` L11–12 | Survey of the 2026-07 `uniprot_sprot.dat.gz` | supported |
-| A12 | Registered `--ontology` values | 19 | `README.md` L243; `src/ontology_registry.py`; `TODO.md` L38 | Keys in the dispatch table | supported |
+| A12 | Registered `--ontology` values | 19 | `README.md` L243; `src/ontology_registry.py`; `TODO.md` L38 | Keys in the dispatch table | supported **as of the 2026-08-04 compile**; superseded by K1 (28 keys after PRs #66/#68) — the manuscript now quotes K1 |
 | A13 | Test suite at external-review date | 162 tests, 6.63 s | `ENGINEERING_SCIENTIFIC_REVIEW_TODOS.md` L133 | Reviewer's `pytest` run, 2026-07-15 | provisional — `CLAUDE.md`/`README.md` state "155 tests, ~5 s"; the two disagree and neither is a committed artifact |
 
 ---
@@ -48,6 +62,15 @@ run manifest pinning input releases and checksums
 
 Source file for B1–B6: `validation/performance_metrics.tsv`. Semantics from
 `validation/validate_results.py` and `validation/domain_centric_eval.py`.
+
+> **Era (2026-08-17): pre-regulates-fix.** Both sides of every B comparison
+> are propagated through `OntologyProcessor` (`validate_results.py:164–169`),
+> which at the time traversed the regulates-family edges (K3). B7–B9
+> additionally measured the superseded *post-hoc* relative filter
+> (`validation/apply_relative_inference.py`), replaced by the in-inference
+> combination (K11). All B rows are PROVISIONAL for the manuscript pending
+> post-#67 regeneration; the row verdicts below stand as records of what the
+> committed files contain.
 
 | ID | Claim | Value | Source (file : locator) | What was actually measured | Verdict |
 | --- | --- | --- | --- | --- | --- |
@@ -65,6 +88,14 @@ Source file for B1–B6: `validation/performance_metrics.tsv`. Semantics from
 ---
 
 ## C. Protein-centric temporal (CAFA-style) benchmark (§2)
+
+> **Era (2026-08-17): pre-regulates-fix.** The no-knowledge gate, truth sets,
+> IC frequencies, naive baseline and p-score transfer all propagate through
+> `OntologyProcessor` (`temporal_benchmark.py:606,703`), pre-#67 (K3). Every
+> C value — cohort sizes included — is PROVISIONAL for the manuscript pending
+> post-fix regeneration. The defect applies identically to dcGO and both
+> baselines, so the qualitative comparisons are retained in the text with the
+> banner.
 
 Source file for all of C: `validation/temporal_benchmark_metrics.tsv`.
 Semantics from `validation/temporal_benchmark.py`
@@ -206,6 +237,13 @@ at IC ≥ 0, including MF where it loses on F_max" — derived from C4a–C4c.
 
 ## E. Surprise score — held-out temporal test
 
+> **Era (2026-08-17): pre-regulates-fix.** The prediction and hit sets are
+> propagated non-IEA/experimental closures computed pre-#67 (K3), and the
+> underlying t0 association set is the manifest-less pre-parity run (A7).
+> All E rows are PROVISIONAL for the manuscript pending post-fix
+> regeneration; the paired-comparison verdict (E10) is expected to be robust
+> to the fix but must be re-derived, not assumed.
+
 Source for E2–E12: `validation/temporal_surprise_metrics.tsv`; semantics from
 `validation/temporal_surprise.py` (`score_association`, `acquisition_base_rates`,
 `pool`, `_bootstrap_enrichment_ci`, `_budget_enrichment`, `compare_rankings`).
@@ -255,6 +293,15 @@ particular defect, but every ontology trained from `uniprot_sprot.dat.gz` is.
 Ledger IDs F1–F9 record the value as currently committed, so that the corrected
 run can be diffed against it.
 
+> **Update (2026-08-17).** The species recomputation happened (2026-08-04) and
+> the corrected values below carry their own verdicts. One further era note:
+> the **GO anchor (F1) is pre-regulates-fix era** — its propagation ran
+> through the pre-#67 `OntologyProcessor` (K3) — and is PROVISIONAL with the
+> rest of the GO-propagated results. The non-GO rows propagate over their own
+> hierarchies via the light `is_a`/`part_of`-only OBO reader and companion
+> loaders, which never traversed regulates-family edges, so the edge fix does
+> not touch them.
+
 Source file: `validation/temporal_breadth_metrics.tsv` (and
 `validation/temporal_breadth_go.tsv` for the GO anchor). Statistic identical to
 E2. t0 = archived Swiss-Prot 2021_02 (07-Apr-2021) for the UniProt layers,
@@ -296,7 +343,7 @@ GOA release 205 for GO.
 | G8 | Human subset contains 8,256 distinct Pfam and 911 distinct SUPERFAMILY signatures rolled into 19,534 InterPro entries | as stated | memory `original-dcgo-methodology.md` | provisional — memory only; not recomputed |
 | G9 | The 2023 dcGO release reports ~1,000 Pfam and ~800 InterPro domains | as stated | `VALIDATION_PLAN.md` L465–468 | **unsupported** — the source document itself instructs "verify that figure against the actual download before citing it". Excluded from the manuscript |
 | G10 | The 2023 dcGO release added MONDO, EFO, KEGG, Reactome, PANTHER, WikiPathways, MitoCarta, DGIdb, Open Targets, ENRICHR/TRRUST, MSigDB, and dropped EC, UniPathway, UniProt keywords, DrugBank ATC | as stated | `VALIDATION_PLAN.md` L469–473, attributed to `docs/EMS185259.pdf` | provisional — PDF unreadable here |
-| G11 | No quantitative comparison against original dcGO output has been run | — | `VALIDATION_PLAN.md` §3 checkboxes L477–485 all unchecked; `TODO.md` L62 | supported |
+| G11 | No quantitative comparison against original dcGO output has been run | — | `VALIDATION_PLAN.md` §3 checkboxes L477–485 all unchecked; `TODO.md` L62 | supported **as of the 2026-08-04 compile**; superseded by K9 — the comparison was run on 2026-08-04 (`--domain-key ssf`, `validation/compare_original_dcgo.py`) and the manuscript now cites it |
 
 ---
 
@@ -304,6 +351,13 @@ GOA release 205 for GO.
 
 All rows sourced from `ENGINEERING_SCIENTIFIC_REVIEW_TODOS.md` (review date
 2026-07-15) and **supported** as accurate statements of that document.
+
+> **Update (2026-08-17).** Several rows describe conditions that have since
+> changed; each remains an accurate statement of the review, with the current
+> state recorded in block K: H4 (ablation now run — K8), H5 (shrinkage now
+> removed — K7), H12 (`bench_A`–`bench_D` now committed), and the "no run
+> manifest" condition (manifests now emitted — K12, though no number in this
+> draft is covered by one).
 
 | ID | Limitation | Locator |
 | --- | --- | --- |
@@ -328,6 +382,51 @@ All rows sourced from `ENGINEERING_SCIENTIFIC_REVIEW_TODOS.md` (review date
 | H19 | No minimum-support / effect-size policy; FDR significance alone retains associations from sparse tables; contingency cells and odds-ratio CIs are not reported | L116–120; `VALIDATION_PLAN.md` L557–563 |
 | H20 | Reviewer's overall verdict: the evidence supports predictive signal in this retrospective benchmark, **not** general performance, calibration, or superiority | L10–13, L143–155 |
 | H21 | `odds_ratio` prints `0.0000` when `d = 0` and `inf` when `b·c = 0`; no Haldane correction | `VALIDATION_PLAN.md` L560–563; visible in `README.md` L271–272 example output | 
+
+---
+
+## K. Method parity and the current pipeline (added 2026-08-17, PRs #61–#70)
+
+| ID | Claim | Value | Source (file : locator) | What was actually measured | Verdict |
+| --- | --- | --- | --- | --- | --- |
+| K1 | Registered `--ontology` keys | 28 | `src/ontology_registry.py` `ONTOLOGIES` (verified: `len(ONTOLOGIES)` = 28 on `main` @ 16dec71) | Dispatch-table keys, including `go` and the generic `xref` escape hatch; 26 substantive vocabularies beyond GO | supported |
+| K2 | Entries with a hierarchy (True Path and relative inference capable) | 19 of 28 | `src/ontology_registry.py` (entries with `build_ancestors`/`build_parents` or `external_propagation`, counted by inspection); `CLAUDE.md` Known Limitations ("all 19 ontologies with a hierarchy") | go, ec, reactome, keyword, doid, orphanet_doid, hpo, syngo, mp, wbphenotype, zfa, fbcv, fbbt, tcdb, merops, cazy, subcellular, ligand, cofactor | supported |
+| K3 | Regulates-family GO edges previously traversed by propagation, now dropped | 7,799 | commit `833dc5e` (PR #67) message; `VALIDATION_PLAN.md` L940–947 ("~7,800"); policy constant `src/hierarchy.py` `PROPAGATION_RELATIONS` | `regulates`/`positively_regulates`/`negatively_regulates` edges in `go-basic.obo`; the pipeline logs the dropped count per run | supported (the exact count is from the PR record; each post-fix run re-logs it) |
+| K4 | Paper-parity human GO single-domain significant associations, FDR < 0.01 | 30,655 | `VALIDATION_PLAN.md` next-steps item 2, sweep table (L110–116) | `--propagate-annotations --enable-relative-inference --enable-true-path`, post-regulates-fix, before any reporting floor | provisional — prose table only; recomputable via `validation/specificity_metrics.py`; to be superseded by a manifest-carrying production artifact |
+| K5 | `--min-ic` sweep on the K4 run | floors 0/1/2/3/5 → significant 30,655 / 30,302 / 28,348 / 26,401 / 18,888; mean #ancestors 6.0 / 6.1 / 6.3 / 6.4 / 7.3; on an ancestor chain 52.7% / 50.2% / 46.4% / 42.8% / 33.3%; GO roots present only at floor 0 | same locator; re-derived unchanged from a full-precision `ic` export per the plan's note | The cascade is **not resolved** by the floor (52.7% → 50.2%); an allspecies run is worse (82.4% on a chain, L90–95), and degenerate parents and the attainable-p floor are ruled out as causes | provisional (as K4) |
+| K6 | GO aspect roots sit at IC 0.09–0.17 bits; `--min-ic 1` removes them plus the near-universal band at a cost of 353 associations (1.2%) | as stated | `VALIDATION_PLAN.md` L118–122; root band also recorded in the `src/information_content.py` module docstring | Annotation-frequency IC on the propagated human GO map | provisional (prose + docstring; the 353/1.2% figure is derivable from K5's floor-0 vs floor-1 rows) |
+| K7 | Shrinkage removed (2026-08-05) | enabling it took FDR < 0.01 rejections from 163,277 to 463,924 (+184%); the ablation's shrinkage rung moved 0/12 cells | `VALIDATION_PLAN.md` §4 rung table (163,277 / 463,924); `validation/ablation_metrics.tsv`, `validation/ablation_paired_bootstrap.tsv` (`supra_shrink` vs `supra` rows); `CLAUDE.md` Known Limitations | The interpolated quantities were not valid p-values under any null, so BH did not control FDR on them | supported (committed ablation TSVs + plan; the removal is a code fact) |
+| K8 | Component ablation verdicts | supra-domains improve 0/12 aspect × IC cells; the True Path rung is significantly worse in 12/12 — **superseded/confounded** | `validation/ablation_metrics.tsv`, `validation/ablation_paired_bootstrap.tsv`; supersession banner at `VALIDATION_PLAN.md` §4 (L921–947) | The TPR rung measured the then-combined filter+propagation, with the unpropagated-background defect in place (fixed in #46) and regulates-era propagation; it cannot be attributed to propagation and must be re-run against the split flags, post-fix | supported for the measurements; the TPR *attribution* is explicitly not supported |
+| K9 | Published-dcGO comparison (SSF-keyed) | precision 0.537–0.625 across six pre-declared threshold × definition variants; recall 0.036–0.069, **not interpretable** (69.4% of their pairs have zero co-occurring human proteins); per-aspect CC 0.623 > MF 0.544 > BP 0.496 | `VALIDATION_PLAN.md` §3.1 (L795–836); `validation/dcgo_comparison_metrics_*.tsv`, `validation/dcgo_comparison_by_aspect_*.tsv` (committed) | Set overlap of our FDR-significant SSF-keyed pairs with the 2013 release's SCOP-superfamily tables; they are all-species/2016, we are human-only/2026 | supported. Era note: the comparison itself does not GO-propagate our side (direct associations); the "direct+inherited" variant uses *their* published inherited table |
+| K10 | All-species training background | 1,464,355 proteins / 9,074 taxa; wins 8/9 F_max and 9/9 AUPRC cells on the held-out 2021→2026 split; 9/9 and 9/9 under `--evidence-filter experimental`; `manual` universe 75.8% projected annotation; support inflated ~2.44× by orthology | `MULTISPECIES_BACKGROUND.md` (run 2026-08-06) | Training universe swapped, evaluation held fixed | provisional — the evaluation is pre-regulates-fix era, and the run predates manifests; cited in the manuscript as direction only |
+| K11 | Current inference design | relative test folded in before BH: background = union of direct parents' proteins (*N_pa*); BH on `max(overall_p, relative_p)` (intersection–union statistic); h-score `min(overall, relative)`; input map propagated with alt_id remap and unknown-term exclusion, counted; post-BH reporting floors `--min-support` / `--min-ic` with the `ic` column exported | `run_dcgo_human.py`; `src/relative_inference.py`; `src/hierarchy.py` (`propagate_annotation_map`, `PROPAGATION_RELATIONS`); `src/ontology_processor.py` (`alt_id_map`); `src/information_content.py`; `VALIDATION_PLAN.md` item 2 | Description of code on `main` @ 16dec71 | supported (code) |
+| K12 | Run manifests | `run_manifest_<ontology>.json`: input/output SHA-256s and byte sizes, release headers where the format supplies one, Git state, `uv.lock` hash, command line, thresholds, summary counts, and `analysis.ontology.propagation_relations` as the era marker | `src/run_manifest.py`; `REPRODUCIBILITY.md` | A manifest without the `propagation_relations` key — or an artifact with no manifest — is a pre-fix artifact | supported (code). No number in the manuscript is yet covered by a manifest |
+
+---
+
+## L. The multi-vocabulary expansion (added 2026-08-17, PRs #66/#68)
+
+Gene-coverage rows L1–L6 were **recomputed on 2026-08-17** with
+`scripts/verify_gene_coverage.py` against the acquisition-matrix inputs
+(UniProt 2026_02 per-organism idmapping and Swiss-Prot flat file; HPO
+2026-06-23; SynGO 1.3; MGI, ZFIN, WormBase WS298 and FlyBase FB2026_02
+releases as recorded in `data/ACQUISITION_MATRIX.md`); each adapter logs the
+same `RemapCoverage` counts on every run, so a production manifest run will
+re-emit them.
+
+| ID | Claim | Value | Source (file : locator) | What was actually measured | Verdict |
+| --- | --- | --- | --- | --- | --- |
+| L0 | Identifier-mapping policy | unmapped gene ids dropped, counted and logged; one-to-many ids credit **all** accessions; coverage exposed as `RemapCoverage` | `src/gene_mapping.py` and `src/remap.py` module docstrings | The DOID layer's audited remap policy, applied to the protein axis | supported (code) |
+| L1 | HPO gene → UniProt coverage | 98.5% (5,196 / 5,274 gene ids; 5,204 proteins in the layer) | `scripts/verify_gene_coverage.py` recomputation (see block note); mapping route documented in `src/hpo_annotation_source.py` | NCBI GeneID → accession via Swiss-Prot `DR GeneID` lines | supported (recomputed) |
+| L2 | SynGO gene → UniProt coverage | 99.9% (1,787 / 1,789 gene ids; 1,799 proteins) | as L1; route in `src/syngo_annotation_source.py` (HGNC id, approved-symbol fallback; evidence-experiment `uniprot_id` column deliberately unused) | HGNC → accession via `DR HGNC` lines | supported (recomputed) |
+| L3 | MP (MGI) coverage and genotype policy | 85.0% (14,033 / 16,509 MGI markers); single-gene policy drops 2 of 283,003 rows | as L1; policy and row counts in the `src/mgi_annotation_source.py` module docstring | MGI marker → accession via `MRK_SwissProt_TrEMBL.rpt`; multi-gene genotypes excluded | supported (recomputed; policy counts in docstring) |
+| L4 | WBPhenotype coverage | 82.5% (8,704 / 10,550 WBGene ids); `NOT`-qualified rows dropped as negative evidence | as L1; `src/wormbase_annotation_source.py` module docstring | WBGene → accession via the per-organism idmapping file (TrEMBL included) | supported (recomputed) |
+| L5 | ZFA coverage; ZP not derivable | 68.6% (5,139 / 7,487 ZDB-GENE ids). ZP rejected: the annotation file carries no ZP ids and the OBO `zp.obo` has logical definitions for 0 of 43,521 non-obsolete terms (~2% have EQ comments); all 169,887 rows are tagged `abnormal`, so the affected-anatomy reading loses only the quality dimension | as L1; assessment in the `src/zfin_annotation_source.py` module docstring | ZDB-GENE → accession via ZFIN's `uniprot.txt`; entity slots restricted to `ZFA:` ids | supported (recomputed; ZP assessment is a documented code decision) |
+| L6 | FBcv / FBbt coverage and genotype policy | FBcv 35.1% (6,121 / 17,438 FBgn ids), FBbt 42.0% (3,358 / 7,987); single-allele policy keeps 199,921 of 399,972 rows (50.0%) | as L1; policy and row counts in the `src/flybase_annotation_source.py` module docstring | FBal → FBgn → accession via FlyBase's own mapping tables | supported (recomputed; policy counts in docstring) |
+| L6a | The unmapped fly ids are dominated by transgenic constructs and drivers | qualitative | `scripts/verify_gene_coverage.py` unmapped-examples output (most-used-first; the top unmapped id, FBgn0014445, is the *Scer*\GAL4 driver) | Interpretation of the unmapped tail | provisional — spot-checked, not exhaustively classified |
+| L7 | Per-layer significant single-domain associations, FDR < 0.01 | hpo 996; syngo 484; mp 873; wbphenotype 26,624; zfa 37,776; fbcv 5,033; fbbt 10,791 | **expected artifacts: `results/production/run_manifest_<ontology>.json` and the accompanying `domain_<ontology>_associations_significant.tsv` — pending production run.** Interim: development-worktree significant TSVs verified by line count 2026-08-17 | First runs of each merged layer | **provisional — pending production run**; quoted in the manuscript only under that flag |
+| L8 | Acquisition record | 39/39 open sources fetched and integrity-verified (UniProt release 2026_02 at fetch); SNOMED CT and MedDRA licence-gated (not attempted, by policy); OMIM `genemap2.txt` registration-gated (UniProt `DR MIM` + `mim2gene.txt` cover the open part); MAxO has an ontology but no released annotation source; CellMarker 2.0 the sole HTTP failure | `data/ACQUISITION_MATRIX.md` (untracked by design — "do not commit this file or the data") | The acquisition log, with per-source releases, URLs and licence notes | supported as a record of the untracked acquisition log |
+| L9 | Wave-3 layers are in review, not merged | mondo, orphanet_mondo, ncit, oncotree (CIViC-derived), efo (GWAS Catalog), celltype (HPA), wbbt | branch `agent/wave3-ontologies` (`git branch -a`; diff vs `main` inspected 2026-08-17) | Excluded from K1's count and from every number in the manuscript | supported (branch exists; nothing from it is cited) |
 
 ---
 
