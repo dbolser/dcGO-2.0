@@ -158,9 +158,9 @@ its own.
   proteins for the species under study.
 - **Annotations.** For the Gene Ontology, the species GO annotation file in GAF
   2.2 format, with evidence-code filtering (default: all non-IEA, i.e. `manual`).
-  For other vocabularies, see §2.6.
+  For other vocabularies, see §2.6–2.7.
 - **Ontology structure.** `go-basic.obo` for GO propagation; other vocabularies
-  supply their own hierarchy in one of four forms (§2.6).
+  supply their own hierarchy in one of five forms (§2.6).
 
 All three are downloaded by a single script from URLs held in a central
 configuration module. Non-GO vocabularies declare their own annotation and
@@ -653,11 +653,13 @@ consistent with, rather than as independent confirmation of, the F_max picture.
 
 **Restored method pieces.** Two components of the original method were absent
 from an earlier version of this implementation and were restored: the per-target
-p-score transfer and the relative (parental-background) test. The p-score is the
-configuration used throughout Tables 1 and 2 `[C5b]`. A four-configuration
-comparison of the two pieces exists in project documentation `[C5a, C5c, C5d]`,
-but its underlying benchmark outputs are **untracked** `[H12]` and no paired test
-or confidence interval was computed for any pairwise difference, so we mark that
+p-score transfer and the relative (parental-background) test — the latter in its
+earlier post-hoc form, since superseded by the in-inference design of §2.5. The
+p-score is the configuration used throughout Tables 1 and 2 `[C5b]`. A
+four-configuration comparison of the two pieces exists `[C5a, C5c, C5d]`, and
+its benchmark outputs have since been committed (`validation/bench_A`–`bench_D`
+`[H12]`), but no paired test or confidence interval was computed for any
+pairwise difference and the runs are pre-regulates-fix era, so we mark that
 comparison **provisional** and draw no conclusion about which component matters
 more from protein-centric metrics alone.
 
