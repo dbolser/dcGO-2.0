@@ -599,11 +599,16 @@ def build_argument_parser() -> argparse.ArgumentParser:
         metavar="FLOAT",
         help="Discard associations whose term's information content is below "
         "this floor. IC(t) = -log2(fraction of the analysed universe annotated "
-        "to t, True-Path propagated), so universal terms have IC 0 and DAG "
-        "roots sit at (GO: near) 0 — a floor of 1 keeps only terms carried by "
-        "under half the universe. Applied AFTER the FDR correction, exactly "
-        "like --min-support, so it never alters the hypothesis family. "
-        "Default 0 (no filter); the ic column is exported either way",
+        "to t), so universal terms have IC 0 and DAG roots sit at (GO: near) 0 "
+        "— a floor of 1 keeps only terms carried by under half the universe. "
+        "Applied AFTER the FDR correction, exactly like --min-support, so it "
+        "never alters the hypothesis family — and to every deliverable: "
+        "--enable-true-path cannot re-derive a floored-away ancestor into the "
+        "propagated annotations file. Default 0 (no filter); the ic column is "
+        "exported either way — estimated from the True-Path-propagated map "
+        "when the run engages a hierarchy (any hierarchy flag, or this floor), "
+        "from the direct map on a bare run (manifest thresholds.ic_source "
+        "records which)",
     )
     parser.add_argument(
         "--num-cores",
@@ -1613,6 +1618,23 @@ def main(argv: list[str] | None = None) -> int:
             # than hand-building Annotation objects a second way.
             propagated_annotations = propagate_via_ancestors(
                 significant_associations, lambda _term: ()
+            )
+
+        if args.min_ic > 0 and propagated_annotations:
+            # The floor is a statement about every deliverable, not just the
+            # significant table: True-Path propagation re-derives a floored-away
+            # ancestor (any root above a surviving term) straight back, so the
+            # propagated export is floored on the *annotated* term's IC too.
+            before_floor = len(propagated_annotations)
+            propagated_annotations = [
+                ann
+                for ann in propagated_annotations
+                if term_ic.get(ann.go_term, 0.0) >= args.min_ic
+            ]
+            logger.info(
+                f"  IC floor on propagated annotations (ic >= {args.min_ic:g}): "
+                f"{len(propagated_annotations):,} kept, "
+                f"{before_floor - len(propagated_annotations):,} dropped"
             )
 
         if propagated_annotations:

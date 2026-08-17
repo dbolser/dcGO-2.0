@@ -239,7 +239,9 @@ tables); enumerating co-occurring pairs makes it 9.5M tables and 268 s.
   specific defect: a *reporting* floor on the term's annotation-frequency IC
   (shared convention in `src/information_content.py`, exported as the `ic`
   column, always estimated from the propagated map when a hierarchy is in
-  play), applied after BH exactly like `--min-support`. `--min-ic 1` (keep
+  play), applied after BH exactly like `--min-support` — and to every
+  deliverable: `--enable-true-path` cannot re-derive a floored-away ancestor
+  into the propagated annotations file. `--min-ic 1` (keep
   terms carried by <50% of the universe) removes the three GO roots and the
   near-universal band ("biological regulation", "cytoplasm", "organelle") for
   1.2% of associations; it does not resolve the residual ancestor-chain

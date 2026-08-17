@@ -151,7 +151,9 @@ class TestIcColumn:
             for f in (line.split("\t") for line in prop_lines)
         }
         # The ancestor row rolled up from the specific term reports the
-        # *ancestor's* IC — 0 at the root — not its source's.
+        # *ancestor's* IC — 0 at the root — not its source's. (The root row is
+        # present because this run has no floor; a --min-ic run floors the
+        # propagated export too.)
         assert prop_ic[("IPR000002", ROOT)] == 0.0
         assert prop_ic[("IPR000002", OTHER)] == 1.0
 
@@ -219,6 +221,28 @@ class TestMinIcFloor:
         # The floor alone engages the hierarchy: IC must be propagated.
         assert thresholds["ic_source"] == "propagated"
         assert manifest["summary"]["significant_associations"] == 2
+
+    def test_floor_applies_to_the_propagated_export_too(self, pipeline_dir: Path):
+        """True-Path propagation re-derives the root from every surviving
+        child; a --min-ic run means no vacuous terms in *any* deliverable, so
+        the propagated annotations file is floored as well."""
+        run_pipeline(
+            pipeline_dir, "results_floor_tp", "--min-ic", "0.5", "--enable-true-path"
+        )
+
+        propagated = (
+            pipeline_dir / "results_floor_tp" / "domain_go_annotations_propagated.tsv"
+        ).read_text()
+        header, *lines = propagated.splitlines()
+        columns = header.split("\t")
+        prop_rows = [dict(zip(columns, line.split("\t"))) for line in lines]
+        assert all(float(r["ic"]) >= 0.5 for r in prop_rows)
+        # Only the two specific-term direct rows survive: the root rows the
+        # propagation would have re-derived from them are floored away.
+        assert {(r["domain"], r["go_term"]) for r in prop_rows} == {
+            ("IPR000001", SPECIFIC),
+            ("IPR000002", OTHER),
+        }
 
     def test_floor_is_reporting_only_q_values_are_unchanged(self, pipeline_dir: Path):
         """Post-BH placement: surviving rows keep the exact q-values of an
