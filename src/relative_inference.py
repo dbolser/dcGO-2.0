@@ -165,6 +165,52 @@ def parental_p_value(
         return 1.0
 
 
+def union_parental_p_value(
+    domain: str,
+    term: str,
+    index: BackgroundIndex,
+    parents_fn: ParentsFn,
+    min_background_size: int,
+) -> float:
+    """Relative p for *term* against the **union** of its direct parents.
+
+    The scalar reference for :func:`compute_relative_p_values`, and the paper's
+    definition: ``N_pa`` is "the total number of Uniprots that can be annotated
+    by any direct parental GO terms". A term with no parents returns 0.0.
+
+    Raises:
+        InsufficientBackgroundError, InvalidContingencyTableError
+    """
+    parents = list(parents_fn(term))
+    if not parents:
+        return 0.0
+
+    background: Set[str] = set()
+    for parent in parents:
+        background |= index.term_proteins.get(parent, frozenset())
+    if len(background) < min_background_size:
+        raise InsufficientBackgroundError(
+            f"Insufficient background size: {len(background)} < {min_background_size}"
+        )
+
+    domain_proteins = index.domain_proteins.get(domain, frozenset())
+    child = index.term_proteins.get(term, frozenset()) & background
+
+    a = len(child & domain_proteins)
+    b = len(child) - a
+    c = len(domain_proteins & background) - a
+    d = len(background) - (a + b + c)
+
+    if a == 0 or (a + b) == 0 or (a + c) == 0:
+        return 1.0
+    if d < 0:
+        raise InvalidContingencyTableError(
+            f"Invalid contingency table: a={a}, b={b}, c={c}, d={d}"
+        )
+    _, p_value = fisher_exact([[a, b], [c, d]], alternative="greater")
+    return float(p_value)
+
+
 def relative_p_value(
     domain: str,
     term: str,
@@ -173,7 +219,14 @@ def relative_p_value(
     min_background_size: int,
     reject_at: float | None = None,
 ) -> float:
-    """The association's relative p-value: its *weakest* parental result.
+    """Superseded per-parent policy: the association's *weakest* parental result.
+
+    Kept only as the driver of :func:`filter_by_parental_background`, the
+    post-hoc filter that is no longer reachable from the CLI. The pipeline uses
+    the union background (:func:`union_parental_p_value` and
+    :func:`compute_relative_p_values`), which is what the paper specifies. Both
+    are due for deletion with that filter.
+
 
     The association must survive *every* direct parent, so the governing
     p-value is the largest — the same intersection-union logic the paper applies
@@ -399,14 +452,14 @@ def compute_relative_p_values(
             ``compute_cooccurring_contingency_tables``.
 
     Returns:
-        ``(relative_p, tables, rejections)``. ``relative_p[i]`` is the largest
-        p-value over the pair's direct parents — the association must survive
-        every one of them, the same intersection-union logic the paper uses to
-        combine the overall and relative inferences. A pair whose term has no
-        parents scores 0.0, so ``max(overall_p, relative_p)`` leaves it to the
-        overall inference. A pair with any untestable parent scores 1.0, which
-        is the vectorised spelling of the loop's "conservatively reject".
-        ``tables[i]`` is the governing parent's table (zeros where untested).
+        ``(relative_p, tables, rejections)``. The background for a term is the
+        **union** of its direct parents' proteins, as the paper's Figure 1
+        caption defines it ("*N_pa is the total number of Uniprots that can be
+        annotated by any direct parental GO terms*") — one test per term, not one
+        per parent. A term with no parents scores 0.0, so
+        ``max(overall_p, relative_p)`` leaves it to the overall inference. An
+        untestable background scores 1.0, the conservative rejection.
+        ``tables[i]`` is the pair's 2x2 table (zeros where untested).
     """
     from scipy import sparse
 
@@ -424,55 +477,65 @@ def compute_relative_p_values(
     )
     term_counts = np.asarray(propagated.sum(axis=0)).ravel().astype(np.int64)
 
-    # Propagated domain x term co-occurrence, blocked over domains for the same
-    # allocation reason compute_cooccurring_contingency_tables blocks.
+    # Parental-level background per term: the OR of its direct parents' columns.
+    # Expressed as an incidence product so it is one sparse matmul rather than a
+    # Python loop over parents, and so the result is a term-indexed matrix the
+    # domain product can be taken against directly.
+    rows: List[int] = []
+    cols: List[int] = []
+    for i, term in enumerate(term_ids):
+        for parent in parents_fn(term):
+            column = index_of.get(parent)
+            if column is not None:
+                rows.append(column)
+                cols.append(i)
+    parent_incidence = sparse.csr_matrix(
+        (np.ones(len(rows), dtype=np.int32), (rows, cols)),
+        shape=(len(extended_ids), n_terms),
+    )
+    parent_union = (propagated @ parent_incidence).tocsr()
+    # A protein in several parents belongs to the union once.
+    parent_union.data[:] = 1
+    union_counts = np.asarray(parent_union.sum(axis=0)).ravel().astype(np.int64)
+    del rows, cols, parent_incidence
+
+    # Two domain x term products, blocked over domains for the same allocation
+    # reason compute_cooccurring_contingency_tables blocks: the child's own
+    # propagated co-occurrence, and its parental-union co-occurrence.
     domain_csc = protein_domain_matrix.astype(np.int32).tocsc()
     n_domains = protein_domain_matrix.shape[1]
-    blocks = []
+    child_blocks, union_blocks = [], []
     for start in range(0, n_domains, domain_block):
         stop = min(start + domain_block, n_domains)
-        blocks.append((domain_csc[:, start:stop].T @ propagated).tocsr())
-    cooccurrence = sparse.vstack(blocks, format="csr") if blocks else None
-    del blocks, domain_csc
+        block = domain_csc[:, start:stop].T
+        child_blocks.append((block @ propagated).tocsr())
+        union_blocks.append((block @ parent_union).tocsr())
+    cooccurrence = sparse.vstack(child_blocks, format="csr")
+    union_cooccurrence = sparse.vstack(union_blocks, format="csr")
+    del child_blocks, union_blocks, domain_csc
 
     domain_idx = pair_index // n_terms
     term_idx = pair_index % n_terms
 
-    # Flatten (pair, parent) into one axis, remembering each parent's pair.
-    parent_cols: List[int] = []
-    owner: List[int] = []
-    for i in range(n_pairs):
-        for parent in parents_fn(term_ids[term_idx[i]]):
-            column = index_of.get(parent)
-            if column is not None:
-                parent_cols.append(column)
-                owner.append(i)
-
     relative_p = np.zeros(n_pairs, dtype=np.float64)  # no parents -> 0.0
     tables = np.zeros((n_pairs, 2, 2), dtype=np.int32)
     rejections: Dict[str, int] = {}
-    if not owner:
+
+    has_parents = union_counts[term_idx] > 0
+    if not has_parents.any():
         return relative_p, tables, rejections
 
-    owner_arr = np.asarray(owner, dtype=np.int64)
-    parent_arr = np.asarray(parent_cols, dtype=np.int64)
-    del owner, parent_cols
-
-    child_arr = term_idx[owner_arr]
-    dom_arr = domain_idx[owner_arr]
-
-    a = np.asarray(cooccurrence[dom_arr, child_arr]).ravel().astype(np.int64)
-    dp = np.asarray(cooccurrence[dom_arr, parent_arr]).ravel().astype(np.int64)
-    n_child = term_counts[child_arr]
-    n_parent = term_counts[parent_arr]
+    a = np.asarray(cooccurrence[domain_idx, term_idx]).ravel().astype(np.int64)
+    dp = np.asarray(union_cooccurrence[domain_idx, term_idx]).ravel().astype(np.int64)
+    n_child = term_counts[term_idx]
+    n_union = union_counts[term_idx]
 
     b = n_child - a
     c = dp - a
-    d = n_parent - n_child - dp + a
+    d = n_union - n_child - dp + a
 
-    # Guards, in the same order and with the same verdicts as the loop.
-    too_small = n_parent < min_background_size
-    invalid = d < 0
+    too_small = has_parents & (n_union < min_background_size)
+    invalid = has_parents & (d < 0)
     untestable = too_small | invalid
     if too_small.any():
         rejections["InsufficientBackgroundError"] = int(too_small.sum())
@@ -482,8 +545,8 @@ def compute_relative_p_values(
     # a == 0 or an empty margin means no association is possible: p = 1 exactly.
     trivial = (a == 0) | ((a + b) == 0) | ((a + c) == 0)
 
-    p_per_parent = np.ones(len(owner_arr), dtype=np.float64)
-    testable = ~(untestable | trivial)
+    testable = has_parents & ~(untestable | trivial)
+    relative_p[has_parents & ~testable] = 1.0
     if testable.any():
         sub = np.empty((int(testable.sum()), 2, 2), dtype=np.int32)
         sub[:, 0, 0] = a[testable]
@@ -493,23 +556,10 @@ def compute_relative_p_values(
         _, p_sub = fisher_exact_parallel(
             sub, alternative="greater", batch_size=fisher_batch_size
         )
-        p_per_parent[testable] = p_sub
-
-    # An untestable parent is conservatively fatal for its association.
-    p_per_parent[untestable] = 1.0
-
-    # Group maximum, and the governing parent's table alongside it.
-    order = np.lexsort((p_per_parent, owner_arr))
-    sorted_owner = owner_arr[order]
-    last = np.ones(len(order), dtype=bool)
-    last[:-1] = sorted_owner[:-1] != sorted_owner[1:]
-    winners = order[last]
-    winning_pairs = sorted_owner[last]
-
-    relative_p[winning_pairs] = p_per_parent[winners]
-    tables[winning_pairs, 0, 0] = a[winners]
-    tables[winning_pairs, 0, 1] = b[winners]
-    tables[winning_pairs, 1, 0] = c[winners]
-    tables[winning_pairs, 1, 1] = np.maximum(d[winners], 0)
+        relative_p[testable] = p_sub
+        tables[testable, 0, 0] = a[testable]
+        tables[testable, 0, 1] = b[testable]
+        tables[testable, 1, 0] = c[testable]
+        tables[testable, 1, 1] = d[testable]
 
     return relative_p, tables, rejections

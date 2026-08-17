@@ -251,13 +251,10 @@ Two caveats worth knowing:
   `drugbank`, `pharos`, `condensate`, `rhea`, `xref`) have no parental
   background to test against and are rejected with an explicit error.
 - **The relative inference is not usable yet, and both stages are off by
-  default.** Two known deviations from the paper block it: our parental
-  background is the maximum over per-parent tests where the paper's Figure 1
-  caption specifies one test against the *union* of the direct parents'
-  proteins, and terms with no parents skip the test entirely so the DAG roots
-  pass untested. In practice enabling it makes the output *less* specific, which
-  is the opposite of its purpose. See `VALIDATION_PLAN.md` next-steps item 2 for
-  the measurements, including the widened-universe experiment that failed.
+  default.** Terms with no parents skip the test and pass on the overall
+  inference alone, so the GO roots dominate the output and enabling the layer
+  makes results *less* specific — the opposite of its purpose. It needs an
+  information-content floor. See `VALIDATION_PLAN.md` next-steps item 2.
 - **Neither stage is on by default yet.** Both are opt-in while the numbers
   they change are re-measured.
 
