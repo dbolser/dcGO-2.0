@@ -458,3 +458,94 @@ class TestUnionBackgroundIsThePaperDefinition:
         union = set().union(*(index.term_proteins[p] for p in parents))
         intersection = set.intersection(*(index.term_proteins[p] for p in parents))
         assert len(union) > len(intersection)  # the fixture distinguishes them
+
+
+class TestNegativeCellsNeverReachFisher:
+    """Inconsistent parents_fn/ancestors_fn must not wrap through uint32.
+
+    If the two hierarchy views are ever derived from different relations, the
+    child's propagated proteins stop being a subset of the parental union and
+    c = dp - a goes negative. fisher_exact casts tables to uint32, so an
+    unguarded negative cell becomes ~4.29e9 — silent garbage entering BH. The
+    guard must count the pair as an invalid table and hand back the documented
+    conservative verdict: p = 1 and an all-zero table row.
+    """
+
+    @staticmethod
+    def _run(parents_fn, ancestors_fn):
+        import numpy as np
+
+        from src.relative_inference import compute_relative_p_values
+        from src.sparse_fisher import (
+            build_sparse_matrices,
+            compute_cooccurring_contingency_tables,
+        )
+
+        # D co-occurs with T:child on P1-P3 and with T:parent only on P4, so
+        # under an ancestors_fn that refuses to propagate, a = 3 while dp = 1:
+        # c = dp - a = -2 with a + c != 0, which the trivial-margin mask cannot
+        # catch — only the negative-cell guard stands between this and uint32.
+        protein_domains = {
+            "P1": {"D"},
+            "P2": {"D"},
+            "P3": {"D"},
+            "P4": {"D"},
+            "P5": {"D2"},
+        }
+        protein_terms = {
+            "P1": {"T:child"},
+            "P2": {"T:child"},
+            "P3": {"T:child"},
+            "P4": {"T:parent"},
+            "P5": {"T:parent"},
+        }
+        domain_list = sorted({d for ds in protein_domains.values() for d in ds})
+        term_list = sorted({t for ts in protein_terms.values() for t in ts})
+        pdm, ptm, _ = build_sparse_matrices(
+            protein_domains, protein_terms, domain_list, term_list
+        )
+        _, pair_index, _ = compute_cooccurring_contingency_tables(pdm, ptm)
+        relative_p, tables, rejections = compute_relative_p_values(
+            pdm,
+            ptm,
+            pair_index,
+            term_list,
+            parents_fn,
+            ancestors_fn,
+            min_background_size=1,
+        )
+        n_terms = len(term_list)
+        by_pair = {
+            (domain_list[int(idx) // n_terms], term_list[int(idx) % n_terms]): (
+                p,
+                tables[i],
+            )
+            for i, (idx, p) in enumerate(zip(pair_index, relative_p))
+        }
+        assert np.all(tables >= 0)
+        return by_pair, rejections
+
+    def test_inconsistent_hierarchies_yield_p_one_and_a_zero_table(self):
+        # parents_fn knows about T:parent; ancestors_fn refuses to propagate —
+        # the inconsistency that makes c = dp - a = -2 for (D, T:child).
+        by_pair, rejections = self._run(
+            parents_fn=lambda t: {"T:parent"} if t == "T:child" else set(),
+            ancestors_fn=lambda t: set(),
+        )
+        assert rejections.get("InvalidContingencyTableError", 0) >= 1
+        p, table = by_pair[("D", "T:child")]
+        assert p == 1.0
+        assert not table.any()
+
+    def test_consistent_hierarchies_are_untouched_by_the_guard(self):
+        # The same data with an ancestors_fn that agrees with parents_fn: the
+        # child's proteins land inside the parental union, every cell is
+        # non-negative, and the pair is actually tested.
+        by_pair, rejections = self._run(
+            parents_fn=lambda t: {"T:parent"} if t == "T:child" else set(),
+            ancestors_fn=lambda t: {"T:parent"} if t == "T:child" else set(),
+        )
+        assert rejections == {}
+        p, table = by_pair[("D", "T:child")]
+        assert 0.0 < p <= 1.0
+        assert table.any()

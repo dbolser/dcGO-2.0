@@ -10,6 +10,7 @@ from src.hierarchy import (
     closure_ancestors,
     dotted_ancestors,
     parse_obo_child_parents,
+    propagate_annotation_map,
     propagate_via_ancestors,
 )
 
@@ -38,6 +39,85 @@ class TestClosureAncestors:
         # Not expected in real DAGs, but must terminate with a finite result.
         anc = closure_ancestors({"a": {"b"}, "b": {"a"}})
         assert isinstance(anc("a"), set)
+
+
+class TestPropagateAnnotationMap:
+    def test_closure_over_ancestors(self):
+        anc = closure_ancestors({"c": {"b"}, "b": {"a"}})
+        result, coverage = propagate_annotation_map({"P1": {"c"}, "P2": {"b"}}, anc)
+        assert result == {"P1": {"c", "b", "a"}, "P2": {"b", "a"}}
+        assert coverage.pairs_before == 2
+        assert coverage.pairs_after == 5
+
+    def test_input_map_not_mutated(self):
+        anc = closure_ancestors({"c": {"b"}})
+        original = {"P1": {"c"}}
+        propagate_annotation_map(original, anc)
+        assert original == {"P1": {"c"}}
+
+    def test_empty_map(self):
+        # The run script computes an expansion ratio from these totals; an
+        # empty intersection must yield an empty map, not a crash.
+        result, coverage = propagate_annotation_map({}, closure_ancestors({}))
+        assert result == {}
+        assert coverage.pairs_before == 0
+        assert coverage.pairs_after == 0
+
+    def test_term_without_ancestors_kept(self):
+        anc = closure_ancestors({})
+        result, _ = propagate_annotation_map({"P1": {"root"}}, anc)
+        assert result == {"P1": {"root"}}
+
+    def test_unknown_terms_tallied_with_membership_test(self):
+        # "obsolete" is not in the hierarchy: with a membership test it is
+        # counted as unpropagatable rather than passing as a silent root.
+        anc = closure_ancestors({"c": {"b"}})
+        known = {"c", "b"}.__contains__
+        result, coverage = propagate_annotation_map(
+            {"P1": {"c", "obsolete"}, "P2": {"obsolete"}}, anc, known
+        )
+        assert coverage.unknown_terms == 1
+        assert coverage.unknown_pairs == 2
+        # The unknown term is kept as a direct annotation, not dropped.
+        assert result == {"P1": {"c", "b", "obsolete"}, "P2": {"obsolete"}}
+
+    def test_roots_are_not_counted_unknown(self):
+        anc = closure_ancestors({"c": {"b"}})
+        known = {"c", "b"}.__contains__
+        _, coverage = propagate_annotation_map({"P1": {"b"}}, anc, known)
+        assert coverage.unknown_terms == 0
+        assert coverage.unknown_pairs == 0
+
+    def test_no_membership_test_means_not_assessed(self):
+        anc = closure_ancestors({})
+        _, coverage = propagate_annotation_map({"P1": {"zzz"}}, anc)
+        assert coverage.unknown_terms is None
+        assert coverage.unknown_pairs is None
+
+    def test_drop_unknown_removes_the_pairs_from_the_universe(self):
+        # An unknown term can neither propagate nor face a parental
+        # background; dropped, it cannot pass the relative inference by
+        # default. The protein itself stays, with what survives.
+        anc = closure_ancestors({"c": {"b"}})
+        known = {"c", "b"}.__contains__
+        result, coverage = propagate_annotation_map(
+            {"P1": {"c", "obsolete"}, "P2": {"obsolete"}},
+            anc,
+            known,
+            drop_unknown=True,
+        )
+        assert result == {"P1": {"c", "b"}, "P2": set()}
+        assert coverage.unknown_terms == 1
+        assert coverage.unknown_pairs == 2
+        assert coverage.pairs_before == 3
+        assert coverage.pairs_after == 2
+
+    def test_drop_unknown_without_membership_test_is_a_no_op(self):
+        anc = closure_ancestors({})
+        result, _ = propagate_annotation_map(
+            {"P1": {"zzz"}}, anc, None, drop_unknown=True
+        )
+        assert result == {"P1": {"zzz"}}
 
 
 class TestPropagateViaAncestors:

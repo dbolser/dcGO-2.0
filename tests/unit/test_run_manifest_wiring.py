@@ -117,6 +117,13 @@ def test_go_run_with_true_path_records_the_ontology_file(tmp_path, fake_inputs):
     # Propagation no longer implies the parental-background filter: the two are
     # separate flags, so the manifest names only the stage this one describes.
     assert data["analysis"]["ontology"]["propagation"] == "go_dag"
+    # The edge-type policy is part of provenance: pre-#67 artifacts were
+    # propagated over a DAG that included the regulates family, and the
+    # presence of this key is what distinguishes the eras.
+    assert data["analysis"]["ontology"]["propagation_relations"] == [
+        "is_a",
+        "part_of",
+    ]
     assert data["analysis"]["ontology"]["relative_inference_enabled"] is False
 
 
@@ -148,6 +155,8 @@ def test_ec_run_records_enzyme_dat_and_an_implicit_hierarchy(tmp_path, fake_inpu
     # EC's hierarchy is implicit in the numbering, so there is no extra input.
     assert data["analysis"]["ontology"]["hierarchy_inputs"] == []
     assert data["analysis"]["ontology"]["propagation"] == "ancestor_closure"
+    # Registry closures declare their edges in their loaders, not here.
+    assert data["analysis"]["ontology"]["propagation_relations"] is None
 
 
 def test_an_input_used_for_both_roles_is_recorded_once(tmp_path, fake_inputs):

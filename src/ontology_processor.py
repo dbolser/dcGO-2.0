@@ -10,12 +10,14 @@ propagation as specified in the dcGO methodology.
 import networkx as nx
 import obonet
 import pandas as pd
+from collections import Counter
 from pathlib import Path
 from typing import Dict, List, Set, Union
 from loguru import logger
 from dataclasses import dataclass
 import gzip
 
+from src.hierarchy import PROPAGATION_RELATIONS
 from src.relative_inference import (
     BackgroundIndex,
     InsufficientBackgroundError,
@@ -145,6 +147,43 @@ class OntologyProcessor:
         if obsolete_terms:
             self.go_graph.remove_nodes_from(obsolete_terms)
             logger.info(f"Removed {len(obsolete_terms)} obsolete GO terms")
+
+        # GO's annotation-propagation rules license is_a and part_of edges only.
+        # obonet stores the relationship type as the MultiDiGraph edge key, and
+        # go-basic.obo also carries ~7,800 regulates / positively_regulates /
+        # negatively_regulates edges. Traversing those would put a protein
+        # annotated to "negative regulation of X" into X's background and let
+        # get_parents return a regulates-target as a "parent" — wrong for the
+        # True Path Rule and for the relative inference alike. Drop them before
+        # reversing so get_ancestors, get_parents and propagate_annotations all
+        # see the same is_a/part_of-only DAG.
+        propagating_relations = set(PROPAGATION_RELATIONS)
+        dropped_edges = [
+            (u, v, key)
+            for u, v, key in self.go_graph.edges(keys=True)
+            if key not in propagating_relations
+        ]
+        if dropped_edges:
+            self.go_graph.remove_edges_from(dropped_edges)
+            by_type = Counter(key for _, _, key in dropped_edges)
+            detail = ", ".join(
+                f"{count:,} x {key}" for key, count in sorted(by_type.items())
+            )
+            logger.info(
+                f"Dropped {len(dropped_edges):,} non-propagating edges "
+                f"(annotation propagation follows is_a/part_of only): {detail}"
+            )
+
+        # Merged ids. When GO folds one term into another, the survivor's
+        # stanza lists the retired id as an alt_id; obonet keeps those as node
+        # *data*, not nodes, so a membership test alone would call them
+        # unknown. Annotation files can lag the ontology and still carry them,
+        # and an alt_id is not a dead annotation — it has an exact live
+        # replacement. go-basic 2026 carries ~3,300 of them.
+        self.alt_id_map: Dict[str, str] = {}
+        for term, data in self.go_graph.nodes(data=True):
+            for alt in data.get("alt_id", ()):
+                self.alt_id_map[alt] = term
 
         # obonet emits edges child -> parent (each term points to its is_a
         # target). Reverse so edges run parent -> child, which is the direction

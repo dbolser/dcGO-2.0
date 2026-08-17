@@ -94,7 +94,11 @@ from scipy.stats import hypergeom
 
 from src.annotation_source import restrict_to_universe
 from src.domain_annotation_parser import DOMAIN_KEYS, DomainAnnotationParser
-from src.hierarchy import propagate_via_ancestors
+from src.hierarchy import (
+    PROPAGATION_RELATIONS,
+    propagate_annotation_map,
+    propagate_via_ancestors,
+)
 from src.ontology_processor import OntologyProcessor
 from src.ontology_registry import (
     OntologyEntry,
@@ -430,6 +434,17 @@ def start_run_manifest(
                     if ontology_entry.external_propagation
                     else "ancestor_closure"
                     if ontology_entry.build_ancestors is not None
+                    else None
+                ),
+                # The edge types the GO DAG traverses. Artifacts produced
+                # before this key existed were propagated over a DAG that also
+                # included the ~7,800 regulates-family edges, so mixed-era
+                # comparisons are confounded — see VALIDATION_PLAN §4.
+                # Registry closures declare their edges in their own loaders
+                # (see hierarchy_inputs), so nothing is recorded for them here.
+                "propagation_relations": (
+                    list(PROPAGATION_RELATIONS)
+                    if ontology_entry.external_propagation
                     else None
                 ),
             },
@@ -839,28 +854,71 @@ def main(argv: list[str] | None = None) -> int:
     # propagate its backgrounds (#46), so without this the overall and relative
     # p-values combined by --enable-relative-inference were computed against two
     # different definitions of "annotated to T".
+    input_coverage = None
+    input_processor = None
+    input_alt_ids_remapped = None
     if args.propagate_annotations:
         if ontology_entry.build_ancestors is None:
-            input_ancestors = OntologyProcessor(args.go_ontology).get_ancestors
+            input_processor = OntologyProcessor(args.go_ontology)
+            input_ancestors = input_processor.get_ancestors
+            # Membership test so terms the hierarchy no longer contains are
+            # handled instead of silently failing to propagate. Registry
+            # hierarchies expose only an ancestors function, so the remap and
+            # tally are GO-only for now.
+            known_term_fn = input_processor.go_graph.__contains__
+
+            # Merged ids first: an annotation to an alt_id has an exact live
+            # replacement, so it is remapped rather than dropped.
+            alt_map = input_processor.alt_id_map
+            remapped_terms: set = set()
+            remapped_pairs = 0
+            remapped: dict = {}
+            for protein, terms in protein_go_map.items():
+                mapped = set()
+                for term in terms:
+                    primary = alt_map.get(term)
+                    if primary is not None:
+                        remapped_terms.add(term)
+                        remapped_pairs += 1
+                        mapped.add(primary)
+                    else:
+                        mapped.add(term)
+                remapped[protein] = mapped
+            protein_go_map = remapped
+            input_alt_ids_remapped = len(remapped_terms)
+            if remapped_terms:
+                logger.info(
+                    f"  Remapped {len(remapped_terms):,} alt_id terms to their "
+                    f"primary ids ({remapped_pairs:,} (protein, term) pairs)"
+                )
         else:
             input_ancestors = ontology_entry.build_ancestors(ontology_paths)
+            known_term_fn = None
 
-        before = sum(len(terms) for terms in protein_go_map.values())
-        cache: dict = {}
-        propagated_map = {}
-        for protein, terms in protein_go_map.items():
-            closure = set(terms)
-            for term in terms:
-                if term not in cache:
-                    cache[term] = frozenset(input_ancestors(term))
-                closure |= cache[term]
-            propagated_map[protein] = closure
-        protein_go_map = propagated_map
-        after = sum(len(terms) for terms in protein_go_map.values())
+        # Terms still unknown after the remap (obsolete or malformed ids) are
+        # dropped, not carried: an unknown term cannot propagate and has no
+        # parents, so it would skip the relative inference and pass on the
+        # overall p-value alone.
+        protein_go_map, input_coverage = propagate_annotation_map(
+            protein_go_map, input_ancestors, known_term_fn, drop_unknown=True
+        )
+        before = input_coverage.pairs_before
+        after = input_coverage.pairs_after
+        # With an empty GAF ∩ InterPro intersection there is nothing to
+        # propagate and no ratio to report; the run still has to reach its
+        # clean "no pairs to test" abort rather than divide by zero here.
+        ratio = f" ({after / before:.1f}x)" if before else ""
         logger.info(
             f"  True Path Rule on input annotations: {before:,} → {after:,} "
-            f"(protein, term) pairs ({after / before:.1f}x)"
+            f"(protein, term) pairs{ratio}"
         )
+        if input_coverage.unknown_terms:
+            logger.info(
+                f"  {input_coverage.unknown_terms:,} annotated terms are not in "
+                f"the hierarchy even after alt_id remapping (obsolete or "
+                f"malformed ids); their {input_coverage.unknown_pairs:,} "
+                f"(protein, term) pairs were dropped from the tested universe"
+            )
 
     # Calibration control. Comparing two ontology layers by their significant
     # counts is only meaningful if neither count is manufactured by its
@@ -1025,10 +1083,15 @@ def main(argv: list[str] | None = None) -> int:
     relative_tables = None
     if args.enable_relative_inference or args.enable_true_path:
         # GO's hierarchy comes from the obonet graph, every other ontology's
-        # from the registry. Loaded once here and reused by Stage 5.5.
+        # from the registry. Loaded once here and reused by Stage 5.5 — unless
+        # --propagate-annotations already parsed the OBO, in which case that
+        # processor is reused (its graph and caches are identical).
         if ontology_entry.build_ancestors is None:
-            logger.info(f"Loading GO ontology from: {args.go_ontology}")
-            ontology_processor = OntologyProcessor(args.go_ontology)
+            if input_processor is not None:
+                ontology_processor = input_processor
+            else:
+                logger.info(f"Loading GO ontology from: {args.go_ontology}")
+                ontology_processor = OntologyProcessor(args.go_ontology)
 
     if args.enable_relative_inference:
         logger.info("")
@@ -1040,6 +1103,9 @@ def main(argv: list[str] | None = None) -> int:
             parents_fn = ontology_processor.get_parents
             relative_ancestors_fn = ontology_processor.get_ancestors
         else:
+            # Repeated build_* calls (input propagation above, both views
+            # here) share one parse: ontology_registry memoises the underlying
+            # child→parents map per (loader, path) in _child_parents.
             parents_fn = ontology_entry.build_parents(ontology_paths)
             relative_ancestors_fn = ontology_entry.build_ancestors(ontology_paths)
 
@@ -1060,13 +1126,34 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
 
-        n_root = int((relative_pvalues == 0.0).sum())
+        # relative_p == 0.0 means parents_fn returned nothing — a genuine root,
+        # or a term the hierarchy does not contain at all (possible when the
+        # input map was not cleaned by --propagate-annotations). Only the roots
+        # belong in the "no parent to test against" count; unknown terms are a
+        # defect worth its own line, because they pass on the overall
+        # inference alone.
+        skipped = relative_pvalues == 0.0
+        n_unknown = 0
+        if ontology_processor is not None and skipped.any():
+            term_known = np.fromiter(
+                (term in ontology_processor.go_graph for term in go_list),
+                dtype=bool,
+                count=len(go_list),
+            )
+            n_unknown = int((skipped & ~term_known[pair_index % len(go_list)]).sum())
+        n_root = int(skipped.sum()) - n_unknown
         combined = np.maximum(pvalues, relative_pvalues)
         n_weakened = int((combined > pvalues).sum())
         logger.info(
             f"  {n_weakened:,} pairs governed by the relative inference; "
             f"{n_root:,} have no parent to test against"
         )
+        if n_unknown:
+            logger.warning(
+                f"  {n_unknown:,} pairs carry terms the hierarchy does not "
+                f"contain; they pass on the overall inference alone. Run with "
+                f"--propagate-annotations to remap or drop them."
+            )
         if relative_rejections:
             detail = ", ".join(
                 f"{n:,} x {kind}" for kind, n in sorted(relative_rejections.items())
@@ -1470,24 +1557,32 @@ def main(argv: list[str] | None = None) -> int:
     if propagated_annotations:
         output_files.append((annotations_file, "propagated_annotations"))
     logger.info("Hashing outputs and finalizing the run manifest...")
+    summary = {
+        "ontology": ontology_label,
+        "proteins": len(proteins_with_both),
+        "domains": len(domain_list),
+        "terms": len(go_list),
+        "tests": int(n_hypotheses),
+        # Tables actually built and passed to Fisher. Everything else in the
+        # hypothesis space has a=0 and therefore p=1 exactly under the
+        # one-sided 'greater' test, so it is corrected for but not computed.
+        "tests_evaluated": int(len(pvalues)),
+        "significant_associations": n_significant,
+        # One cutoff per hypothesis family, not one overall.
+        "bh_threshold_pvalue": {k: float(v) for k, v in thresholds.items()},
+        "propagated_annotations": len(propagated_annotations),
+        "runtime_seconds": round(total_time, 2),
+    }
+    if input_coverage is not None and input_coverage.unknown_terms is not None:
+        # Input handling under --propagate-annotations: alt_id annotations are
+        # remapped to their primary ids; terms still unknown after that
+        # (obsolete or malformed ids) are dropped from the tested universe.
+        summary["input_alt_ids_remapped"] = input_alt_ids_remapped
+        summary["input_terms_not_in_hierarchy"] = input_coverage.unknown_terms
+        summary["input_pairs_dropped"] = input_coverage.unknown_pairs
     manifest.complete(
         outputs=[describe_file(path, role=role) for path, role in output_files],
-        summary={
-            "ontology": ontology_label,
-            "proteins": len(proteins_with_both),
-            "domains": len(domain_list),
-            "terms": len(go_list),
-            "tests": int(n_hypotheses),
-            # Tables actually built and passed to Fisher. Everything else in the
-            # hypothesis space has a=0 and therefore p=1 exactly under the
-            # one-sided 'greater' test, so it is corrected for but not computed.
-            "tests_evaluated": int(len(pvalues)),
-            "significant_associations": n_significant,
-            # One cutoff per hypothesis family, not one overall.
-            "bh_threshold_pvalue": {k: float(v) for k, v in thresholds.items()},
-            "propagated_annotations": len(propagated_annotations),
-            "runtime_seconds": round(total_time, 2),
-        },
+        summary=summary,
     )
 
     logger.info("Output files:")
