@@ -30,7 +30,7 @@ Fisher's exact tests with FDR correction and hypergeometric association scoring.
 4. **Generates supra-domains** (contiguous domain combinations up to triplets)
    (contiguous combinations up to triplets).
 5. *(optional)* **Applies the True Path Rule** to propagate associations up the
-   GO DAG, when run with `--enable-true-path`; and *(optional, GO only)* applies
+   GO DAG, when run with `--enable-true-path`; and *(optional)* applies
    the paper's **relative inference** — a parental-background filter — when run
    with `--enable-relative-inference`. These are separate steps of the published
    method and are selected separately; see [Two hierarchy stages](#two-hierarchy-stages).
@@ -216,9 +216,12 @@ Two caveats worth knowing:
   and applies BH-FDR to that. We apply it as a post-hoc `alpha < 0.05` filter
   *after* BH has already run. Those are different methods with different error
   control — see `VALIDATION_PLAN.md` next-steps item 2.
-- **`--enable-relative-inference` is GO-only.** The test needs each term's
-  *direct* parents; the registry supplies a transitive-ancestors function for
-  every other ontology, which cannot answer "one level up".
+- **`--enable-relative-inference` works for every ontology with a hierarchy** —
+  all 12 of them (`go`, `ec`, `reactome`, `keyword`, `doid`, `orphanet_doid`,
+  `tcdb`, `merops`, `cazy`, `subcellular`, `ligand`, `cofactor`). The 9 flat
+  cross-reference layers (`disease`, `orphanet`, `unipathway`, `complex`,
+  `drugbank`, `pharos`, `condensate`, `rhea`, `xref`) have no parental
+  background to test against and are rejected with an explicit error.
 
 #### Disease: re-keying OMIM onto the Disease Ontology
 
@@ -338,8 +341,8 @@ writing `data/interim/protein2ipr_<species>.dat.gz` so subsequent runs are fast.
 | `--batch-size` | `50000` | Fisher test batch size |
 | `--enable-supra-domains` / `--disable-supra-domains` | enabled | Test contiguous domain combinations |
 | `--enable-true-path` | off | Propagate associations up the term hierarchy, and only that (fails if the ontology has none) |
-| `--enable-relative-inference` | off | Parental-background filter: keep an association only if still enriched within its term's direct parents. **GO only**, and it *removes* associations |
-| `--go-ontology` | `data/raw/go_ontology/go-basic.obo` | GO OBO file (GO only; read by either of the two flags above) |
+| `--enable-relative-inference` | off | Parental-background filter: keep an association only if still enriched within its term's direct parents. Any ontology with a hierarchy; it *removes* associations |
+| `--go-ontology` | `data/raw/go_ontology/go-basic.obo` | GO OBO file (`--ontology go` only; read by either of the two flags above) |
 | `--output-dir` | `results/` | Output directory |
 
 ---

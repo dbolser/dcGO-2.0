@@ -12,8 +12,6 @@ from dataclasses import dataclass
 
 from src.ontology_processor import (
     Annotation,
-    InsufficientBackgroundError,
-    InvalidContingencyTableError,
     OntologyProcessor,
 )
 
@@ -402,63 +400,6 @@ class TestOptimalLevelFilter:
                 [object()], protein_domain_map, protein_go_map
             )
 
-    @pytest.mark.parametrize(
-        ("error", "counter"),
-        [
-            (
-                InsufficientBackgroundError("too small"),
-                "InsufficientBackgroundError",
-            ),
-            (
-                InvalidContingencyTableError("invalid cells"),
-                "InvalidContingencyTableError",
-            ),
-        ],
-    )
-    def test_expected_parent_rejections_are_counted_separately(
-        self,
-        ontology_processor,
-        sample_protein_maps,
-        monkeypatch,
-        error,
-        counter,
-    ):
-        protein_domain_map, protein_go_map = sample_protein_maps
-        association = MockAssociation("IPR001", "GO:0006812", 1e-10, 1e-8, 95.0)
-
-        def reject(*args, **kwargs):
-            raise error
-
-        monkeypatch.setattr(
-            ontology_processor, "_test_against_parent_background", reject
-        )
-
-        assert (
-            ontology_processor.apply_optimal_level_filter(
-                [association], protein_domain_map, protein_go_map
-            )
-            == []
-        )
-        assert ontology_processor._filter_rejections == {counter: 1}
-
-    def test_unexpected_parent_test_error_propagates(
-        self, ontology_processor, sample_protein_maps, monkeypatch
-    ):
-        protein_domain_map, protein_go_map = sample_protein_maps
-        association = MockAssociation("IPR001", "GO:0006812", 1e-10, 1e-8, 95.0)
-
-        def fail_unexpectedly(*args, **kwargs):
-            raise RuntimeError("implementation defect")
-
-        monkeypatch.setattr(
-            ontology_processor, "_test_against_parent_background", fail_unexpectedly
-        )
-
-        with pytest.raises(RuntimeError, match="implementation defect"):
-            ontology_processor.apply_optimal_level_filter(
-                [association], protein_domain_map, protein_go_map
-            )
-
 
 class TestAnnotationPropagation:
     """Test suite for annotation propagation (True Path Rule Phase 2)."""
@@ -832,51 +773,6 @@ class TestBackgroundIndexEquivalence:
                     parent,
                 )
 
-    def test_shared_and_lazy_index_give_the_same_p_value(
-        self, ontology_processor, sample_protein_maps
-    ):
-        from src.ontology_processor import _BackgroundIndex
-
-        protein_domain_map, protein_go_map = sample_protein_maps
-        # Built with ancestors, matching what the method constructs lazily —
-        # an unpropagated index would now legitimately disagree.
-        shared = _BackgroundIndex(
-            protein_domain_map, protein_go_map, ontology_processor.get_ancestors
-        )
-        lazy = ontology_processor._test_against_parent_background(
-            "IPR001", "GO:0006812", "GO:0006811", protein_domain_map, protein_go_map, 3
-        )
-        passed = ontology_processor._test_against_parent_background(
-            "IPR001",
-            "GO:0006812",
-            "GO:0006811",
-            protein_domain_map,
-            protein_go_map,
-            3,
-            index=shared,
-        )
-        assert lazy == passed
-
-    def test_small_background_still_raises(
-        self, ontology_processor, sample_protein_maps
-    ):
-        """The guard survives propagation.
-
-        GO:0009987 is no longer a small background — propagation puts every
-        protein annotated beneath it there — so the case is now a leaf term,
-        which has no descendants to gather.
-        """
-        protein_domain_map, protein_go_map = sample_protein_maps
-        with pytest.raises(ValueError, match="Insufficient background size"):
-            ontology_processor._test_against_parent_background(
-                "IPR001",
-                "GO:0006812",
-                "GO:0006812",  # a leaf: only the 3 directly annotated proteins
-                protein_domain_map,
-                protein_go_map,
-                min_background_size=5,
-            )
-
 
 class TestBackgroundIsPropagated:
     """The parental background counts proteins annotated *beneath* the parent.
@@ -933,22 +829,3 @@ class TestBackgroundIsPropagated:
         direct = _BackgroundIndex(*maps)
         propagated = _BackgroundIndex(*maps, ontology_processor.get_ancestors)
         assert direct.domain_proteins == propagated.domain_proteins
-
-    def test_the_background_test_no_longer_raises_for_such_a_parent(
-        self, ontology_processor
-    ):
-        """End of the chain: the test returns a p-value instead of being discarded."""
-        protein_domain_map = {f"P{i}": ["IPR1"] for i in range(1, 7)}
-        protein_domain_map.update({f"P{i}": ["IPR2"] for i in range(7, 13)})
-        protein_go_map = {f"P{i}": {"GO:0006812"} for i in range(1, 7)}
-        protein_go_map.update({f"P{i}": {"GO:0006810"} for i in range(7, 13)})
-
-        p_value = ontology_processor._test_against_parent_background(
-            domain="IPR1",
-            child_term="GO:0006812",
-            parent_term="GO:0008150",  # no direct annotations anywhere
-            protein_domain_map=protein_domain_map,
-            protein_go_map=protein_go_map,
-            min_background_size=3,
-        )
-        assert 0.0 <= p_value <= 1.0

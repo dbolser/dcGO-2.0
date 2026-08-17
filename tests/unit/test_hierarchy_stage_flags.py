@@ -72,26 +72,44 @@ class TestFlagsAreIndependent:
         assert "only" in help_text
 
 
-class TestRelativeInferenceIsGOOnly:
-    """The filter needs each term's *direct parents*, which only GO exposes."""
+class TestRelativeInferenceNeedsAHierarchy:
+    """The filter ranges over a term's *direct parents*, so it needs a hierarchy.
 
-    def test_non_go_ontology_is_rejected(self) -> None:
+    It is no longer GO-only: every registry ontology supplying ``build_parents``
+    can run it. Only the flat cross-reference layers are rejected.
+    """
+
+    @pytest.mark.parametrize(
+        "ontology",
+        ["go", "ec", "reactome", "keyword", "doid", "tcdb", "subcellular", "ligand"],
+    )
+    def test_hierarchical_ontologies_are_accepted(self, ontology: str) -> None:
+        parser = argparse.ArgumentParser(prog="dcgo")
+        validate_arguments(
+            _args(ontology=ontology, enable_relative_inference=True), parser
+        )
+
+    @pytest.mark.parametrize("ontology", ["disease", "complex", "rhea", "xref"])
+    def test_flat_vocabularies_are_rejected(self, ontology: str) -> None:
         parser = argparse.ArgumentParser(prog="dcgo")
         with pytest.raises(SystemExit) as excinfo:
             validate_arguments(
-                _args(ontology="ec", enable_relative_inference=True), parser
+                _args(ontology=ontology, enable_relative_inference=True), parser
             )
         assert excinfo.value.code == 2
 
-    def test_go_is_accepted(self) -> None:
-        parser = argparse.ArgumentParser(prog="dcgo")
-        validate_arguments(_args(ontology="go", enable_relative_inference=True), parser)
-
-    def test_non_go_without_the_flag_is_unaffected(self) -> None:
+    def test_a_flat_vocabulary_without_the_flag_is_unaffected(self) -> None:
         parser = argparse.ArgumentParser(prog="dcgo")
         validate_arguments(
-            _args(ontology="ec", enable_relative_inference=False), parser
+            _args(ontology="disease", enable_relative_inference=False), parser
         )
+
+    def test_direct_parents_accompany_every_hierarchy(self) -> None:
+        """``build_ancestors`` is not a substitute; pin the two to each other."""
+        from src.ontology_registry import ONTOLOGIES
+
+        for key, entry in ONTOLOGIES.items():
+            assert entry.supports_true_path == entry.supports_relative_inference, key
 
 
 class TestRunRequestCarriesBothStages:

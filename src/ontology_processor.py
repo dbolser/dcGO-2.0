@@ -11,60 +11,30 @@ import networkx as nx
 import obonet
 import pandas as pd
 from pathlib import Path
-from typing import Callable, Dict, List, Set, Union
+from typing import Dict, List, Set, Union
 from loguru import logger
 from dataclasses import dataclass
-from scipy.stats import fisher_exact
 import gzip
 
+from src.relative_inference import (
+    BackgroundIndex,
+    InsufficientBackgroundError,
+    InvalidContingencyTableError,
+    filter_by_parental_background,
+)
 
-class InsufficientBackgroundError(ValueError):
-    """The parental statistical universe is smaller than the configured minimum."""
+# The parental-background machinery moved to src/relative_inference.py, where it
+# is ontology-agnostic. These names stay importable from here because the GO
+# path and its regression tests were written against them.
+_BackgroundIndex = BackgroundIndex
 
-
-class InvalidContingencyTableError(ValueError):
-    """The parental-background counts cannot form a valid contingency table."""
-
-
-class _BackgroundIndex:
-    """Indexed backgrounds for the parental enrichment test.
-
-    Term membership includes ancestor propagation, as required by the True Path
-    Rule; domain membership is direct. The inverted indexes are built once per
-    filtering run so every parent test uses the same protein universe without
-    repeatedly scanning the proteome.
-
-    See ``docs/design/ontology-processing.md`` for the regression history behind
-    these invariants.
-    """
-
-    __slots__ = ("term_proteins", "domain_proteins")
-
-    def __init__(
-        self,
-        protein_domain_map: Dict[str, List[str]],
-        protein_go_map: Dict[str, Set[str]],
-        get_ancestors: "Callable[[str], Set[str]] | None" = None,
-    ) -> None:
-        term_proteins: Dict[str, set] = {}
-        # Ancestors are looked up once per distinct term, not once per
-        # (protein, term): the annotation map has ~10^6 pairs over ~10^4 terms.
-        ancestor_cache: Dict[str, Set[str]] = {}
-        for protein, terms in protein_go_map.items():
-            for term in terms:
-                term_proteins.setdefault(term, set()).add(protein)
-                if get_ancestors is None:
-                    continue
-                if term not in ancestor_cache:
-                    ancestor_cache[term] = set(get_ancestors(term))
-                for ancestor in ancestor_cache[term]:
-                    term_proteins.setdefault(ancestor, set()).add(protein)
-        domain_proteins: Dict[str, set] = {}
-        for protein, domains in protein_domain_map.items():
-            for domain in domains:
-                domain_proteins.setdefault(domain, set()).add(protein)
-        self.term_proteins = term_proteins
-        self.domain_proteins = domain_proteins
+__all__ = [
+    "Annotation",
+    "BackgroundIndex",
+    "InsufficientBackgroundError",
+    "InvalidContingencyTableError",
+    "OntologyProcessor",
+]
 
 
 @dataclass
@@ -305,211 +275,30 @@ class OntologyProcessor:
         Raises:
             ValueError: If input data is malformed
         """
-        logger.info("Applying optimal level filter (True Path Rule implementation)")
+        # The test itself is ontology-agnostic and lives in
+        # src/relative_inference.py, so every registry ontology with a hierarchy
+        # can use it. This method supplies GO's hierarchy from the obonet graph
+        # and keeps the historical call signature.
+        return filter_by_parental_background(
+            significant_associations,
+            protein_domain_map,
+            protein_go_map,
+            parents_fn=self.get_parents,
+            ancestors_fn=self.get_ancestors,
+            min_background_size=min_background_size,
+            alpha_threshold=alpha_threshold,
+        )
 
-        if not significant_associations:
-            logger.warning("No significant associations provided for filtering")
+    def get_parents(self, go_term: str) -> List[str]:
+        """Direct parents of *go_term*; empty for roots and unknown terms.
+
+        Unknown terms yield no parents, so the relative test has nothing to
+        range over and the association is kept — the conservative behaviour the
+        filter has always had for terms absent from the ontology.
+        """
+        if go_term not in self.go_graph:
             return []
-
-        # Validate input data
-        if not protein_domain_map or not protein_go_map:
-            raise ValueError("Protein mapping data cannot be empty")
-
-        filtered_associations = []
-        total_associations = len(significant_associations)
-        # Invert the maps once; see _BackgroundIndex for why this is not optional
-        # at real scale. The counts it produces are identical to the direct scan.
-        index = _BackgroundIndex(protein_domain_map, protein_go_map, self.get_ancestors)
-        self._filter_rejections: Dict[str, int] = {}
-
-        for i, assoc in enumerate(significant_associations):
-            if i % 10000 == 0:
-                logger.info(f"Processing association {i + 1}/{total_associations}")
-
-            if self._passes_optimal_level_test(
-                assoc.domain,
-                assoc.go_term,
-                protein_domain_map,
-                protein_go_map,
-                min_background_size,
-                alpha_threshold,
-                index=index,
-            ):
-                filtered_associations.append(assoc)
-
-        logger.info(
-            f"Optimal level filter: {len(filtered_associations)}/{total_associations} associations retained"
-        )
-        if self._filter_rejections:
-            detail = ", ".join(
-                f"{n:,} x {kind}" for kind, n in sorted(self._filter_rejections.items())
-            )
-            logger.info(
-                f"  {sum(self._filter_rejections.values()):,} parent tests could not be "
-                f"evaluated and their associations were rejected untested ({detail}). "
-                "The background is propagated, so this should now be rare; a large "
-                "count here means the ontology graph or the annotation map is not "
-                "what the filter expects."
-            )
-        return filtered_associations
-
-    def _passes_optimal_level_test(
-        self,
-        domain: str,
-        child_term: str,
-        protein_domain_map: Dict[str, List[str]],
-        protein_go_map: Dict[str, Set[str]],
-        min_background_size: int,
-        alpha_threshold: float,
-        index: "_BackgroundIndex | None" = None,
-    ) -> bool:
-        """
-        Test if a domain-GO association is at optimal specificity level.
-
-        Implements the core True Path Rule logic by testing whether the
-        domain-child term association is significantly stronger than
-        domain-parent term associations.
-
-        Args:
-            domain: Domain identifier
-            child_term: Child GO term being tested
-            protein_domain_map: Protein to domain mapping
-            protein_go_map: Protein to GO term mapping
-            min_background_size: Minimum background proteins required
-            alpha_threshold: Significance threshold
-
-        Returns:
-            True if association passes optimal level test
-        """
-        if child_term not in self.go_graph:
-            logger.debug(
-                f"GO term {child_term} not found in ontology, keeping association"
-            )
-            return True  # Keep if term not in graph (conservative approach)
-
-        # Get direct parents (predecessors in the graph)
-        parents = list(self.go_graph.predecessors(child_term))
-
-        if not parents:
-            logger.debug(f"GO term {child_term} has no parents, keeping association")
-            return True  # Root terms pass by default
-
-        # Test against each parent
-        for parent_term in parents:
-            try:
-                p_value = self._test_against_parent_background(
-                    domain,
-                    child_term,
-                    parent_term,
-                    protein_domain_map,
-                    protein_go_map,
-                    min_background_size,
-                    index=index,
-                )
-
-                # If not significantly stronger than any parent, reject
-                if p_value >= alpha_threshold:
-                    logger.debug(
-                        f"Association {domain}-{child_term} not significantly stronger than parent {parent_term} (p={p_value:.4f})"
-                    )
-                    return False
-
-            except (
-                InsufficientBackgroundError,
-                InvalidContingencyTableError,
-            ) as e:
-                # Expected data rejections are counted by category.
-                # Programming errors must remain visible.
-                self._filter_rejections[type(e).__name__] = (
-                    self._filter_rejections.get(type(e).__name__, 0) + 1
-                )
-                logger.debug(f"Error testing against parent {parent_term}: {e}")
-                return False
-
-        return True
-
-    def _test_against_parent_background(
-        self,
-        domain: str,
-        child_term: str,
-        parent_term: str,
-        protein_domain_map: Dict[str, List[str]],
-        protein_go_map: Dict[str, Set[str]],
-        min_background_size: int,
-        index: "_BackgroundIndex | None" = None,
-    ) -> float:
-        """
-        Test domain-child association strength within parent term background.
-
-        This implements the statistical test at the core of the True Path Rule.
-        We test whether the domain is significantly enriched in proteins annotated
-        to the child term, when considering only proteins annotated to the parent term.
-
-        Args:
-            domain: Domain identifier
-            child_term: Child GO term
-            parent_term: Parent GO term defining the background
-            protein_domain_map: Protein to domain mapping
-            protein_go_map: Protein to GO term mapping
-            min_background_size: Minimum background size for valid test
-
-        Returns:
-            P-value from Fisher's exact test
-
-        Raises:
-            InsufficientBackgroundError: If the parent background is too small.
-            InvalidContingencyTableError: If the derived cells are inconsistent.
-        """
-        # Inverted index of the same two maps. Building it here (rather than
-        # requiring the caller to) keeps direct callers working; the batch entry
-        # point apply_optimal_level_filter passes a shared one so the inversion
-        # happens once per run instead of once per test.
-        if index is None:
-            index = _BackgroundIndex(
-                protein_domain_map, protein_go_map, self.get_ancestors
-            )
-
-        # Get all proteins annotated with parent term (background set)
-        parent_proteins = index.term_proteins.get(parent_term, frozenset())
-
-        if len(parent_proteins) < min_background_size:
-            raise InsufficientBackgroundError(
-                f"Insufficient background size: {len(parent_proteins)} < {min_background_size}"
-            )
-
-        # Build 2x2 contingency table within parent background, as set algebra on
-        # the index. Identical counts to scanning every protein, ~1000x cheaper.
-        domain_proteins = index.domain_proteins.get(domain, frozenset())
-        child_in_background = (
-            index.term_proteins.get(child_term, frozenset()) & parent_proteins
-        )
-        domain_in_background = domain_proteins & parent_proteins
-
-        # a: proteins with domain AND child term (within parent background)
-        a = len(child_in_background & domain_proteins)
-        # b: proteins with child term but NOT domain (within parent background)
-        b = len(child_in_background) - a
-        # c: proteins with domain but NOT child term (within parent background)
-        c = len(domain_in_background) - a
-        # d: proteins with neither domain nor child term (within parent background)
-        d = len(parent_proteins) - (a + b + c)
-
-        # Validate contingency table
-        if a == 0 or (a + b) == 0 or (a + c) == 0:
-            return 1.0  # No association possible
-
-        if d < 0:
-            raise InvalidContingencyTableError(
-                f"Invalid contingency table: a={a}, b={b}, c={c}, d={d}"
-            )
-
-        try:
-            # One-tailed Fisher's exact test for enrichment
-            _, p_value = fisher_exact([[a, b], [c, d]], alternative="greater")
-            return p_value
-        except (ValueError, ZeroDivisionError) as e:
-            logger.warning(f"Fisher's exact test failed: {e}")
-            return 1.0
+        return list(self.go_graph.predecessors(go_term))
 
     def propagate_annotations(self, direct_associations: List) -> List[Annotation]:
         """

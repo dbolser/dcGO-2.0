@@ -40,7 +40,7 @@ Options:
     --permute-annotations N  Calibration control: shuffle protein↔term-set assignment (null run)
     --enable-true-path       True Path propagation *only* (GO via OBO DAG, EC via numbering, reactome/keyword via hierarchy files)
     --enable-relative-inference
-                             Parental-background filter (GO only). Independent of --enable-true-path
+                             Parental-background filter (any ontology with a hierarchy). Independent of --enable-true-path
     --go-ontology PATH       Path to GO ontology file (default: data/raw/go_ontology/go-basic.obo)
 
 Examples:
@@ -95,8 +95,10 @@ from src.ontology_processor import OntologyProcessor
 from src.ontology_registry import (
     OntologyEntry,
     describe_ontologies,
+    get_ontology,
     ontology_keys,
 )
+from src.relative_inference import filter_by_parental_background
 from src.run_manifest import RunManifest, describe_file, manifest_filename
 from src.runner import RunRequest, resolve_inputs
 from src.sparse_fisher import (
@@ -319,17 +321,18 @@ def validate_arguments(
             f"--species must be a bare name used in the input filenames, got "
             f"{args.species!r}"
         )
-    # The parental-background test needs *direct parents* of a term, which today
-    # only the GO OBO graph exposes (OntologyProcessor.go_graph.predecessors).
-    # The registry's other ontologies supply a transitive-ancestors function
-    # instead, which cannot answer "one level up". See the PR notes.
-    if args.enable_relative_inference and args.ontology != "go":
-        parser.error(
-            f"--enable-relative-inference is currently GO-only, got --ontology "
-            f"{args.ontology}. The parental-background test needs each term's "
-            "direct parents; the registry supplies transitive ancestors for "
-            "every other ontology."
-        )
+    # Relative inference needs each term's *direct parents*. Every registry
+    # ontology with a hierarchy now supplies them (`build_parents`); the flat
+    # cross-reference layers have nothing to test against, so they are rejected
+    # here rather than silently running the overall inference alone.
+    if args.enable_relative_inference:
+        entry = get_ontology(args.ontology)
+        if not entry.supports_relative_inference:
+            parser.error(
+                f"--enable-relative-inference is not available for --ontology "
+                f"{args.ontology}: it has no term hierarchy, so an association "
+                "has no parental background to be tested against."
+            )
 
 
 def build_ontology_paths(args: argparse.Namespace) -> dict[str, Path]:
@@ -556,7 +559,8 @@ def build_argument_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Enable the parental-background (relative inference) filter: keep "
         "an association only if it is still enriched within the proteins "
-        "annotated to the term's direct parents. GO only. This is a filter, "
+        "annotated to the term's direct parents. Needs a term hierarchy. "
+        "This is a filter, "
         "not propagation — it deletes associations and is independent of "
         "--enable-true-path",
     )
@@ -1046,19 +1050,29 @@ def main(argv: list[str] | None = None) -> int:
 
         # --- Stage A: relative inference (paper Step 2) — removes associations
         if args.enable_relative_inference:
-            assert ontology_processor is not None  # guarded by validate_arguments
             logger.info(
                 f"Relative inference: testing {len(significant_associations):,} "
                 "associations against their direct-parent backgrounds..."
             )
+            # GO's hierarchy comes from the obonet graph, every other ontology's
+            # from the registry. The test itself is the same code either way.
+            if ontology_processor is not None:
+                parents_fn = ontology_processor.get_parents
+                relative_ancestors_fn = ontology_processor.get_ancestors
+            else:
+                parents_fn = ontology_entry.build_parents(ontology_paths)
+                relative_ancestors_fn = ontology_entry.build_ancestors(ontology_paths)
+
             # alpha_threshold is a raw Fisher p-value, not FDR-corrected: this
             # is a post-hoc filter applied after BH, which is *not* what the
             # paper does (it combines overall and relative p-values and then
             # corrects). See VALIDATION_PLAN.md next-steps item 2.
-            significant_associations = ontology_processor.apply_optimal_level_filter(
+            significant_associations = filter_by_parental_background(
                 significant_associations,
                 protein_domain_map,
                 protein_go_map,
+                parents_fn=parents_fn,
+                ancestors_fn=relative_ancestors_fn,
                 min_background_size=PARENTAL_MIN_BACKGROUND_SIZE,
                 alpha_threshold=PARENTAL_ALPHA_THRESHOLD,
             )
