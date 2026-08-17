@@ -181,6 +181,25 @@ def _iter_entries(
                 cc_topic, cc_parts = None, []
 
 
+def iter_uniprot_entries(
+    path: Path, want_cc: bool = False, want_ft: bool = False
+) -> Iterator[UniProtEntry]:
+    """Public single-pass iterator over the flat file's entries.
+
+    :func:`parse_uniprot_cross_refs` reads one ``DR`` database per scan; a
+    caller that needs several from the same ~1 GB file (``src.gene_mapping``
+    builds three gene→accession indexes at once) iterates the entries itself
+    instead of paying one scan per database.
+
+    Note the raw ``DR`` fields are *not* cleaned here: ``"-"`` placeholders
+    (``DR   GeneID; 1017; -.``) come through as-is, so filtering them is the
+    caller's policy — :func:`parse_uniprot_cross_refs` drops placeholder
+    *terms*, and callers of this iterator must apply the equivalent to
+    whichever fields they read.
+    """
+    return _iter_entries(path, want_cc=want_cc, want_ft=want_ft)
+
+
 def parse_uniprot_accessions(path: Path) -> Set[str]:
     """Every primary accession in a UniProt flat file.
 

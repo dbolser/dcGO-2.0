@@ -38,7 +38,7 @@ from typing import Dict, Set, Tuple
 from loguru import logger
 
 from src.remap import RemapCoverage, remap_values
-from src.uniprot_annotation_source import _iter_entries
+from src.uniprot_annotation_source import iter_uniprot_entries
 
 
 @dataclass(frozen=True)
@@ -98,11 +98,16 @@ def parse_gene_accession_index(dat_path: Path) -> GeneAccessionIndex:
     hgnc: Dict[str, Set[str]] = defaultdict(set)
     symbol: Dict[str, Set[str]] = defaultdict(set)
     n_entries = 0
-    for entry in _iter_entries(Path(dat_path)):
+    for entry in iter_uniprot_entries(Path(dat_path)):
         n_entries += 1
         if entry.accession is None:
             continue
         for db, xref_id, xref_type in entry.cross_refs:
+            # "-" is UniProt's placeholder field; skipping it mirrors the
+            # term filter parse_uniprot_cross_refs applies (ids never carry it
+            # in practice, but the raw iterator leaves cleaning to us).
+            if xref_id == "-":
+                continue
             if db == "GeneID":
                 geneid[xref_id].add(entry.accession)
             elif db == "HGNC":
