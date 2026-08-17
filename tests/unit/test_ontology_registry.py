@@ -26,6 +26,9 @@ def paths(tmp_path):
         "subcell",
         "chebi_obo",
         "doid_obo",
+        "hpo_g2p",
+        "hpo_obo",
+        "syngo_zip",
     ):
         path = tmp_path / name
         path.write_text("")
@@ -72,6 +75,8 @@ class TestTruePathSupport:
             "cofactor",
             "doid",
             "orphanet_doid",
+            "hpo",
+            "syngo",
         ],
     )
     def test_hierarchical_ontologies_can_propagate(self, key):
@@ -180,3 +185,36 @@ class TestSourceConstruction:
         # without --enable-true-path must still fail loudly when it is absent.
         paths["doid_obo"] = tmp_path / "gone.obo"
         assert missing_inputs(get_ontology("doid"), paths)
+
+    def test_hpo_reads_the_g2p_file_and_the_flat_file(self, paths):
+        source = get_ontology("hpo").build_source(paths, {})
+        assert source.genes_to_phenotype_path == paths["hpo_g2p"]
+        assert source.dat_path == paths["uniprot_dat"]
+
+    def test_syngo_reads_the_zip_and_the_flat_file(self, paths):
+        source = get_ontology("syngo").build_source(paths, {})
+        assert source.zip_path == paths["syngo_zip"]
+        assert source.dat_path == paths["uniprot_dat"]
+
+
+class TestGeneKeyedPreflight:
+    """The gene-keyed layers must demand every input they read."""
+
+    def test_hpo_needs_the_annotations_and_the_flat_file(self, paths, tmp_path):
+        entry = get_ontology("hpo")
+        assert set(entry.needs) == {"hpo_g2p", "uniprot_dat"}
+        paths["hpo_g2p"] = tmp_path / "gone.txt"
+        assert missing_inputs(entry, paths)
+
+    def test_hpo_hierarchy_needs_the_obo_only_when_propagating(self, paths, tmp_path):
+        entry = get_ontology("hpo")
+        paths["hpo_obo"] = tmp_path / "gone.obo"
+        assert missing_inputs(entry, paths) == []
+        assert missing_inputs(entry, paths, for_hierarchy=True)
+
+    def test_syngo_zip_is_both_annotation_and_hierarchy_input(self, paths, tmp_path):
+        entry = get_ontology("syngo")
+        assert "syngo_zip" in entry.needs
+        assert entry.hierarchy_needs == ("syngo_zip",)
+        paths["syngo_zip"] = tmp_path / "gone.zip"
+        assert missing_inputs(entry, paths)

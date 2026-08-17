@@ -19,9 +19,9 @@ Options:
     --ontology STR           Ontology to associate domains with (default: go). See
                              src/ontology_registry.py, or --help, for the full list:
                              go, ec, reactome, keyword, disease, doid, orphanet,
-                             orphanet_doid, tcdb, merops, cazy, unipathway, complex,
-                             drugbank, pharos, condensate, subcellular, ligand,
-                             cofactor, rhea, xref
+                             orphanet_doid, hpo, syngo, tcdb, merops, cazy,
+                             unipathway, complex, drugbank, pharos, condensate,
+                             subcellular, ligand, cofactor, rhea, xref
     --doid-obo PATH          Path to doid.obo, used when --ontology doid|orphanet_doid
     --xref-db STR            UniProt DR database name, required when --ontology xref (e.g. KEGG, BRENDA)
     --xref-type STR          Optional DR third-field filter for --ontology xref (e.g. 'phenotype')
@@ -62,6 +62,10 @@ Examples:
     uv run python run_dcgo_human.py --ontology ligand             # FT /ligand_id (ChEBI)
     uv run python run_dcgo_human.py --ontology tcdb               # transporter classification
     uv run python run_dcgo_human.py --ontology xref --xref-db KEGG # any DR database
+
+    # Gene-keyed layers (genes re-keyed to UniProt accessions at parse time)
+    uv run python run_dcgo_human.py --ontology hpo                # HPO phenotypes (NCBI GeneID)
+    uv run python run_dcgo_human.py --ontology syngo              # SynGO synaptic terms (HGNC)
 
     # Run with True Path Rule propagation (paper Step 3)
     uv run python run_dcgo_human.py --enable-true-path --go-ontology data/raw/go_ontology/go-basic.obo
@@ -134,6 +138,10 @@ INPUT_SOURCE_NAMES = {
     "keywlist": "uniprot_keywlist",
     "subcell": "uniprot_subcell",
     "chebi_obo": "chebi",
+    "doid_obo": "disease_ontology",
+    "hpo_g2p": "hpo_annotations",
+    "hpo_obo": "hpo_ontology",
+    "syngo_zip": "syngo",
     # Not an ontology input: the upstream source protein2ipr_<species>.dat.gz
     # was derived from, recorded as `derived_from`.
     "interpro_mappings": "interpro_mappings",
@@ -630,6 +638,27 @@ def build_argument_parser() -> argparse.ArgumentParser:
         help="Path to the Human Disease Ontology OBO, for --ontology "
         "doid/orphanet_doid (supplies both the OMIM/Orphanet cross-references "
         "used to re-key the annotations and the DAG they propagate up)",
+    )
+    parser.add_argument(
+        "--hpo-genes-to-phenotype",
+        type=Path,
+        default=Path("data/raw/hpo/genes_to_phenotype.txt"),
+        help="Path to HPO genes_to_phenotype.txt (NCBI GeneID → HP term), for "
+        "--ontology hpo",
+    )
+    parser.add_argument(
+        "--hpo-obo",
+        type=Path,
+        default=Path("data/raw/hpo/hp.obo"),
+        help="Path to the Human Phenotype Ontology OBO, for --ontology hpo "
+        "--enable-true-path",
+    )
+    parser.add_argument(
+        "--syngo-zip",
+        type=Path,
+        default=Path("data/raw/syngo/syngo1.3_complete_data.zip"),
+        help="Path to the SynGO bulk-release zip (annotations + ontology "
+        "sheets), for --ontology syngo",
     )
     parser.add_argument(
         "--permute-annotations",
