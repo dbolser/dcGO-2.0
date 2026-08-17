@@ -84,9 +84,10 @@ uv run python run_dcgo_human.py --num-cores 8 # statistical inference
 uv run python run_dcgo_human.py --num-cores 8 \
     --enable-true-path --go-ontology data/raw/go_ontology/go-basic.obo
 
-# With the parental-background filter (paper Step 2 "relative inference" — GO
-# only, and it *removes* associations). Independent of --enable-true-path;
-# passing both reproduces what --enable-true-path alone used to do for GO.
+# With the parental-background filter (paper Step 2 "relative inference" — any
+# ontology with a hierarchy, and it *removes* associations). Independent of
+# --enable-true-path; passing both reproduces what --enable-true-path alone
+# used to do for GO.
 uv run python run_dcgo_human.py --enable-relative-inference
 
 # Other ontologies (see src/ontology_registry.py or --help for all 21)
@@ -124,7 +125,7 @@ sbatch scripts/run_dcgo_hpc.sh
 
 **External inputs** (downloaded by `scripts/download_data.py`):
 - GOA annotations — protein → GO mappings (GAF 2.2)
-- GO ontology — `go-basic.obo` (needed for `--enable-true-path` or `--enable-relative-inference`)
+- GO ontology — `go-basic.obo` (`--ontology go` only: needed for `--enable-true-path` or `--enable-relative-inference`; other ontologies read their own hierarchy files)
 - InterPro mappings — pre-computed `protein2ipr.dat.gz` domain annotations
 
 **Internal flow:**
@@ -194,19 +195,15 @@ tables); enumerating co-occurring pairs makes it 9.5M tables and 268 s.
   inference* (Step 2, vs. the true-path rule at Step 3) and is now
   `--enable-relative-inference`, available for all 12 ontologies with a
   hierarchy, and it *removes* associations rather than adding them.
-- **Relative inference runs before the BH correction** (`--enable-relative-inference`,
-  opt-in). Each candidate pair gets a parental-background p-value and BH corrects
-  `max(overall_p, relative_p)` — an intersection-union statistic, hence a valid
-  p-value without further correction; the h-score is `min(overall, relative)`.
-  That part matches the paper. **Two things do not, and the layer is not usable
-  yet — see `VALIDATION_PLAN.md` next-steps item 2:**
-  - the parental background is our max over per-parent tests, where the paper's
-    Figure 1 caption defines it as one test against the *union* of the direct
-    parents' proteins (56.1% of GO terms have more than one parent, and ours is
-    the conservative direction);
-  - terms with no parents are exempt from the test entirely, so `relative_p = 0`
-    and they pass on the overall inference alone. The three GO roots come out as
-    the top three results on an allspecies run.
+- **Relative inference (`--enable-relative-inference`, opt-in) is implemented
+  but not usable yet.** The combination matches the paper — BH corrects
+  `max(overall_p, relative_p)`, h-score is `min(overall, relative)`, the
+  parental background is the union of a term's direct parents, and the input
+  map is true-path propagated (`--propagate-annotations`). But parentless terms
+  skip the test entirely and pass on the overall inference alone, so the GO
+  roots dominate the output and the layer makes results *less* specific rather
+  than more. Needs an IC floor, and possibly `elim`-style decorrelation. See
+  `VALIDATION_PLAN.md` next-steps item 2.
 - **The §4 ablation cannot attribute its True Path result to either stage.** It
   was run when one flag drove both, so "the True Path Rule is significantly
   worse in 12/12 cells" is a statement about filter-plus-propagation, measured

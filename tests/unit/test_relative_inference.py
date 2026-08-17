@@ -16,6 +16,7 @@ import pytest
 
 from src.relative_inference import (
     BackgroundIndex,
+    union_parental_p_value,
     InsufficientBackgroundError,
     InvalidContingencyTableError,
     filter_by_parental_background,
@@ -38,7 +39,10 @@ class Assoc:
 
 # A hierarchy with no OBO file behind it at all: child -> direct parents.
 CHILD_TO_PARENTS = {
-    "T:leaf": {"T:mid"},
+    # T:leaf has TWO parents, so the union background differs from any single
+    # one of them. Without a multi-parent term the union-vs-per-parent
+    # distinction is invisible, and 56.1% of real GO terms have several parents.
+    "T:leaf": {"T:mid", "T:other"},
     "T:mid": {"T:root"},
     "T:other": {"T:root"},
 }
@@ -100,20 +104,18 @@ def maps():
 class TestWorksWithoutAnOboGraph:
     """The extraction's reason for existing."""
 
-    def test_filter_runs_on_a_dict_hierarchy(self, maps):
+    def test_the_test_runs_on_a_dict_hierarchy(self, maps):
+        """No OBO graph anywhere: parents and ancestors are plain functions."""
         protein_domains, protein_terms = maps
-        kept = filter_by_parental_background(
-            [Assoc("IPR_A", "T:leaf"), Assoc("IPR_B", "T:other")],
-            protein_domains,
-            protein_terms,
-            parents_fn=parents_of,
-            ancestors_fn=ancestors_of,
-            min_background_size=3,
-            alpha_threshold=0.05,
-        )
-        # IPR_A is every T:leaf protein and no other T:mid protein, so it is
-        # specific to the leaf; IPR_B is not enriched within T:root.
-        assert [a.go_term for a in kept] == ["T:leaf"]
+        index = BackgroundIndex(protein_domains, protein_terms, ancestors_of)
+        kept = [
+            term
+            for domain, term in [("IPR_A", "T:leaf"), ("IPR_B", "T:other")]
+            if union_parental_p_value(domain, term, index, parents_of, 3) < 0.05
+        ]
+        # IPR_A is exactly T:leaf within its parents' union; IPR_B is spread
+        # across T:root and so is not specific to T:other.
+        assert kept == ["T:leaf"]
 
     def test_background_index_propagates_term_membership(self, maps):
         protein_domains, protein_terms = maps
@@ -336,7 +338,7 @@ class TestVectorisedMatchesTheLoop:
     def _loop(protein_domains, protein_terms, pairs, min_background_size=3):
         index = BackgroundIndex(protein_domains, protein_terms, ancestors_of)
         return {
-            (domain, term): relative_p_value(
+            (domain, term): union_parental_p_value(
                 domain, term, index, parents_of, min_background_size
             )
             for domain, term in pairs
@@ -415,3 +417,44 @@ class TestPropagatedTermMatrix:
             ptm, term_list, ancestors_of
         )
         assert propagated.sum(axis=0).A1[index_of["T:root"]] == 1
+
+
+class TestUnionBackgroundIsThePaperDefinition:
+    """`N_pa` is the count over proteins annotated by *any* direct parent.
+
+    The paper's Figure 1 caption defines the parental background as the union
+    over direct parents, tested once. An earlier implementation ran one test per
+    parent and took the maximum, which is uniformly more conservative: the union
+    is a superset of every single parent, and the child count is unchanged, so
+    the same association scores at least as well against it.
+    """
+
+    def test_union_is_never_more_conservative_than_per_parent_max(self, maps):
+        protein_domains, protein_terms = maps
+        index = BackgroundIndex(protein_domains, protein_terms, ancestors_of)
+
+        for domain in ("IPR_A", "IPR_B"):
+            for term in ("T:leaf", "T:mid", "T:other"):
+                if not parents_of(term):
+                    continue
+                union = union_parental_p_value(domain, term, index, parents_of, 3)
+                per_parent = relative_p_value(domain, term, index, parents_of, 3)
+                assert union <= per_parent + 1e-12, (domain, term, union, per_parent)
+
+    def test_a_multi_parent_term_actually_differs(self, maps):
+        """Guard against the fixture silently losing its multi-parent term."""
+        protein_domains, protein_terms = maps
+        assert len(parents_of("T:leaf")) > 1
+        index = BackgroundIndex(protein_domains, protein_terms, ancestors_of)
+        union = union_parental_p_value("IPR_A", "T:leaf", index, parents_of, 3)
+        per_parent = relative_p_value("IPR_A", "T:leaf", index, parents_of, 3)
+        assert union < per_parent
+
+    def test_the_background_is_the_union_not_the_intersection(self, maps):
+        """The body text says "all", the caption says "any"; we follow "any"."""
+        protein_domains, protein_terms = maps
+        index = BackgroundIndex(protein_domains, protein_terms, ancestors_of)
+        parents = list(parents_of("T:leaf"))
+        union = set().union(*(index.term_proteins[p] for p in parents))
+        intersection = set.intersection(*(index.term_proteins[p] for p in parents))
+        assert len(union) > len(intersection)  # the fixture distinguishes them

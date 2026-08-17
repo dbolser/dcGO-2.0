@@ -62,72 +62,46 @@ terms. Remaining, in rough priority:
    against the *current* InterPro2GO. Fetch a dated (~2021) `interpro2go` and pass
    it as `--reference` so it becomes a true held-out temporal test (mirrors §2 on
    the domain side). Small.
-2. **Fold the relative inference into the pipeline (paper parity).** — *in
-   progress; the layer is implemented but not yet usable.*
+2. **Relative inference (paper Step 2).** Implemented; **not usable yet**, and
+   opt-in for that reason.
 
-   **Done.** `--enable-relative-inference` computes a parental-background
-   p-value for every candidate pair *before* the FDR correction and applies BH
-   to `max(overall_p, relative_p)`, with `min(overall, relative)` as the
-   h-score. It was a post-hoc `alpha<0.05` filter, which gave the relative
-   dimension no FDR control at all. `--propagate-annotations` applies the True
-   Path Rule to the input protein→term map, which the paper states explicitly
-   ("*those annotated to the root of GO term after applying the true-path
-   rule*") and which the relative inference's own backgrounds require.
+   Matching the paper: the parental-background p-value is computed for every
+   candidate pair *before* the correction, BH corrects
+   `max(overall_p, relative_p)` (an intersection-union statistic, so a valid
+   p-value without further adjustment) and the h-score is
+   `min(overall, relative)`; the background is the **union** of a term's direct
+   parents' proteins, per the Figure 1 caption's `N_pa`; and the input
+   protein→term map is true-path propagated, which the paper states explicitly.
 
-   **Two known deviations / gaps, both blocking:**
+   **Blocking: parentless terms skip the test.** They score `relative_p = 0` and
+   pass on the overall inference alone, so the DAG roots dominate the output —
+   `biological_process` is the single most frequent term on an allspecies run
+   (9,623 domains). Nothing in Steps 1–3 prevents it.
 
-   a. **Parental background.** We run one Fisher test per direct parent and take
-      the max. The paper's Figure 1 caption defines `N_pa` as "*the total number
-      of Uniprots that can be annotated by **any** direct parental GO terms*" —
-      one test against the **union**. The body text says "*all direct parental
-      GO terms*", so the paper is internally inconsistent; the caption defines
-      the formula's variable. 56.1% of GO terms have >1 direct parent, and our
-      version is uniformly the more conservative one.
-
-   b. **Root exemption.** A term with no parents gets `relative_p = 0`, so it
-      passes on the overall inference alone with no specificity test. Under
-      input propagation those terms are large and easily enriched, so the
-      output is dominated by them.
-
-   **Effect, human GO single domains, FDR<0.01** (`--disable-supra-domains`):
-
-   | configuration | significant | mean #ancestors of term | on an ancestor chain |
-   |---|---:|---:|---:|
-   | overall only | 44,453 | 11.8 | 28.6% |
-   | + relative | 3,876 | 5.9 | — |
-   | + input propagation | 147,329 | 9.8 | — |
-   | both | 18,612 | 4.1 | 39.2% |
-
-   The stated purpose of the relative inference is to report each domain at the
-   *most specific* level it supports. Enabling it makes the output **less**
-   specific and **increases** the fraction of associations sitting on an
-   ancestor–descendant chain, so it is not currently doing its job.
-
-   **Tried and did not work: widening the universe.** The hypothesis was that
-   the depth penalty was a power artefact of human-only data, and that the
-   paper's ~100,000-protein multi-species universe would flatten it. It does the
-   opposite. On `--species allspecies` (1,464,355 proteins, 40,141 domains):
+   The stated purpose is to report each domain at the most specific level it
+   supports. It currently does the opposite (human GO single domains, FDR<0.01):
 
    | configuration | significant | mean #ancestors | on an ancestor chain |
    |---|---:|---:|---:|
-   | overall only | 535,133 | 13.6 | 35.4% |
-   | both | 840,667 | 6.2 | **82.4%** |
+   | overall only | 44,453 | 11.8 | 28.6% |
+   | + relative + input propagation | 33,185 | 6.8 | 55.2% |
 
-   Top terms are `biological_process` (9,623 domains), `cellular_component`,
-   `molecular_function` — the DAG roots themselves. More data made it worse.
-   Sample size is not the problem; (a) and (b) are.
+   **Ruled out:** a wider universe (allspecies is *worse* — 82.4% of
+   associations on a chain, the three GO roots as the top three results); the
+   attainable-p floor (binds only below ~100-protein backgrounds); degenerate
+   parents whose propagated protein set equals their child's (6.3% of
+   (term, parent) pairs). The per-parent-maximum background was also wrong and
+   is fixed, which improved specificity but not the cascade.
 
-   **Also ruled out as the dominant mechanism:** the attainable-p floor (binding
-   only for parental backgrounds below ~100 proteins) and degenerate parents
-   whose propagated protein set equals their child's (1,960/31,222 = 6.3% of
-   (term, parent) pairs). The depth effect is graded, not a cliff.
-
-   **Open, and probably needs the authors:** does the paper's IC / "meta-GO"
-   analysis (their Figure 3) do the level selection, with the two inferences
-   only doing enrichment? If so our reading of the method has been incomplete.
+   **Next:** an information-content floor on reported terms — dcGO's own
+   IC/"meta-GO" analysis (their Figure 3) may be where level selection actually
+   happens, in which case our reading of the method is incomplete — and, if that
+   is not enough, `elim`-style decorrelation (Alexa et al. 2006): test specific
+   terms first, remove their proteins, retest ancestors on the residue.
 
    *(The p-score protein-prediction path is deliberately **not** pursued: the
    deliverable is domain→term annotation, not protein-centric prediction.)*
+
 3. **§4 ablation** — now that the yardstick is trusted, run the temporal benchmark
    per pipeline config (single-domain / +supra / +shrinkage / +TPR).
 4. ~~**§3 original-dcGO comparison**~~ — **done** (2026-08-04), see §3.1.
