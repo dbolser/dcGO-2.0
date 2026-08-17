@@ -74,8 +74,8 @@ class TestHPOAnnotationSource:
         source = HPOAnnotationSource(g2p, dat)
         assert source.coverage is None
         source.parse()
-        assert source.coverage.unmapped_terms == ["99"]
-        assert source.coverage.n_mapped_terms == 2  # of 3 gene ids
+        assert source.coverage.unmapped_values == ["99"]
+        assert source.coverage.n_mapped_values == 2  # of 3 gene ids
 
     def test_spec_declares_the_hp_prefix(self, g2p, dat):
         spec = HPOAnnotationSource(g2p, dat).spec

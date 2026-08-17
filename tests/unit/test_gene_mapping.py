@@ -87,14 +87,14 @@ class TestRemapGeneAnnotations:
         assert not any("T:3" in terms for terms in remapped.values())
 
     def test_coverage_counts_the_gene_axis(self, index):
-        # The coverage is axis-swapped (see remap_gene_annotations): its "term"
-        # counters range over gene ids, its "protein" counters over terms.
+        # The coverage's "values" are the gene ids being remapped, its "keys"
+        # are the ontology terms (see remap_gene_annotations).
         _, coverage = remap_gene_annotations(self.GENE_TERMS, index.geneid, "test")
-        assert coverage.n_source_terms == 3  # distinct gene ids
-        assert coverage.n_mapped_terms == 2
-        assert coverage.unmapped_terms == ["99"]
-        assert coverage.n_source_proteins == 3  # distinct ontology terms
-        assert coverage.n_result_proteins == 2  # T:3 left the layer
+        assert coverage.n_source_values == 3  # distinct gene ids
+        assert coverage.n_mapped_values == 2
+        assert coverage.unmapped_values == ["99"]
+        assert coverage.n_source_keys == 3  # distinct ontology terms
+        assert coverage.n_result_keys == 2  # T:3 left the layer
 
     def test_annotation_coverage_is_over_pairs_not_genes(self, index):
         _, coverage = remap_gene_annotations(self.GENE_TERMS, index.geneid, "test")

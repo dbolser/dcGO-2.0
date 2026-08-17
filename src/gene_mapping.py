@@ -20,12 +20,12 @@ Mapping policy, mirroring :mod:`src.disease_ontology`:
   for readthrough loci and unresolved paralogs) — kept as a genuine expansion:
   the term goes to *all* of them, since choosing one arbitrarily is not
   reproducible.
-* Coverage accounting *reuses* :func:`src.disease_ontology.remap_protein_terms`
-  by inverting the map (terms become the keys, gene ids the values being
-  remapped) rather than duplicating its audited counting loop. The returned
-  :class:`~src.disease_ontology.RemapCoverage` is therefore axis-swapped: its
-  "term" counters range over gene ids and its "protein" counters over ontology
-  terms — :func:`remap_gene_annotations` documents this at the call site.
+* Coverage accounting *reuses* the generic :func:`src.remap.remap_values` on
+  the inverted map (terms become the keys, gene ids the values being remapped)
+  rather than duplicating its audited counting loop. The returned
+  :class:`~src.remap.RemapCoverage` is axis-neutral, so its fields stay
+  truthful here: the "value" counters range over gene ids, the "key" counters
+  over ontology terms.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ from typing import Dict, Set, Tuple
 
 from loguru import logger
 
-from src.disease_ontology import RemapCoverage, remap_protein_terms
+from src.remap import RemapCoverage, remap_values
 from src.uniprot_annotation_source import _iter_entries
 
 
@@ -137,14 +137,14 @@ def remap_gene_annotations(
 ) -> Tuple[Dict[str, Set[str]], RemapCoverage]:
     """Re-key a ``{gene id: {term}}`` map onto ``{accession: {term}}``.
 
-    Implemented as :func:`~src.disease_ontology.remap_protein_terms` on the
-    inverted map, so the unmapped/one-to-many accounting is the same audited
-    code the DOID layer uses. The returned coverage is axis-swapped
-    accordingly: ``term_coverage`` is the fraction of *gene ids* that mapped,
-    ``n_source_proteins``/``n_result_proteins`` count ontology terms, and
-    ``unmapped_terms`` lists the gene ids that mapped to nothing.
+    Implemented as the generic :func:`src.remap.remap_values` on the inverted
+    map, so the unmapped/one-to-many accounting is the same audited code the
+    DOID layer uses. The coverage fields read naturally: its *values* are the
+    gene ids being remapped (``value_coverage`` is the fraction of genes that
+    mapped, ``unmapped_values`` the genes that mapped to nothing) and its
+    *keys* are the ontology terms.
     """
-    remapped, coverage = remap_protein_terms(
+    remapped, coverage = remap_values(
         _invert(gene_terms),
         gene_map,
         label,

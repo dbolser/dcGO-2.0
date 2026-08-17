@@ -55,13 +55,14 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, FrozenSet, List, Optional, Protocol, Set, Tuple
+from typing import Dict, FrozenSet, Optional, Set, Tuple
 
 from loguru import logger
 
 from src.annotation_source import AnnotationSource, OntologySpec
+from src.remap import RemapCoverage, remap_values
 from src.uniprot_annotation_source import parse_uniprot_cross_refs
 
 #: Disease Ontology terms, e.g. ``DOID:9352``.
@@ -72,16 +73,6 @@ DOID_SPEC = OntologySpec(
 _ID_RE = re.compile(r"^id:\s*(\S+)")
 _REPLACED_BY_RE = re.compile(r"^replaced_by:\s*(\S+)")
 _XREF_RE = re.compile(r"^xref:\s*([^\s:]+):(\S+)")
-
-
-class SupportsTargets(Protocol):
-    """A source-id → target-ids translation table, as :func:`remap_protein_terms` sees it.
-
-    :class:`XrefMapping` is the DOID implementation; the gene→accession maps in
-    :mod:`src.gene_mapping` are another.
-    """
-
-    def targets(self, source_id: str) -> Set[str]: ...
 
 
 @dataclass(frozen=True)
@@ -128,56 +119,6 @@ class XrefMapping:
     def targets(self, source_id: str) -> Set[str]:
         """Live DO terms cross-referencing ``source_id`` (empty if unmapped)."""
         return self.source_to_doids.get(source_id, set())
-
-
-@dataclass
-class RemapCoverage:
-    """What re-keying a protein→term map through an :class:`XrefMapping` did.
-
-    Mapping *coverage* is the first-class number for this layer: a hierarchy is
-    only worth having if it reaches most of the annotations. Reporting "more
-    significant associations" without it would be meaningless, because dropping
-    unmapped terms shrinks the hypothesis universe on its own.
-
-    Attributes:
-        n_source_terms: distinct source ids in the input map.
-        n_mapped_terms: of those, how many had at least one live DO target.
-        n_source_annotations: protein→term pairs in the input map.
-        n_mapped_annotations: input pairs whose term mapped (the coverage that
-            actually matters — a term used by many proteins counts many times).
-        n_result_terms: distinct DO terms in the output map.
-        n_result_annotations: protein→DO pairs in the output (can exceed
-            ``n_mapped_annotations`` through one-to-many expansion, or fall below
-            it when two OMIM ids pool onto one DO term).
-        n_source_proteins / n_result_proteins: proteins carrying ≥1 term before
-            and after. The difference is the proteins that leave the layer
-            entirely because none of their diseases mapped.
-        n_expanded_annotations: input pairs that produced more than one DO term.
-        unmapped_terms: the source ids that mapped to nothing, most-used first.
-    """
-
-    n_source_terms: int = 0
-    n_mapped_terms: int = 0
-    n_source_annotations: int = 0
-    n_mapped_annotations: int = 0
-    n_result_terms: int = 0
-    n_result_annotations: int = 0
-    n_source_proteins: int = 0
-    n_result_proteins: int = 0
-    n_expanded_annotations: int = 0
-    unmapped_terms: List[str] = field(default_factory=list)
-
-    @property
-    def term_coverage(self) -> float:
-        """Fraction of distinct source ids that map to a DO term."""
-        return self.n_mapped_terms / self.n_source_terms if self.n_source_terms else 0.0
-
-    @property
-    def annotation_coverage(self) -> float:
-        """Fraction of protein→term annotations that survive the re-keying."""
-        if not self.n_source_annotations:
-            return 0.0
-        return self.n_mapped_annotations / self.n_source_annotations
 
 
 def _resolve_replacement(
@@ -307,102 +248,32 @@ def build_doid_xref_map(path: Path, xref_prefix: str = "MIM") -> XrefMapping:
 
 def remap_protein_terms(
     protein_terms: Dict[str, Set[str]],
-    mapping: "SupportsTargets",
+    mapping: XrefMapping,
     label: str = "OMIM→DOID",
-    *,
-    key_label: str = "protein",
-    value_label: str = "term",
-    target_label: str = "Disease Ontology term",
 ) -> Tuple[Dict[str, Set[str]], RemapCoverage]:
-    """Re-key the *values* of a ``{key: {source id}}`` map through ``mapping``.
+    """Re-key a ``{protein: {source id}}`` map onto DO terms.
 
     One-to-many source ids expand to every target; unmapped ones are dropped
-    (and counted); keys left with no value at all disappear from the map, as
+    (and counted); proteins left with no term at all disappear from the map, as
     they must — the Fisher engine treats an absent protein as having no
     annotation, which is exactly right for a protein whose only diseases are
     outside DO.
 
-    The defaults describe the DOID use (proteins keyed, disease ids as values).
-    ``mapping`` can be any object with a ``targets(source_id) -> Set[str]``
-    method; the gene-keyed layers (:mod:`src.gene_mapping`) reuse this with the
-    axes swapped, and pass ``key_label``/``value_label``/``target_label`` so the
-    log lines name what was actually remapped.
+    A thin DOID-flavoured wrapper over the generic :func:`src.remap.remap_values`
+    (which the gene-keyed layers also use, on the protein axis).
 
     Returns:
         ``(remapped map, coverage)``. The coverage report is returned rather than
-        only logged so callers and tests can assert on it. Its "term" counters
-        range over the *values* being remapped and its "protein" counters over
-        the *keys* — for an axis-swapped caller, read them accordingly.
+        only logged so callers and tests can assert on it.
     """
-    result: Dict[str, Set[str]] = {}
-    source_term_use: Dict[str, int] = defaultdict(int)
-    n_source_annotations = 0
-    n_mapped_annotations = 0
-    n_expanded = 0
-
-    for protein, terms in protein_terms.items():
-        mapped: Set[str] = set()
-        for term in terms:
-            n_source_annotations += 1
-            source_term_use[term] += 1
-            targets = mapping.targets(term)
-            if targets:
-                n_mapped_annotations += 1
-                if len(targets) > 1:
-                    n_expanded += 1
-                mapped |= targets
-        if mapped:
-            result[protein] = mapped
-
-    unmapped = sorted(
-        (term for term in source_term_use if not mapping.targets(term)),
-        key=lambda term: (-source_term_use[term], term),
+    return remap_values(
+        protein_terms,
+        mapping,
+        label,
+        key_label="protein",
+        value_label="term",
+        target_label="Disease Ontology term",
     )
-    coverage = RemapCoverage(
-        n_source_terms=len(source_term_use),
-        n_mapped_terms=len(source_term_use) - len(unmapped),
-        n_source_annotations=n_source_annotations,
-        n_mapped_annotations=n_mapped_annotations,
-        n_result_terms=len({term for terms in result.values() for term in terms}),
-        n_result_annotations=sum(len(terms) for terms in result.values()),
-        n_source_proteins=len(protein_terms),
-        n_result_proteins=len(result),
-        n_expanded_annotations=n_expanded,
-        unmapped_terms=unmapped,
-    )
-
-    logger.info(f"Re-keyed annotations {label}:")
-    logger.info(
-        f"  {value_label} coverage: {coverage.n_mapped_terms:,} / "
-        f"{coverage.n_source_terms:,} distinct source ids "
-        f"({coverage.term_coverage:.1%})"
-    )
-    logger.info(
-        f"  annotation coverage: {coverage.n_mapped_annotations:,} / "
-        f"{coverage.n_source_annotations:,} {key_label}-{value_label} "
-        f"annotations ({coverage.annotation_coverage:.1%})"
-    )
-    logger.info(
-        f"  {key_label}s: {coverage.n_source_proteins:,} → "
-        f"{coverage.n_result_proteins:,}; {value_label}s: "
-        f"{coverage.n_source_terms:,} → {coverage.n_result_terms:,}; "
-        f"annotations: {coverage.n_source_annotations:,} → "
-        f"{coverage.n_result_annotations:,}"
-    )
-    if coverage.n_expanded_annotations:
-        logger.info(
-            f"  one-to-many expansions applied: "
-            f"{coverage.n_expanded_annotations:,} annotations"
-        )
-    if unmapped:
-        logger.warning(
-            f"  {len(unmapped):,} source ids had no {target_label} and "
-            f"were dropped (covering "
-            f"{coverage.n_source_annotations - coverage.n_mapped_annotations:,} "
-            "annotations); most used: "
-            + ", ".join(f"{term} ×{source_term_use[term]}" for term in unmapped[:5])
-        )
-    return result, coverage
 
 
 class DiseaseOntologyAnnotationSource(AnnotationSource):

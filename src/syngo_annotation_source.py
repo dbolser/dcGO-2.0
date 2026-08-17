@@ -32,13 +32,13 @@ from typing import Dict, Iterator, List, Optional, Set, Tuple
 from loguru import logger
 
 from src.annotation_source import AnnotationSource, OntologySpec
-from src.disease_ontology import RemapCoverage
 from src.gene_mapping import (
     GeneAccessionIndex,
     GeneAccessionMap,
     parse_gene_accession_index,
     remap_gene_annotations,
 )
+from src.remap import RemapCoverage
 
 #: SynGO terms are GO ids plus SynGO-specific ``SYNGO:`` extensions, so the
 #: spec declares no single term prefix.
@@ -169,8 +169,8 @@ class SynGOAnnotationSource(AnnotationSource):
     def __init__(self, zip_path: Path, dat_path: Path) -> None:
         self.zip_path = Path(zip_path)
         self.dat_path = Path(dat_path)
-        #: Populated by :meth:`parse`; axis-swapped as documented in
-        #: :func:`src.gene_mapping.remap_gene_annotations`.
+        #: Populated by :meth:`parse`; its *values* are the HGNC ids, its
+        #: *keys* the SynGO terms (see :func:`src.gene_mapping.remap_gene_annotations`).
         self.coverage: Optional[RemapCoverage] = None
         #: HGNC ids that only resolved through their approved symbol.
         self.n_symbol_fallback: int = 0

@@ -24,8 +24,8 @@ from typing import Dict, Optional, Set
 from loguru import logger
 
 from src.annotation_source import AnnotationSource, OntologySpec
-from src.disease_ontology import RemapCoverage
 from src.gene_mapping import parse_gene_accession_index, remap_gene_annotations
+from src.remap import RemapCoverage
 
 #: Human Phenotype Ontology terms, e.g. ``HP:0001250``.
 HPO_SPEC = OntologySpec(
@@ -80,8 +80,8 @@ class HPOAnnotationSource(AnnotationSource):
     def __init__(self, genes_to_phenotype_path: Path, dat_path: Path) -> None:
         self.genes_to_phenotype_path = Path(genes_to_phenotype_path)
         self.dat_path = Path(dat_path)
-        #: Populated by :meth:`parse`; axis-swapped as documented in
-        #: :func:`src.gene_mapping.remap_gene_annotations`.
+        #: Populated by :meth:`parse`; its *values* are the gene ids, its
+        #: *keys* the HP terms (see :func:`src.gene_mapping.remap_gene_annotations`).
         self.coverage: Optional[RemapCoverage] = None
 
     def parse(self) -> Dict[str, Set[str]]:

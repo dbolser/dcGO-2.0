@@ -145,7 +145,7 @@ class TestSynGOAnnotationSource:
     def test_unmapped_gene_and_fallback_are_counted(self, zip_path, dat):
         source = SynGOAnnotationSource(zip_path, dat)
         source.parse()
-        assert source.coverage.unmapped_terms == ["HGNC:3", "HGNC:4", "HGNC:9"]
+        assert source.coverage.unmapped_values == ["HGNC:3", "HGNC:4", "HGNC:9"]
         assert source.n_symbol_fallback == 1
 
     def test_spec_has_no_single_term_prefix(self, zip_path, dat):
