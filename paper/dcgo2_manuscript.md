@@ -498,12 +498,25 @@ current-release run retains 165,823 `[A8]`. Feature space is dominated by
 combinations: 19,230 single domains expand to 102,206 features once contiguous
 pairs and triples are included `[A2, A3]`.
 
+> **PROVISIONAL — pre-regulates-fix era.** Both headline counts come from
+> manifest-less runs of the superseded configuration (no relative inference,
+> no input propagation) and are to be regenerated from post-fix,
+> manifest-carrying runs. The Fisher stage itself does not propagate, so
+> these counts are not corrupted by the edge defect — but they no longer
+> describe the method §2 now specifies. Under the paper-parity single-domain
+> configuration the corresponding count is 30,655 `[K4]`.
+
 We stress that "significant" here means only that: no minimum-support or
 effect-size policy is applied, so the set includes associations resting on very
 small contingency tables `[H19]`. The counts above should be read as the size of
 a hypothesis set, not as a count of validated findings.
 
 ### 3.2 Coverage of the curated InterPro2GO reference
+
+> **PROVISIONAL — pre-regulates-fix era.** Both sides of this comparison are
+> propagated to ancestor closure through the GO processor, which at the time
+> of these runs traversed the regulates-family edges `[K3]`. Every figure in
+> this subsection must be regenerated from post-#67 runs.
 
 At the FDR < 0.01 operating point the association set recovers **64.7%** of
 curated InterPro2GO pairs — 30,673 of 47,393 propagated pairs on the domains
@@ -520,6 +533,15 @@ curation gap, not demonstrated errors. This evaluation cannot establish precisio
 and is not independent validation `[H16]`.
 
 ### 3.3 Temporal benchmark: what the headline depends on
+
+> **PROVISIONAL — pre-regulates-fix era.** The benchmark's no-knowledge gate,
+> its truth sets, the naive baseline's term frequencies and the p-score
+> transfer all propagate through the GO processor, which at the time of these
+> runs traversed the regulates-family edges `[K3]`. Cohort sizes and every
+> value in Tables 1 and 2 must be regenerated from post-#67 runs before
+> submission; the qualitative reading below is retained because the defect
+> applies identically to dcGO and to both baselines, but no number in this
+> subsection should be quoted as current.
 
 **Cohorts.** The no-knowledge benchmark comprises 324 biological-process, 418
 molecular-function and 572 cellular-component proteins at IC ≥ 0 `[C1a]`. These
@@ -625,6 +647,14 @@ more from protein-centric metrics alone.
 
 ### 3.4 Domain-centric effect of the relative test
 
+> **PROVISIONAL — superseded machinery, pre-regulates-fix era.** This
+> measurement evaluated the earlier *post-hoc* relative filter, which has
+> since been replaced by the in-inference combination of §2.5, and its
+> propagation ran over the pre-#67 edge set `[K3]`. It is retained as the
+> only committed measurement of the relative test's domain-centric direction;
+> it must be re-run under the current design (`--enable-relative-inference`)
+> before any number here is quoted.
+
 Scored directly against propagated InterPro2GO on the shared single-domain
 space, the base association set gives coverage 0.631 at a precision floor of
 0.218 (134,610 predicted pairs, 29,382 recovered); adding the relative
@@ -640,6 +670,12 @@ uncertainty was computed for the 0.218 → 0.253 difference `[B9]`, so it should
 read as a direction, not as a significant improvement.
 
 ### 3.5 Emergent domain combinations
+
+> **Era note.** The candidate set derives from the current-release
+> association run, a manifest-less pre-parity artifact (§3.1). The emergence
+> statistic itself does not propagate, so the edge fix does not touch the
+> arithmetic below, but the counts inherit the association set's era and will
+> be regenerated with it.
 
 Of the supra-domain associations in the current human GO run, 22,243 survive the
 redundant-signature filter `[D3]` and **24** are emergent beyond their
@@ -673,6 +709,14 @@ that produced the associations, so it measures internal consistency of the
 evidence, not predictive power `[D14]`. That is what the next subsection tests.
 
 ### 3.6 Held-out test: the associations predict, the ranking does not
+
+> **PROVISIONAL — pre-regulates-fix era.** The prediction and hit sets in
+> this subsection are defined over propagated non-IEA and experimental
+> annotation closures computed through the pre-#67 GO processor `[K3]`, and
+> the underlying 2021 association set is a manifest-less pre-parity run. The
+> verdicts below (the associations predict; the ranking shows no demonstrated
+> advantage) are qualitative and paired, but every number must be regenerated
+> from post-fix runs.
 
 Applying the score to the 2021 association set yields 22,376 candidates, of which
 10,136 leave at least one standing prediction `[E1]`.
@@ -741,6 +785,14 @@ leaves.
 Applying the held-out enrichment statistic of §3.6 to seven vocabularies trained
 on an archived April 2021 Swiss-Prot release gives the values in Table 3.
 
+> **Era note.** The non-GO rows propagate over their own hierarchies, which
+> are read by the light `is_a`/`part_of`-only OBO reader and its companions
+> and were therefore never exposed to the regulates-edge defect. The **GO
+> anchor row is pre-regulates-fix era** `[K3]` and is PROVISIONAL with the
+> rest of the GO-propagated results; since it is the control the correction
+> narrative leans on, the whole table should be re-anchored after the post-fix
+> regeneration.
+
 **Table 3.** Held-out enrichment by vocabulary, 2021 → 2026, after the
 species correction. Values from `validation/temporal_breadth_metrics.tsv`.
 
@@ -797,15 +849,6 @@ candidate set as well as in protocol `[F14]`. Second, the rows pool single
 domains and supra-domains, so this table does **not** test whether the emergent
 (combination-specific) claim generalises beyond GO `[F12]` — which is the more
 interesting question and remains open.
-
-> **Placeholder for corrected results.**
-> `[TABLE 3-CORRECTED — to be inserted after the species-filtering fix.]`
-> The recomputation must (i) restrict every UniProt-native source to the target
-> taxon, (ii) set the contingency-table row space to the intersection of the
-> annotation and domain protein sets rather than their union, (iii) re-run every
-> t0 vocabulary training run, and (iv) re-run `validation/temporal_breadth.py`.
-> Until then, no claim of any kind should be made about whether the domain–term
-> signal generalises beyond the Gene Ontology.
 
 ---
 
@@ -899,9 +942,17 @@ general performance, calibration, or superiority" `[H20]`.
 5. **The random-domain null is a single seeded shuffle**, not a permutation
    distribution `[H3]`. No empirical p-value or null interval exists, so
    "1.3–25× above random" is a ratio of two point estimates.
-6. **No component ablation.** The contribution of supra-domains, shrinkage and
-   True Path propagation has not been isolated `[H4]`, so we cannot say which
-   parts of the method carry the signal.
+6. **The component ablation has now been run, and it is negative for two of
+   three components.** Over 12 aspect × IC cells with a protein-level paired
+   bootstrap: supra-domains improve 0/12 cells; the shrinkage rung moved
+   0/12 cells (and the step has since been removed `[K7]`); and the True Path
+   rung is significantly worse in 12/12 — but that last figure is a statement
+   about the then-combined filter-plus-propagation, measured with a
+   background defect since fixed and over the pre-fix edge set, so it cannot
+   be attributed to propagation and must be re-measured against the split
+   flags `[K8]`. On this benchmark the best configuration is single domains
+   only; the supra-domain machinery's demonstrated value is the emergent
+   combinations of §3.5–3.6, not protein-centric F_max.
 7. **Weak comparators.** A frequency baseline and a shuffled null establish that
    signal exists; they do not establish utility. No comparison exists against
    original dcGO output, against a homology-transfer baseline, or against any
@@ -914,12 +965,13 @@ general performance, calibration, or superiority" `[H20]`.
 
 **Statistical validity.**
 
-10. **The shrinkage step is a heuristic, not a fitted empirical-Bayes model.** It
-    geometrically interpolates observed and constituent *p*-values with a hand-set
-    decay; the transformed quantities have not been shown to be valid *p*-values,
-    so BH applied to them does not guarantee nominal FDR `[H5]`. It is disabled
-    in every run reported here, and we make **no** FDR-control claim for any
-    configuration that enables it.
+10. **The shrinkage step was a heuristic, not a fitted empirical-Bayes model,
+    and has been removed.** It geometrically interpolated observed and
+    constituent *p*-values with a hand-set decay; the transformed quantities
+    were not valid *p*-values, so BH over them did not control FDR `[H5]`, and
+    enabling it inflated rejections by 184% with no measurable effect on
+    prediction quality `[K7]`. It was disabled in every run reported here and
+    no longer exists in the codebase.
 11. **BH is applied across a strongly dependent hypothesis family** — nested GO
     terms, supra-domains containing their constituents, co-occurring domains —
     without simulation or hierarchical multiple-testing correction `[H15]`.
@@ -943,14 +995,21 @@ general performance, calibration, or superiority" `[H20]`.
 
 **Scope and implementation.**
 
-17. **The multi-ontology results are invalid pending recomputation** (§3.7), due
-    to the species-filtering defect in the UniProt-native sources `[F]`.
-18. **Benchmark artifacts are untracked.** The configuration-comparison outputs
-    are not committed, so their provenance is unclear `[H12]`, which is why the
-    A–D comparison is marked provisional.
-19. **No run manifest.** No output records the commit, command line, dependency
-    lock, input releases or checksums, so no reported number is exactly
-    reproducible today.
+17. **Every GO-propagated result in this draft is pre-regulates-fix era.** The
+    species-filtering defect that previously invalidated §3.7 has been fixed
+    and those rows regenerated `[F]`; the outstanding regeneration debt is now
+    the propagation-edge fix: §3.2–3.4, §3.6 and the §3.7 GO anchor must be
+    reproduced from post-#67, manifest-carrying runs `[K3, K12]`.
+18. **The A–D configuration-comparison artifacts are now committed**
+    (`validation/bench_A`–`bench_D`), closing the provenance gap the review
+    raised `[H12]`; the comparison itself still lacks a paired test or
+    confidence interval and stays provisional (§3.3).
+19. **Run manifests now exist but cover none of the reported numbers.** Every
+    run writes `run_manifest_<ontology>.json` with input/output SHA-256s,
+    release headers, Git state, dependency-lock hash, command line and
+    thresholds `[K12]` — but all numbers in this draft predate the machinery,
+    so none is exactly reproducible today. Regeneration under manifests is a
+    prerequisite for submission.
 20. **Implementation caveats that touch reported behaviour:** a numerical failure
     in the hypergeometric score falls back to a value of 50.0, i.e. a plausible
     medium-confidence score `[H13]`; and `--num-cores` is logged but does not
@@ -985,14 +1044,20 @@ annotation files, including the dated archive from which release 205 (April 2021
 was taken; the Gene Ontology `go-basic.obo` [4]; the UniProt Swiss-Prot flat file
 and its companion vocabularies [8]; Expasy ENZYME; and InterPro2GO.
 
-**Reproducibility status — incomplete.** Only the t0 annotation release is pinned
-by identifier. The t1 annotation snapshot, the GO release, the InterPro release
-and the Swiss-Prot releases are referenced through mutable "current" URLs with no
-checksums, and no run manifest is emitted `[H8, H12]`. Regenerating the numbers in
-this manuscript exactly is therefore **not currently possible from a clean
-checkout**. Closing this — pinned releases with checksums, a machine-readable run
-manifest, an archived input snapshot, and one-command regeneration of every table
-— is a prerequisite for submission.
+**Reproducibility status — machinery in place, numbers not yet regenerated.**
+Every run now emits a machine-readable manifest
+(`run_manifest_<ontology>.json`: input/output SHA-256 digests, release headers
+where the format supplies one, Git state, dependency-lock hash, command line,
+thresholds, and the propagation-edge policy as an era marker), with a
+completion checklist in `REPRODUCIBILITY.md` `[K12]`. However, only the t0
+annotation release is pinned by identifier; the t1 snapshot, the GO release,
+the InterPro release and the Swiss-Prot releases are still referenced through
+mutable "current" URLs `[H8]`, and **every number in this manuscript predates
+the manifest machinery**. Regenerating the numbers exactly is therefore not
+currently possible from a clean checkout. Closing this — the post-fix,
+manifest-carrying regeneration of every table, pinned releases, an archived
+input snapshot, and one-command regeneration — is a prerequisite for
+submission.
 
 ---
 
