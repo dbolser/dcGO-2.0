@@ -10,6 +10,7 @@ from src.hierarchy import (
     closure_ancestors,
     dotted_ancestors,
     parse_obo_child_parents,
+    propagate_annotation_map,
     propagate_via_ancestors,
 )
 
@@ -38,6 +39,28 @@ class TestClosureAncestors:
         # Not expected in real DAGs, but must terminate with a finite result.
         anc = closure_ancestors({"a": {"b"}, "b": {"a"}})
         assert isinstance(anc("a"), set)
+
+
+class TestPropagateAnnotationMap:
+    def test_closure_over_ancestors(self):
+        anc = closure_ancestors({"c": {"b"}, "b": {"a"}})
+        result = propagate_annotation_map({"P1": {"c"}, "P2": {"b"}}, anc)
+        assert result == {"P1": {"c", "b", "a"}, "P2": {"b", "a"}}
+
+    def test_input_map_not_mutated(self):
+        anc = closure_ancestors({"c": {"b"}})
+        original = {"P1": {"c"}}
+        propagate_annotation_map(original, anc)
+        assert original == {"P1": {"c"}}
+
+    def test_empty_map(self):
+        # The run script computes an expansion ratio from these totals; an
+        # empty intersection must yield an empty map, not a crash.
+        assert propagate_annotation_map({}, closure_ancestors({})) == {}
+
+    def test_term_without_ancestors_kept(self):
+        anc = closure_ancestors({})
+        assert propagate_annotation_map({"P1": {"root"}}, anc) == {"P1": {"root"}}
 
 
 class TestPropagateViaAncestors:

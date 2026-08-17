@@ -94,7 +94,7 @@ from scipy.stats import hypergeom
 
 from src.annotation_source import restrict_to_universe
 from src.domain_annotation_parser import DOMAIN_KEYS, DomainAnnotationParser
-from src.hierarchy import propagate_via_ancestors
+from src.hierarchy import propagate_annotation_map, propagate_via_ancestors
 from src.ontology_processor import OntologyProcessor
 from src.ontology_registry import (
     OntologyEntry,
@@ -846,20 +846,15 @@ def main(argv: list[str] | None = None) -> int:
             input_ancestors = ontology_entry.build_ancestors(ontology_paths)
 
         before = sum(len(terms) for terms in protein_go_map.values())
-        cache: dict = {}
-        propagated_map = {}
-        for protein, terms in protein_go_map.items():
-            closure = set(terms)
-            for term in terms:
-                if term not in cache:
-                    cache[term] = frozenset(input_ancestors(term))
-                closure |= cache[term]
-            propagated_map[protein] = closure
-        protein_go_map = propagated_map
+        protein_go_map = propagate_annotation_map(protein_go_map, input_ancestors)
         after = sum(len(terms) for terms in protein_go_map.values())
+        # With an empty GAF ∩ InterPro intersection there is nothing to
+        # propagate and no ratio to report; the run still has to reach its
+        # clean "no pairs to test" abort rather than divide by zero here.
+        ratio = f" ({after / before:.1f}x)" if before else ""
         logger.info(
             f"  True Path Rule on input annotations: {before:,} → {after:,} "
-            f"(protein, term) pairs ({after / before:.1f}x)"
+            f"(protein, term) pairs{ratio}"
         )
 
     # Calibration control. Comparing two ontology layers by their significant

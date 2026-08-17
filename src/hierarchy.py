@@ -93,6 +93,30 @@ def parents_from_map(
     return parents
 
 
+def propagate_annotation_map(
+    protein_terms: Dict[str, Set[str]],
+    ancestors_fn: Callable[[str], Iterable[str]],
+) -> Dict[str, Set[str]]:
+    """Apply the True Path Rule to a ``{protein: {terms}}`` annotation map.
+
+    Each protein's term set is closed over ``ancestors_fn``: an annotation to a
+    child term implies its ancestors by definition. Ancestors are looked up
+    once per distinct term, not once per (protein, term) — the annotation map
+    has ~10^6 pairs over ~10^4 terms. The input map is not mutated.
+    """
+    cache: Dict[str, frozenset] = {}
+    propagated: Dict[str, Set[str]] = {}
+    for protein, terms in protein_terms.items():
+        closure = set(terms)
+        for term in terms:
+            cached = cache.get(term)
+            if cached is None:
+                cached = cache[term] = frozenset(ancestors_fn(term))
+            closure |= cached
+        propagated[protein] = closure
+    return propagated
+
+
 def nearest_parents(
     ordered_ancestors_fn: Callable[[str], Sequence[str]],
 ) -> Callable[[str], Set[str]]:
