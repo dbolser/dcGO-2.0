@@ -226,7 +226,7 @@ Human GO, `--disable-supra-domains`, FDR < 0.01:
 | Configuration | Significant associations |
 |---|---:|
 | overall inference only | 44,453 |
-| `--enable-relative-inference` (paper method) | **3,876** |
+| `--enable-relative-inference` | **3,876** |
 
 The drop is large because the relative p-value is now held to the same FDR
 standard as the overall one (a threshold of 1.2e-07 on this run), rather than
@@ -250,6 +250,14 @@ Two caveats worth knowing:
   cross-reference layers (`disease`, `orphanet`, `unipathway`, `complex`,
   `drugbank`, `pharos`, `condensate`, `rhea`, `xref`) have no parental
   background to test against and are rejected with an explicit error.
+- **The relative inference is not usable yet, and both stages are off by
+  default.** Two known deviations from the paper block it: our parental
+  background is the maximum over per-parent tests where the paper's Figure 1
+  caption specifies one test against the *union* of the direct parents'
+  proteins, and terms with no parents skip the test entirely so the DAG roots
+  pass untested. In practice enabling it makes the output *less* specific, which
+  is the opposite of its purpose. See `VALIDATION_PLAN.md` next-steps item 2 for
+  the measurements, including the widened-universe experiment that failed.
 - **Neither stage is on by default yet.** Both are opt-in while the numbers
   they change are re-measured.
 

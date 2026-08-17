@@ -194,15 +194,19 @@ tables); enumerating co-occurring pairs makes it 9.5M tables and 268 s.
   inference* (Step 2, vs. the true-path rule at Step 3) and is now
   `--enable-relative-inference`, available for all 12 ontologies with a
   hierarchy, and it *removes* associations rather than adding them.
-- **Relative inference now matches the paper** (was VALIDATION_PLAN next-steps
-  item 2). It runs *before* the BH correction: each candidate pair gets a
-  parental-background p-value, and BH corrects `max(overall_p, relative_p)` —
-  an intersection-union statistic, hence a valid p-value without further
-  correction. The reported h-score is correspondingly `min(overall, relative)`.
-  It was previously a post-hoc `alpha < 0.05` filter applied after BH, which
-  gave the relative dimension no FDR control at all. On human GO single domains
-  this takes FDR<0.01 associations from 44,453 to **3,876**, because the
-  relative p-value is now held to the same standard as the overall one.
+- **Relative inference runs before the BH correction** (`--enable-relative-inference`,
+  opt-in). Each candidate pair gets a parental-background p-value and BH corrects
+  `max(overall_p, relative_p)` — an intersection-union statistic, hence a valid
+  p-value without further correction; the h-score is `min(overall, relative)`.
+  That part matches the paper. **Two things do not, and the layer is not usable
+  yet — see `VALIDATION_PLAN.md` next-steps item 2:**
+  - the parental background is our max over per-parent tests, where the paper's
+    Figure 1 caption defines it as one test against the *union* of the direct
+    parents' proteins (56.1% of GO terms have more than one parent, and ours is
+    the conservative direction);
+  - terms with no parents are exempt from the test entirely, so `relative_p = 0`
+    and they pass on the overall inference alone. The three GO roots come out as
+    the top three results on an allspecies run.
 - **The §4 ablation cannot attribute its True Path result to either stage.** It
   was run when one flag drove both, so "the True Path Rule is significantly
   worse in 12/12 cells" is a statement about filter-plus-propagation, measured
