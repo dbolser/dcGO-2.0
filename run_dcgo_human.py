@@ -107,6 +107,7 @@ from src.hierarchy import (
     propagate_annotation_map,
     propagate_via_ancestors,
 )
+from src.information_content import information_content
 from src.ontology_processor import OntologyProcessor
 from src.ontology_registry import (
     OntologyEntry,
@@ -353,6 +354,8 @@ def validate_arguments(
         parser.error(f"--batch-size must be positive, got {args.batch_size}")
     if args.min_support < 0:
         parser.error(f"--min-support must be >= 0, got {args.min_support}")
+    if args.min_ic < 0:
+        parser.error(f"--min-ic must be >= 0, got {args.min_ic}")
     if args.num_cores <= 0:
         parser.error(f"--num-cores must be positive, got {args.num_cores}")
     if not args.species or "/" in args.species:
@@ -385,6 +388,32 @@ def validate_arguments(
 def build_ontology_paths(args: argparse.Namespace) -> dict[str, Path]:
     """Compatibility helper backed by the generic input-resolution request."""
     return RunRequest.from_namespace(args).ontology_paths()
+
+
+def resolve_ic_source(args: argparse.Namespace, ontology_entry: OntologyEntry) -> str:
+    """Where the frequencies behind the exported term IC come from in this run.
+
+    ``"propagated"``: the run's True-Path-propagated protein→term map — the
+    correct estimate whenever a hierarchy is in play, because an unpropagated
+    ``P(t)`` understates every non-leaf term's frequency and inflates its IC.
+    Chosen whenever the run already engages the hierarchy (any of the three
+    hierarchy stage flags) or the IC actually gates output (``--min-ic``), each
+    of which makes the hierarchy inputs mandatory.
+
+    ``"direct"``: the input map as annotated. Correct as-is for a flat
+    vocabulary. For a hierarchy ontology it applies only to a bare run (no
+    hierarchy flags, no floor), where requiring the hierarchy file would change
+    the default run's input contract just to decorate a column; the manifest
+    records which estimate a given artifact carries.
+    """
+    if ontology_entry.supports_true_path and (
+        args.propagate_annotations
+        or args.enable_true_path
+        or args.enable_relative_inference
+        or args.min_ic > 0
+    ):
+        return "propagated"
+    return "direct"
 
 
 def start_run_manifest(
@@ -424,6 +453,9 @@ def start_run_manifest(
             args.enable_true_path
             or args.enable_relative_inference
             or args.propagate_annotations
+            # The IC floor's frequencies are estimated over the propagated
+            # map, so the floor alone also reads the hierarchy.
+            or args.min_ic > 0
         )
         else []
     )
@@ -489,6 +521,15 @@ def start_run_manifest(
                 # FDR significance alone. Recorded explicitly rather than by
                 # omission, either way.
                 "min_proteins_per_association": args.min_support or None,
+                # 0 means no information-content floor. IC is the shared
+                # annotation-frequency convention (src/information_content.py)
+                # over this run's own analysable universe; like min-support it
+                # is applied after BH, narrowing only what is reported.
+                "min_ic": args.min_ic or None,
+                # Whether the ic column (and the floor) was estimated from the
+                # True-Path-propagated input map or the direct one — see
+                # resolve_ic_source.
+                "ic_source": resolve_ic_source(args, ontology_entry),
                 "min_domain_length": MIN_DOMAIN_LENGTH,
                 "max_supra_domain_length": MAX_SUPRA_DOMAIN_LENGTH,
                 "enable_supra_domains": bool(args.enable_supra_domains),
@@ -546,6 +587,19 @@ def build_argument_parser() -> argparse.ArgumentParser:
         "never alters the hypothesis family. Default 0 (no filter): the emergent "
         "domain combinations this method exists to find sit at n = 2-8 proteins, "
         "so a non-zero default would delete them",
+    )
+    parser.add_argument(
+        "--min-ic",
+        type=float,
+        default=0.0,
+        metavar="FLOAT",
+        help="Discard associations whose term's information content is below "
+        "this floor. IC(t) = -log2(fraction of the analysed universe annotated "
+        "to t, True-Path propagated), so DAG roots have IC 0 by construction "
+        "and any positive floor removes them. Applied AFTER the FDR "
+        "correction, exactly like --min-support, so it never alters the "
+        "hypothesis family. Default 0 (no filter); the ic column is exported "
+        "either way",
     )
     parser.add_argument(
         "--num-cores",
@@ -1064,6 +1118,35 @@ def main(argv: list[str] | None = None) -> int:
             "These results are a null, not predictions."
         )
 
+    # Term information content over this run's own analysable universe,
+    # exported per association (the ic column) and enforced by the --min-ic
+    # reporting floor. The frequencies must come from the True-Path-propagated
+    # map whenever a hierarchy is in play: an unpropagated P(t) understates
+    # every non-leaf term's frequency and inflates mid-level IC. Which estimate
+    # this run used is recorded in the manifest (thresholds.ic_source).
+    ic_source = resolve_ic_source(args, ontology_entry)
+    if ic_source == "propagated" and not args.propagate_annotations:
+        # Propagate a throwaway copy for the frequency estimate only; the
+        # tested map itself stays exactly as the flags left it.
+        if ontology_entry.build_ancestors is None:
+            if input_processor is None:
+                logger.info(f"Loading GO ontology from: {args.go_ontology}")
+                # Kept in input_processor so Stage 4.5 reuses this parse.
+                input_processor = OntologyProcessor(args.go_ontology)
+            ic_ancestors = input_processor.get_ancestors
+        else:
+            ic_ancestors = ontology_entry.build_ancestors(ontology_paths)
+        ic_map, _ic_coverage = propagate_annotation_map(protein_go_map, ic_ancestors)
+        term_ic = information_content(ic_map)
+        del ic_map
+    else:
+        # Already propagated (--propagate-annotations), or a run that never
+        # touches a hierarchy ("direct" — exact for flat vocabularies).
+        term_ic = information_content(protein_go_map)
+    logger.info(
+        f"  Term information content: {len(term_ic):,} terms ({ic_source} frequencies)"
+    )
+
     # Build protein-domain map (using lists for compatibility with ontology processor)
     # CRITICAL: Include both single domains AND supra-domains as per dcGO methodology
     protein_domain_map = {}
@@ -1395,6 +1478,30 @@ def main(argv: list[str] | None = None) -> int:
             f"{int(significant.sum()):,} kept, {dropped:,} dropped"
         )
 
+    # Each evaluated pair's term IC, read by the floor below and exported as
+    # the ic column. Terms absent from the IC map (never annotated in this
+    # universe) read as 0.0 — "no frequency information".
+    term_ic_arr = np.fromiter(
+        (term_ic.get(term, 0.0) for term in go_list),
+        dtype=np.float64,
+        count=len(go_list),
+    )
+    pair_ic = term_ic_arr[pair_index % len(go_list)]
+
+    # Information-content floor: same post-BH placement as --min-support, for
+    # the same reason — filtering beforehand would shrink the hypothesis family
+    # by a property of the outcome, so applied here it only narrows what is
+    # reported and changes no q-value. Roots have IC 0 by construction, so any
+    # positive floor removes the vacuous top of the DAG — the terms the
+    # relative inference can never test because they have no parents.
+    if args.min_ic > 0:
+        dropped = int((significant & (pair_ic < args.min_ic)).sum())
+        significant &= pair_ic >= args.min_ic
+        logger.info(
+            f"  IC floor (ic >= {args.min_ic:g}, applied after BH): "
+            f"{int(significant.sum()):,} kept, {dropped:,} dropped"
+        )
+
     n_significant = int(significant.sum())
 
     # STAGE 5.5: Hierarchy post-processing (optional, two independent stages)
@@ -1540,7 +1647,7 @@ def main(argv: list[str] | None = None) -> int:
         f.write(
             f"domain\t{term_col}\tp_value\tadj_p_value\todds_ratio\t"
             f"odds_ratio_ci_low\todds_ratio_ci_high\thyper_score\t"
-            f"domain_type\tconstituent_domains\tn_observations\ta\tb\tc\td"
+            f"domain_type\tconstituent_domains\tn_observations\ta\tb\tc\td\tic"
             f"{xref_header}\n"
         )
         for idx in significant_indices:
@@ -1567,7 +1674,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"{pvalues[idx]:.6e}\t{adjusted_pvalues[idx]:.6e}\t{odds_ratios[idx]:.4f}\t"
                 f"{or_low:.4f}\t{or_high:.4f}\t{hyper_score:.2f}\t"
                 f"{meta.domain_type.value}\t{constituents}\t{meta.observation_count}\t"
-                f"{a}\t{b}\t{c}\t{d}"
+                f"{a}\t{b}\t{c}\t{d}\t{pair_ic[idx]:.4f}"
                 f"{xref_field(domain_id)}\n"
             )
 
@@ -1584,7 +1691,7 @@ def main(argv: list[str] | None = None) -> int:
     with open(top_file, "w") as f:
         f.write(
             f"rank\tdomain\t{term_col}\tp_value\tadj_p_value\todds_ratio\thyper_score\t"
-            f"domain_type\tconstituent_domains\tn_observations{xref_header}\n"
+            f"domain_type\tconstituent_domains\tn_observations\tic{xref_header}\n"
         )
         for rank, idx in enumerate(top_indices, 1):
             domain_idx = pair_index[idx] // len(go_list)
@@ -1606,7 +1713,8 @@ def main(argv: list[str] | None = None) -> int:
             f.write(
                 f"{rank}\t{domain_id}\t{go_list[go_idx]}\t"
                 f"{pvalues[idx]:.6e}\t{adjusted_pvalues[idx]:.6e}\t{odds_ratios[idx]:.4f}\t{hyper_score:.2f}\t"
-                f"{meta.domain_type.value}\t{constituents}\t{meta.observation_count}"
+                f"{meta.domain_type.value}\t{constituents}\t{meta.observation_count}\t"
+                f"{pair_ic[idx]:.4f}"
                 f"{xref_field(domain_id)}\n"
             )
 
@@ -1634,12 +1742,15 @@ def main(argv: list[str] | None = None) -> int:
         )
         with open(annotations_file, "w") as f:
             f.write(
-                f"domain\t{term_col}\tq_value\tassociation_score\tannotation_type\tdirect_source_term\n"
+                f"domain\t{term_col}\tq_value\tassociation_score\tannotation_type\tdirect_source_term\tic\n"
             )
             for ann in propagated_annotations:
+                # IC of the *annotated* term, so propagated rows show how
+                # little information the roll-up retains as it climbs.
                 f.write(
                     f"{ann.domain}\t{ann.go_term}\t{ann.q_value:.6e}\t{ann.association_score:.2f}\t"
-                    f"{ann.annotation_type}\t{ann.direct_source_term}\n"
+                    f"{ann.annotation_type}\t{ann.direct_source_term}\t"
+                    f"{term_ic.get(ann.go_term, 0.0):.4f}\n"
                 )
 
         logger.info(

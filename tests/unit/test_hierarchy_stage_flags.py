@@ -28,6 +28,7 @@ def _args(**overrides) -> argparse.Namespace:
         num_cores=8,
         species="human",
         min_support=0,
+        min_ic=0.0,
         ontology="go",
         enable_relative_inference=False,
         propagate_annotations=False,

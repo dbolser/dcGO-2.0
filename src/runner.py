@@ -24,6 +24,7 @@ class RunRequest:
     output_dir: Path
     fdr_threshold: float
     min_support: int
+    min_ic: float
     enable_true_path: bool
     enable_relative_inference: bool
     propagate_annotations: bool
@@ -66,6 +67,7 @@ class RunRequest:
             output_dir=args.output_dir,
             fdr_threshold=args.fdr_threshold,
             min_support=args.min_support,
+            min_ic=getattr(args, "min_ic", 0.0),
             enable_true_path=args.enable_true_path,
             enable_relative_inference=getattr(args, "enable_relative_inference", False),
             propagate_annotations=getattr(args, "propagate_annotations", False),
@@ -156,8 +158,10 @@ def resolve_inputs(request: RunRequest) -> InputResolution:
         true_path_unsupported=(
             request.enable_true_path and not entry.supports_true_path
         ),
-        # Relative inference reads the same hierarchy file propagation does, so
-        # either flag makes the hierarchy inputs mandatory up front.
+        # Relative inference reads the same hierarchy file propagation does,
+        # and the --min-ic floor's frequencies are estimated over the
+        # propagated map — so any of these makes the hierarchy inputs
+        # mandatory up front.
         missing_inputs=tuple(
             missing_inputs(
                 entry,
@@ -166,6 +170,7 @@ def resolve_inputs(request: RunRequest) -> InputResolution:
                     request.enable_true_path
                     or request.enable_relative_inference
                     or request.propagate_annotations
+                    or request.min_ic > 0
                 ),
             )
         ),

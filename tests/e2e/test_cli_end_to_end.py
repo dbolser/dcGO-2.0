@@ -53,6 +53,9 @@ EXPECTED_COLUMNS = [
     "b",
     "c",
     "d",
+    # The term's information content over the run's analysable universe
+    # (src/information_content.py); what the --min-ic reporting floor reads.
+    "ic",
 ]
 
 #: Carried by exactly the GO:0000001-annotated proteins — the pair that must be found.
@@ -223,6 +226,7 @@ class TestOutputSchema:
             assert int(row["n_observations"]) > 0
             for cell in ("a", "b", "c", "d"):
                 assert int(row[cell]) >= 0
+            assert float(row["ic"]) >= 0.0
             # An interval, not a point: low <= high, or both NaN.
             low, high = (
                 float(row["odds_ratio_ci_low"]),
