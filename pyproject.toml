@@ -114,7 +114,9 @@ files = [
     "src/disease_ontology.py",
     "src/ec_annotation_source.py",
     "src/hierarchy.py",
+    "src/information_content.py",
     "src/ontology_registry.py",
+    "validation/specificity_metrics.py",
 ]
 follow_imports = "silent"
 warn_return_any = true
