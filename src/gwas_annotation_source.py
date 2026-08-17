@@ -145,8 +145,7 @@ def _open_association_table(path: Path):
         members = archive.namelist()
         if len(members) != 1:
             raise ValueError(
-                f"{path} should contain exactly the association TSV; "
-                f"found {members}"
+                f"{path} should contain exactly the association TSV; found {members}"
             )
         return io.TextIOWrapper(archive.open(members[0]), encoding="utf-8")
     return open(path, "rt", encoding="utf-8")
@@ -253,9 +252,7 @@ class GWASCatalogAnnotationSource(AnnotationSource):
         self.coverage: Optional[RemapCoverage] = None
 
     def parse(self) -> Dict[str, Set[str]]:
-        gene_terms, self.filter_counts = parse_gwas_associations(
-            self.associations_path
-        )
+        gene_terms, self.filter_counts = parse_gwas_associations(self.associations_path)
         index = parse_gene_accession_index(self.dat_path)
         remapped, self.coverage = remap_gene_annotations(
             gene_terms, index.symbol, label="gene symbol→UniProt (GWAS/EFO)"

@@ -121,8 +121,7 @@ def dat(tmp_path):
 class TestIdNormalisation:
     def test_uri_forms_become_curies(self):
         assert (
-            trait_uri_to_curie("http://www.ebi.ac.uk/efo/EFO_0004574")
-            == "EFO:0004574"
+            trait_uri_to_curie("http://www.ebi.ac.uk/efo/EFO_0004574") == "EFO:0004574"
         )
         assert (
             trait_uri_to_curie("http://purl.obolibrary.org/obo/MONDO_0005148")

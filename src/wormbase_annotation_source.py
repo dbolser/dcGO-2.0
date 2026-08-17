@@ -126,9 +126,7 @@ def parse_wb_phenotype_association(path: Path) -> Dict[str, Set[str]]:
     ``NOT``-qualified rows are dropped and counted (negative evidence); any row
     whose term column is not a ``WBPhenotype:`` id is counted as malformed.
     """
-    return _parse_wb_gaf(
-        path, "WBPhenotype:", "WormBase phenotype association file"
-    )
+    return _parse_wb_gaf(path, "WBPhenotype:", "WormBase phenotype association file")
 
 
 def parse_wb_anatomy_association(path: Path) -> Dict[str, Set[str]]:
