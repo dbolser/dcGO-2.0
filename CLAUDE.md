@@ -80,9 +80,14 @@ uv run python scripts/download_data.py        # download required datasets
 uv run python extract_human_interpro.py       # one-time human subset extraction
 uv run python run_dcgo_human.py --num-cores 8 # statistical inference
 
-# With True Path Rule propagation
+# With True Path Rule propagation (paper Step 3 — adds ancestor annotations)
 uv run python run_dcgo_human.py --num-cores 8 \
     --enable-true-path --go-ontology data/raw/go_ontology/go-basic.obo
+
+# With the parental-background filter (paper Step 2 "relative inference" — GO
+# only, and it *removes* associations). Independent of --enable-true-path;
+# passing both reproduces what --enable-true-path alone used to do for GO.
+uv run python run_dcgo_human.py --enable-relative-inference
 
 # Other ontologies (see src/ontology_registry.py or --help for all 21)
 uv run python run_dcgo_human.py --ontology subcellular --enable-true-path
@@ -119,7 +124,7 @@ sbatch scripts/run_dcgo_hpc.sh
 
 **External inputs** (downloaded by `scripts/download_data.py`):
 - GOA annotations — protein → GO mappings (GAF 2.2)
-- GO ontology — `go-basic.obo` (only needed for `--enable-true-path`)
+- GO ontology — `go-basic.obo` (needed for `--enable-true-path` or `--enable-relative-inference`)
 - InterPro mappings — pre-computed `protein2ipr.dat.gz` domain annotations
 
 **Internal flow:**
@@ -184,10 +189,20 @@ tables); enumerating co-occurring pairs makes it 9.5M tables and 268 s.
   observed *rate* and recompute Fisher, which is a different method.
 - True Path Rule is opt-in (`--enable-true-path`), not part of the default run;
   it now errors out for ontologies with no hierarchy instead of silently
-  skipping. Its parental-background filter computes the background from the
-  **unpropagated** annotation map, so parents with no direct annotation have an
-  empty background and every child is rejected untested (54,951 such rejections
-  on the human t0 run). That is a defect, not a tuning choice.
+  skipping. **It is propagation and nothing else.** The parental-background
+  filter it used to run alongside for GO is the paper's separate *relative
+  inference* (Step 2, vs. the true-path rule at Step 3) and is now
+  `--enable-relative-inference` — GO-only, and it *removes* associations rather
+  than adding them. Our version is still a post-hoc `alpha < 0.05` filter
+  applied after BH, where the paper combines the overall and relative p-values
+  *before* correcting; that gap is VALIDATION_PLAN next-steps item 2.
+- **The §4 ablation cannot attribute its True Path result to either stage.** It
+  was run when one flag drove both, so "the True Path Rule is significantly
+  worse in 12/12 cells" is a statement about filter-plus-propagation, measured
+  additionally with the unpropagated-background defect in place (54,951
+  rejections; fixed in #46, now 237 on the same run). Propagation only adds
+  annotations and cannot by itself lower recall. Re-run the ablation against the
+  split flags before citing that number.
 - The surprise score re-ranks associations that already passed the dcGO FDR
   filter, using the same proteins — it measures internal consistency of the
   evidence, not out-of-sample performance. It is also **not a total order**: on

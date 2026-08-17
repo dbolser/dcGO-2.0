@@ -6,19 +6,27 @@ The True Path Rule has been successfully integrated into the production pipeline
 
 ## What is the True Path Rule?
 
-The True Path Rule ensures that if a protein is annotated with a specific GO term, it is also implicitly annotated with all ancestor terms in the GO hierarchy. For domain-GO associations:
+The True Path Rule ensures that if a protein is annotated with a specific GO term, it is also implicitly annotated with all ancestor terms in the GO hierarchy. For domain-GO associations that means:
 
-1. **Optimal Level Filtering**: Identifies the most specific (optimal level) GO term associations
-2. **Hierarchical Propagation**: Propagates direct associations up the GO hierarchy to parent terms
-3. **Annotation Type Tracking**: Distinguishes between direct (from statistical testing) and propagated annotations
+1. **Hierarchical Propagation**: Propagates direct associations up the GO hierarchy to ancestor terms
+2. **Annotation Type Tracking**: Distinguishes between direct (from statistical testing) and propagated annotations
+
+> **This document previously also described "optimal level filtering" as part of
+> the True Path Rule. It is not.** That is the dcGO paper's *relative inference*
+> (its Step 2), a Fisher test against the background of proteins annotated to a
+> term's direct parents. It removes associations rather than adding them, and it
+> is now selected by its own flag, `--enable-relative-inference`. The paper is
+> explicit that the true-path rule is Step 3, propagation alone. See the "Two
+> hierarchy stages" section of `README.md`.
 
 ## Implementation Details
 
 ### New Command Line Options
 
 ```bash
---enable-true-path       # Enable True Path Rule propagation
---go-ontology PATH       # Path to GO ontology file (default: data/raw/go_ontology/go.obo)
+--enable-true-path           # Propagate associations to ancestor terms (this document)
+--enable-relative-inference  # Parental-background filter — a separate stage, GO only
+--go-ontology PATH           # Path to GO ontology file (default: data/raw/go_ontology/go.obo)
 ```
 
 ### Pipeline Stages
@@ -27,10 +35,10 @@ The True Path Rule is applied as **Stage 5.5** (optional), after FDR correction:
 
 1. **Stage 1-4**: Standard pipeline (matrix building, Fisher's tests, FDR correction)
 2. **Stage 5**: FDR Correction → Identifies significant associations
-3. **Stage 5.5** (NEW): True Path Rule
+3. **Stage 5.5** (optional): hierarchy post-processing, two independent stages
    - Load GO ontology (`.obo` file)
-   - Apply optimal level filtering
-   - Propagate annotations up GO hierarchy
+   - *(if `--enable-relative-inference`)* parental-background filter — **removes** associations
+   - *(if `--enable-true-path`)* propagate annotations up the GO hierarchy — **adds** annotations
 4. **Stage 6**: Export Results (including propagated annotations)
 
 ### Code Architecture
@@ -158,7 +166,10 @@ The `ontology_processor.py` module includes:
 ## References
 
 The True Path Rule is described in:
-- Original dcGO paper (Stage 5 - True Path refinement)
+- Fang & Gough 2013 (`docs/1471-2105-14-S3-S9.pdf`), **Step 3**: "*following the
+  true-path rule to obtain the complete domain-centric GO annotations*". Their
+  Step 2 is the two statistical inferences (overall and relative) — the
+  parental-background test lives there, not here.
 - Gene Ontology Consortium guidelines
 - `src/ontology_processor.py` documentation
 

@@ -45,6 +45,7 @@ def make_args(tmp_path, **overrides):
         fdr_threshold=0.01,
         min_support=0,
         enable_true_path=False,
+        enable_relative_inference=False,
         enable_supra_domains=True,
         num_cores=4,
         batch_size=50000,
@@ -109,10 +110,26 @@ def test_go_run_with_true_path_records_the_ontology_file(tmp_path, fake_inputs):
     assert obo["sha256"]
     assert data["analysis"]["ontology"]["hierarchy_inputs"] == ["go_obo"]
     assert data["analysis"]["ontology"]["true_path_enabled"] is True
-    assert (
-        data["analysis"]["ontology"]["propagation"]
-        == "go_dag_with_parental_background_filter"
+    # Propagation no longer implies the parental-background filter: the two are
+    # separate flags, so the manifest names only the stage this one describes.
+    assert data["analysis"]["ontology"]["propagation"] == "go_dag"
+    assert data["analysis"]["ontology"]["relative_inference_enabled"] is False
+
+
+def test_relative_inference_is_recorded_and_pulls_in_the_obo(tmp_path, fake_inputs):
+    """The filter reads the GO DAG too, so it alone makes the OBO an input."""
+    _, data = run_manifest_json(
+        tmp_path, fake_inputs, ontology="go", enable_relative_inference=True
     )
+
+    assert [record["role"] for record in data["inputs"]] == [
+        "domain_annotations",
+        "gaf",
+        "go_obo",
+    ]
+    assert data["analysis"]["ontology"]["hierarchy_inputs"] == ["go_obo"]
+    assert data["analysis"]["ontology"]["relative_inference_enabled"] is True
+    assert data["analysis"]["ontology"]["true_path_enabled"] is False
 
 
 def test_ec_run_records_enzyme_dat_and_an_implicit_hierarchy(tmp_path, fake_inputs):

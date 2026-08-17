@@ -31,6 +31,8 @@ def _args(**overrides) -> argparse.Namespace:
         num_cores=8,
         species="human",
         min_support=0,
+        ontology="go",
+        enable_relative_inference=False,
     )
     defaults.update(overrides)
     return argparse.Namespace(**defaults)

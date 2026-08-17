@@ -25,6 +25,7 @@ class RunRequest:
     fdr_threshold: float
     min_support: int
     enable_true_path: bool
+    enable_relative_inference: bool
     enable_supra_domains: bool
     xref_db: str | None
     go_ontology: Path
@@ -48,6 +49,7 @@ class RunRequest:
             fdr_threshold=args.fdr_threshold,
             min_support=args.min_support,
             enable_true_path=args.enable_true_path,
+            enable_relative_inference=getattr(args, "enable_relative_inference", False),
             enable_supra_domains=args.enable_supra_domains,
             xref_db=getattr(args, "xref_db", None),
             go_ontology=args.go_ontology,
@@ -101,8 +103,16 @@ def resolve_inputs(request: RunRequest) -> InputResolution:
         true_path_unsupported=(
             request.enable_true_path and not entry.supports_true_path
         ),
+        # Relative inference reads the same hierarchy file propagation does, so
+        # either flag makes the hierarchy inputs mandatory up front.
         missing_inputs=tuple(
-            missing_inputs(entry, paths, for_hierarchy=request.enable_true_path)
+            missing_inputs(
+                entry,
+                paths,
+                for_hierarchy=(
+                    request.enable_true_path or request.enable_relative_inference
+                ),
+            )
         ),
     )
 
