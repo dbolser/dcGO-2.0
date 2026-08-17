@@ -358,8 +358,13 @@ def validate_arguments(
         parser.error(f"--batch-size must be positive, got {args.batch_size}")
     if args.min_support < 0:
         parser.error(f"--min-support must be >= 0, got {args.min_support}")
-    if args.min_ic < 0:
-        parser.error(f"--min-ic must be >= 0, got {args.min_ic}")
+    # isfinite, not just >= 0: NaN compares False against everything, so it
+    # would sail through a plain range check, silently disable the floor
+    # (NaN > 0 is False), yet still be truthy enough to write literal NaN —
+    # invalid JSON — into the manifest's thresholds. Infinity would engage
+    # the floor and drop every association.
+    if not math.isfinite(args.min_ic) or args.min_ic < 0:
+        parser.error(f"--min-ic must be a finite value >= 0, got {args.min_ic}")
     if args.num_cores <= 0:
         parser.error(f"--num-cores must be positive, got {args.num_cores}")
     if not args.species or "/" in args.species:
@@ -410,12 +415,8 @@ def resolve_ic_source(args: argparse.Namespace, ontology_entry: OntologyEntry) -
     the default run's input contract just to decorate a column; the manifest
     records which estimate a given artifact carries.
     """
-    if ontology_entry.supports_true_path and (
-        args.propagate_annotations
-        or args.enable_true_path
-        or args.enable_relative_inference
-        or args.min_ic > 0
-    ):
+    engaged = RunRequest.from_namespace(args).engages_hierarchy
+    if ontology_entry.supports_true_path and engaged:
         return "propagated"
     return "direct"
 
@@ -449,18 +450,13 @@ def start_run_manifest(
             derived_from=source_urls.get("interpro_mappings"),
         )
     ]
-    # Relative inference reads the same GO DAG that propagation does, so either
-    # flag pulls the hierarchy inputs into the manifest.
+    # Anything that engages the hierarchy — either stage flag, input-map
+    # propagation, or the --min-ic floor (whose frequencies are estimated over
+    # the propagated map) — pulls the hierarchy inputs into the manifest. One
+    # predicate for all three call sites: RunRequest.engages_hierarchy.
     hierarchy_inputs = (
         list(ontology_entry.hierarchy_needs)
-        if (
-            args.enable_true_path
-            or args.enable_relative_inference
-            or args.propagate_annotations
-            # The IC floor's frequencies are estimated over the propagated
-            # map, so the floor alone also reads the hierarchy.
-            or args.min_ic > 0
-        )
+        if RunRequest.from_namespace(args).engages_hierarchy
         else []
     )
     # dict.fromkeys de-duplicates while preserving order: an ontology may list

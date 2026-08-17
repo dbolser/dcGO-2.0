@@ -68,6 +68,10 @@ class TestRejectsInvalidArguments:
             ({"batch_size": -1}, "--batch-size"),
             ({"min_support": -1}, "--min-support"),
             ({"min_ic": -0.5}, "--min-ic"),
+            # NaN passes every plain comparison and would write invalid JSON
+            # into the manifest; infinity would drop every association.
+            ({"min_ic": float("nan")}, "--min-ic"),
+            ({"min_ic": float("inf")}, "--min-ic"),
             ({"num_cores": 0}, "--num-cores"),
             ({"num_cores": -4}, "--num-cores"),
             ({"species": ""}, "--species"),
