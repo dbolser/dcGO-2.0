@@ -71,6 +71,10 @@ TSV = "\n".join(
         row("TP53", trait_uri=""),
         # Unparsable p-value: counted with the significance drops.
         row("TP53", p_value="NR"),
+        # SNP-SNP interaction notation: both genes credited, counted.
+        row("CDK2 x TP53"),
+        # Separators only: the gene column dissolves to nothing.
+        row(", ;"),
         "",
     ]
 )
@@ -144,12 +148,20 @@ class TestParseGWASAssociations:
     def test_gene_trait_pairs_with_policy_counts(self, tsv):
         gene_terms, counts = parse_gwas_associations(tsv)
         assert gene_terms["CDK2"] == {"EFO:0004574", "MONDO:0005148"}
-        assert counts.n_rows == 10
+        assert counts.n_rows == 12
         assert counts.n_below_significance == 3  # 2E-6, the 5E-8 boundary, "NR"
         assert counts.n_intergenic == 1
         assert counts.n_flanking == 1
+        assert counts.n_no_gene == 1
         assert counts.n_no_trait == 1
-        assert counts.n_kept == 4
+        assert counts.n_kept == 5
+
+    def test_snp_interaction_credits_both_genes(self, tsv):
+        gene_terms, counts = parse_gwas_associations(tsv)
+        # "CDK2 x TP53" is an interaction row on EFO:0004574.
+        assert "EFO:0004574" in gene_terms["TP53"]
+        assert "EFO:0004574" in gene_terms["CDK2"]
+        assert counts.n_snp_interactions == 1
 
     def test_multi_gene_rows_credit_each_symbol(self, tsv):
         gene_terms, _ = parse_gwas_associations(tsv)
@@ -158,7 +170,8 @@ class TestParseGWASAssociations:
 
     def test_multi_trait_rows_credit_each_curie(self, tsv):
         gene_terms, _ = parse_gwas_associations(tsv)
-        assert gene_terms["TP53"] == {"EFO:0000616", "HP:0000001"}
+        # EFO:0004574 arrives separately via the interaction row.
+        assert gene_terms["TP53"] == {"EFO:0000616", "HP:0000001", "EFO:0004574"}
 
     def test_zip_distribution_is_read_in_place(self, tmp_path):
         path = tmp_path / "associations.zip"
@@ -196,14 +209,14 @@ class TestGWASCatalogAnnotationSource:
         parsed = source.parse()
         assert parsed["P24941"] == {"EFO:0004574", "MONDO:0005148"}
         assert parsed["P38398"] == {"EFO:0004574"}
-        assert parsed["P04637"] == {"EFO:0000616", "HP:0000001"}
+        assert parsed["P04637"] == {"EFO:0000616", "HP:0000001", "EFO:0004574"}
 
     def test_unmapped_symbol_is_counted_not_silent(self, tsv, dat):
         source = GWASCatalogAnnotationSource(tsv, dat)
         source.parse()
         # HLA-B has no HGNC line in the mini flat file.
         assert source.coverage.unmapped_values == ["HLA-B"]
-        assert source.filter_counts.n_kept == 4
+        assert source.filter_counts.n_kept == 5
 
     def test_spec_declares_the_efo_prefix(self, tsv, dat):
         spec = GWASCatalogAnnotationSource(tsv, dat).spec

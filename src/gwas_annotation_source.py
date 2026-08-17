@@ -24,7 +24,9 @@ Row policy (every drop counted and logged, and returned to callers as
 * **Gene column** — ``MAPPED_GENE`` (Ensembl-pipeline mapping of the SNP
   location), not ``REPORTED GENE(S)`` (free-text author claims, frequently
   missing, ``"NR"`` or marketing names). Multiple mapped genes (``", "`` or
-  ``"; "`` separated) each receive the trait.
+  ``"; "`` separated) each receive the trait, and SNP-SNP interaction rows
+  (``"GENE1 x GENE2"``, 1,079 kept rows at acquisition) credit both genes —
+  the same both-partners policy the CIViC layer applies to fusions.
 * **Traits** — every ``MAPPED_TRAIT_URI`` (comma-separated when a study maps
   to several) is normalised from URI to CURIE (``.../EFO_0004574`` →
   ``EFO:0004574``). Trait CURIEs outside EFO's own namespace (OBA, MONDO, HP,
@@ -123,7 +125,12 @@ class GWASFilterCounts:
         n_intergenic: rows flagged ``INTERGENIC == 1``.
         n_flanking: further rows whose ``MAPPED_GENE`` was a flanking
             ``"A - B"`` pair (or empty) — intergenic in effect.
+        n_no_gene: rows whose gene column dissolved to nothing after
+            splitting (separators only).
         n_no_trait: rows with no ``MAPPED_TRAIT_URI``.
+        n_snp_interactions: kept rows whose ``MAPPED_GENE`` was a SNP-SNP
+            interaction (``"GENE1 x GENE2"``) — both genes credited, like
+            fusion partners in the CIViC layer.
         n_kept: rows contributing at least one (gene, trait) pair.
     """
 
@@ -131,7 +138,9 @@ class GWASFilterCounts:
     n_below_significance: int = 0
     n_intergenic: int = 0
     n_flanking: int = 0
+    n_no_gene: int = 0
     n_no_trait: int = 0
+    n_snp_interactions: int = 0
     n_kept: int = 0
 
 
@@ -161,10 +170,14 @@ def parse_gwas_associations(
     """
     logger.info(f"Parsing GWAS Catalog associations from {path}")
     gene_terms: Dict[str, Set[str]] = defaultdict(set)
-    n_rows = n_below = n_intergenic = n_flanking = n_no_trait = n_kept = 0
+    n_rows = n_below = n_intergenic = n_flanking = 0
+    n_no_gene = n_no_trait = n_interactions = n_kept = 0
 
     with _open_association_table(path) as handle:
-        reader = csv.DictReader(handle, delimiter="\t")
+        # QUOTE_NONE: the catalog TSV is unquoted, and csv's default quoting
+        # would let a future stray '"' in a free-text field silently swallow
+        # tab separators and shift every later column.
+        reader = csv.DictReader(handle, delimiter="\t", quoting=csv.QUOTE_NONE)
         missing = set(_REQUIRED_COLUMNS) - set(reader.fieldnames or ())
         if missing:
             raise ValueError(
@@ -188,24 +201,31 @@ def parse_gwas_associations(
             if not mapped_gene or " - " in mapped_gene:
                 n_flanking += 1
                 continue
-            trait_uris = (row["MAPPED_TRAIT_URI"] or "").strip()
-            if not trait_uris:
-                n_no_trait += 1
+            # "GENE1 x GENE2" is the catalog's SNP-SNP interaction notation
+            # (spaced, so hyphenated symbols like HLA-B are untouched): both
+            # genes carry the association, like fusion partners.
+            interaction = " x " in mapped_gene
+            genes = {
+                gene.strip()
+                for chunk in mapped_gene.replace(";", ",").split(",")
+                for gene in chunk.split(" x ")
+                if gene.strip()
+            }
+            if not genes:
+                n_no_gene += 1
                 continue
+            trait_uris = (row["MAPPED_TRAIT_URI"] or "").strip()
             traits = {
                 trait_uri_to_curie(uri.strip())
                 for uri in trait_uris.split(",")
                 if uri.strip()
             }
-            genes = {
-                gene.strip()
-                for gene in mapped_gene.replace(";", ",").split(",")
-                if gene.strip()
-            }
-            if not traits or not genes:
+            if not traits:
                 n_no_trait += 1
                 continue
             n_kept += 1
+            if interaction:
+                n_interactions += 1
             for gene in genes:
                 gene_terms[gene] |= traits
 
@@ -214,15 +234,19 @@ def parse_gwas_associations(
         n_below_significance=n_below,
         n_intergenic=n_intergenic,
         n_flanking=n_flanking,
+        n_no_gene=n_no_gene,
         n_no_trait=n_no_trait,
+        n_snp_interactions=n_interactions,
         n_kept=n_kept,
     )
     logger.info(
         f"  Rows: {counts.n_rows:,}; below genome-wide significance "
         f"(p >= {GENOME_WIDE_SIGNIFICANCE}): {counts.n_below_significance:,}; "
         f"intergenic: {counts.n_intergenic:,} flagged + {counts.n_flanking:,} "
-        f"flanking/empty gene; no mapped trait: {counts.n_no_trait:,}; "
-        f"kept: {counts.n_kept:,}"
+        f"flanking/empty gene; gene column dissolved: {counts.n_no_gene:,}; "
+        f"no mapped trait: {counts.n_no_trait:,}; kept: {counts.n_kept:,} "
+        f"({counts.n_snp_interactions:,} SNP-SNP interaction rows, both "
+        f"genes credited)"
     )
     logger.info(
         f"  Genes: {len(gene_terms):,}; traits: "
