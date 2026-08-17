@@ -120,6 +120,19 @@ class TestElevationPolicy:
         with pytest.raises(FileNotFoundError):
             parse_hpa_single_cell(tmp_path / "gone.tsv")
 
+    def test_non_contiguous_gene_blocks_fail_loudly(self, tmp_path):
+        # The streaming parser bounds memory by one gene block; a gene
+        # reappearing later would silently corrupt the per-gene means.
+        path = tmp_path / "shuffled.tsv"
+        path.write_text(
+            "Gene\tGene name\tCell type\tnCPM\n"
+            "ENSG1\tG1\tadipocytes\t10.0\n"
+            "ENSG2\tG2\tadipocytes\t5.0\n"
+            "ENSG1\tG1\thepatocytes\t1.0\n"
+        )
+        with pytest.raises(ValueError, match="not gene-contiguous"):
+            parse_hpa_single_cell(path)
+
 
 class TestEnsemblGeneMap:
     def test_fourth_dr_field_supplies_the_gene(self, dat):

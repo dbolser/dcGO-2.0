@@ -44,9 +44,6 @@ policy for unmapped and one-to-many ids.
 from __future__ import annotations
 
 import csv
-import io
-import zipfile
-from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
@@ -58,6 +55,7 @@ from src.gene_mapping import (
     parse_ensembl_gene_accession_map,
     remap_gene_annotations,
 )
+from src.hierarchy import open_text_or_zip
 from src.remap import RemapCoverage
 
 #: HPA single-cell cell types, by name (flat — see the module docstring for
@@ -98,20 +96,22 @@ class HPAFilterCounts:
     n_genes_elevated: int = 0
 
 
-def _open_expression_table(path: Path):
-    """Open the expression TSV, reaching inside the distribution zip if needed."""
-    path = Path(path)
-    if not path.exists():
-        raise FileNotFoundError(f"HPA single-cell expression file not found: {path}")
-    if path.suffix == ".zip":
-        archive = zipfile.ZipFile(path)
-        members = archive.namelist()
-        if len(members) != 1:
-            raise ValueError(
-                f"{path} should contain exactly the expression TSV; found {members}"
+def _elevated_cell_types(
+    values: List[Tuple[str, float]],
+) -> Tuple[Set[str], int]:
+    """One gene's elevated cell types and its expressed-pair count."""
+    total = sum(value for _, value in values)
+    elevated: Set[str] = set()
+    n_expressed = 0
+    for cell_type, value in values:
+        if value >= MIN_EXPRESSION:
+            n_expressed += 1
+            others_mean = (
+                (total - value) / (len(values) - 1) if len(values) > 1 else 0.0
             )
-        return io.TextIOWrapper(archive.open(members[0]), encoding="utf-8")
-    return open(path, "rt", encoding="utf-8")
+            if value >= ELEVATION_FOLD * others_mean:
+                elevated.add(cell_type)
+    return elevated, n_expressed
 
 
 def parse_hpa_single_cell(
@@ -123,10 +123,31 @@ def parse_hpa_single_cell(
     module docstring. The expression column is found by name (``nCPM``, or the
     older ``nTPM``); unparsable values are treated as 0 (HPA writes ``0.0``
     for absence, so nothing legitimate is lost).
+
+    The file is one contiguous block of rows per gene, so the elevation test
+    runs per block and memory is bounded by one gene's ~154 rows rather than
+    the full 3M-pair matrix (which cost ~1 GB transient to keep 97k pairs).
+    A gene reappearing after its block ended would make the per-block means
+    wrong, so that raises instead of degrading silently.
     """
     logger.info(f"Parsing HPA single-cell expression from {path}")
-    per_gene: Dict[str, List[Tuple[str, float]]] = defaultdict(list)
-    with _open_expression_table(path) as handle:
+    gene_terms: Dict[str, Set[str]] = {}
+    n_pairs = n_expressed = n_elevated = 0
+    seen_genes: Set[str] = set()
+    current_gene: Optional[str] = None
+    block: List[Tuple[str, float]] = []
+
+    def flush() -> None:
+        nonlocal n_expressed, n_elevated
+        if current_gene is None:
+            return
+        elevated, block_expressed = _elevated_cell_types(block)
+        n_expressed += block_expressed
+        if elevated:
+            n_elevated += len(elevated)
+            gene_terms[current_gene] = elevated
+
+    with open_text_or_zip(path, label="HPA single-cell expression file") as handle:
         reader = csv.reader(handle, delimiter="\t")
         header = next(reader, None)
         if header is None:
@@ -156,31 +177,26 @@ def parse_hpa_single_cell(
                 value = float(row[expression_col])
             except ValueError:
                 value = 0.0
-            per_gene[gene].append((cell_type, value))
-
-    gene_terms: Dict[str, Set[str]] = {}
-    n_pairs = n_expressed = n_elevated = 0
-    for gene, values in per_gene.items():
-        n_pairs += len(values)
-        total = sum(value for _, value in values)
-        elevated: Set[str] = set()
-        for cell_type, value in values:
-            if value >= MIN_EXPRESSION:
-                n_expressed += 1
-                others_mean = (
-                    (total - value) / (len(values) - 1) if len(values) > 1 else 0.0
-                )
-                if value >= ELEVATION_FOLD * others_mean:
-                    elevated.add(cell_type)
-        if elevated:
-            n_elevated += len(elevated)
-            gene_terms[gene] = elevated
+            if gene != current_gene:
+                flush()
+                if gene in seen_genes:
+                    raise ValueError(
+                        f"{path} is not gene-contiguous: {gene} reappears "
+                        "after its block ended, so per-gene elevation means "
+                        "cannot be computed streamingly"
+                    )
+                seen_genes.add(gene)
+                current_gene = gene
+                block = []
+            block.append((cell_type, value))
+            n_pairs += 1
+        flush()
 
     counts = HPAFilterCounts(
         n_pairs=n_pairs,
         n_expressed=n_expressed,
         n_elevated=n_elevated,
-        n_genes=len(per_gene),
+        n_genes=len(seen_genes),
         n_genes_elevated=len(gene_terms),
     )
     logger.info(

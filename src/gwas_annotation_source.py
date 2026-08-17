@@ -47,9 +47,7 @@ normalises both sides of every edge to the CURIE form the annotations use.
 from __future__ import annotations
 
 import csv
-import io
 import re
-import zipfile
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -59,7 +57,7 @@ from loguru import logger
 
 from src.annotation_source import AnnotationSource, OntologySpec
 from src.gene_mapping import parse_gene_accession_index, remap_gene_annotations
-from src.hierarchy import parse_obo_child_parents
+from src.hierarchy import open_text_or_zip, parse_obo_child_parents
 from src.remap import RemapCoverage
 
 #: GWAS Catalog traits, EFO-keyed (with imported OBA/MONDO/HP/GO ids kept).
@@ -144,22 +142,6 @@ class GWASFilterCounts:
     n_kept: int = 0
 
 
-def _open_association_table(path: Path):
-    """Open the association TSV, reaching inside the distribution zip if needed."""
-    path = Path(path)
-    if not path.exists():
-        raise FileNotFoundError(f"GWAS Catalog association file not found: {path}")
-    if path.suffix == ".zip":
-        archive = zipfile.ZipFile(path)
-        members = archive.namelist()
-        if len(members) != 1:
-            raise ValueError(
-                f"{path} should contain exactly the association TSV; found {members}"
-            )
-        return io.TextIOWrapper(archive.open(members[0]), encoding="utf-8")
-    return open(path, "rt", encoding="utf-8")
-
-
 def parse_gwas_associations(
     path: Path,
 ) -> Tuple[Dict[str, Set[str]], GWASFilterCounts]:
@@ -173,7 +155,7 @@ def parse_gwas_associations(
     n_rows = n_below = n_intergenic = n_flanking = 0
     n_no_gene = n_no_trait = n_interactions = n_kept = 0
 
-    with _open_association_table(path) as handle:
+    with open_text_or_zip(path, label="GWAS Catalog association file") as handle:
         # QUOTE_NONE: the catalog TSV is unquoted, and csv's default quoting
         # would let a future stray '"' in a free-text field silently swallow
         # tab separators and shift every later column.
