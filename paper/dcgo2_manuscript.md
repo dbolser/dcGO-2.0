@@ -44,11 +44,22 @@ signal from recovery of the annotation base rate.
 **Results.** We present dcGO-2.0, an open reimplementation that associates
 InterPro entries and contiguous InterPro combinations ("supra-domains") with
 ontology terms by Fisher's exact tests with Benjamini–Hochberg control, and that
-generalises the annotation input behind a single interface so that nineteen
-vocabularies beyond the Gene Ontology can be substituted without touching the
-statistics. On human data the pipeline performs 1.64 × 10⁹ tests and reports
-164,549 associations at FDR < 0.01 `[A5, A7]`. We assess these associations in
-three retrospective settings. (i) Against the curated InterPro2GO map, treated
+generalises the annotation input behind a single interface: twenty-six
+vocabularies beyond the Gene Ontology are registered — UniProt-native layers,
+Enzyme Commission, disease, and human and model-organism phenotype ontologies
+whose gene-keyed annotations are re-keyed to protein accessions under an
+audited mapping policy — without touching the statistics `[K1]`. The method
+now reproduces the original pipeline's structure: the relative
+(parental-background) test is combined with the overall test before FDR
+correction, input annotations are propagated by the True Path Rule, GO
+propagation is restricted to `is_a`/`part_of`, and an information-content
+floor removes vacuous near-root terms `[K3, K11]`. On human data the earlier
+default configuration performs 1.64 × 10⁹ tests and reports 164,549
+associations at FDR < 0.01 `[A5, A7]` (**PROVISIONAL** — a pre-fix,
+manifest-less run; the paper-parity single-domain configuration reports
+30,655 `[K4]`). We assess the associations in three retrospective settings,
+all of which predate the propagation fix and are marked provisional in the
+text pending regeneration. (i) Against the curated InterPro2GO map, treated
 strictly as an incomplete positive reference, the association set recovers 64.7%
 of curated pairs on shared domains after propagation `[B1]`. (ii) In a CAFA-style
 no-knowledge benchmark trained on a 2021 GO annotation snapshot and scored
@@ -64,19 +75,24 @@ curation added by 2026 at 12.5-fold the terms' own acquisition rates (2,181 hits
 on 170,416 predictions; bootstrap CI 10.6–14.1) `[E2]`; however, a proposed
 "surprise" ranking of emergent combinations shows **no demonstrated advantage**
 over ranking by the dcGO q-value, with a paired bootstrap interval spanning zero
-at every prediction budget `[E9, E10]`.
+at every prediction budget `[E9, E10]`. Applying the unchanged statistics to the phenotype vocabularies —
+HPO, SynGO, and mouse, worm, zebrafish and fly phenotype layers learned on
+each organism's own proteins, with domains transferring species-agnostically —
+yields per-layer association sets whose counts await the first
+manifest-carrying production run `[L7]`; none is yet validated.
 
 **Conclusions.** Domain-derived associations contain predictive signal for later
 human GO annotations and outperform simple baselines in several retrospective
 settings, particularly for higher-information GO terms. The evidence assembled
-here does not establish general superiority, score calibration, or nominal
-false-discovery-rate control after supra-domain shrinkage, and the
-information-content filter that carries the headline was not pre-specified. We
-report the analysis, its negative results, and the open items required before any
+here does not establish general superiority or score calibration; the
+information-content filter that carries the headline was not pre-specified; and
+the relative-inference layer, though now structurally faithful to the original
+method, does not yet achieve its stated specificity purpose `[K5]`. We report
+the analysis, its negative results, and the open items required before any
 stronger claim would be defensible.
 
 **Keywords.** protein domains; Gene Ontology; functional annotation; InterPro;
-supra-domains; retrospective benchmark.
+supra-domains; phenotype ontologies; retrospective benchmark.
 
 ---
 
@@ -850,6 +866,106 @@ domains and supra-domains, so this table does **not** test whether the emergent
 (combination-specific) claim generalises beyond GO `[F12]` — which is the more
 interesting question and remains open.
 
+### 3.8 Relative inference needs an information floor, and gets one
+
+The in-inference relative test of §2.5 was built to report each domain at the
+most specific term it supports. Run without further measures it does the
+opposite: parentless terms skip the test and pass on the overall inference
+alone, so the three GO aspect roots — carried by most of the universe, at
+0.09–0.17 bits of annotation-frequency information `[K6]` — and the
+near-universal band just above them ("biological regulation", "cytoplasm",
+"organelle") dominate the output.
+
+The `--min-ic` reporting floor removes exactly that failure mode. On the human
+GO single-domain paper-parity run, sweeping the floor gives:
+
+**Table 4.** The `--min-ic` sweep, human GO single domains, paper-parity
+configuration, FDR < 0.01. "On a chain" is the share of significant
+associations whose term is an ancestor of another significant term for the
+same domain — the specificity failure the relative test exists to prevent.
+Values from the sweep in `VALIDATION_PLAN.md` (item 2), computed with
+`validation/specificity_metrics.py`; no machine-readable artifact is committed
+yet, so the ledger carries these as provisional `[K4, K5]`.
+
+| `--min-ic` (bits) | significant | mean #ancestors | on an ancestor chain | GO roots present |
+|---:|---:|---:|---:|---|
+| 0 (off) | 30,655 | 6.0 | 52.7% | all three |
+| 1 | 30,302 | 6.1 | 50.2% | none |
+| 2 | 28,348 | 6.3 | 46.4% | none |
+| 3 | 26,401 | 6.4 | 42.8% | none |
+| 5 | 18,888 | 7.3 | 33.3% | none |
+
+`--min-ic 1` — keep terms carried by under half the universe — removes the
+roots and the near-universal band for 353 associations, 1.2% of the set
+`[K6]`. That is the recommended setting: the floor's job is killing vacuous
+terms, not making the method conservative.
+
+What the floor does **not** fix should be stated as plainly. The residual
+ancestor-chain cascade barely moves — 52.7% of associations sit on a chain
+without the floor, 50.2% with it — so half the surviving output still restates
+a more specific association at a more general level. A wider universe does not
+help (an all-species run is *worse*, at 82.4% on a chain), and degenerate
+parents and the attainable-*p* floor have been ruled out as causes `[K5]`. The
+open idea is `elim`-style decorrelation in the manner of Alexa et al.: test
+specific terms first, remove their proteins, and retest ancestors on the
+residue. Until something of that kind is implemented and measured, relative
+inference should be described as *structurally faithful to the original
+method but not yet achieving its stated purpose* — which is how we describe
+it here.
+
+### 3.9 The multi-vocabulary expansion
+
+The registry now holds twenty-eight `--ontology` keys `[K1]`, and the round
+of work reported here added the annotation layers with the largest scope: the
+Human Phenotype Ontology, SynGO, and five model-organism phenotype
+vocabularies learned on their own organisms' proteomes (§2.7). A systematic
+acquisition pass preceded the adapters: **39 open annotation and ontology
+sources were fetched, integrity-checked and versioned** against UniProt
+release 2026_02 `[L8]`. The boundary of the open data is itself a finding:
+SNOMED CT and MedDRA are licence-gated and were not attempted; OMIM's
+`genemap2.txt` is registration-gated, with UniProt's `MIM` cross-references
+covering the open part; and MAxO publishes an ontology but no released
+annotation source, so there is nothing to test `[L8]`. Further layers built
+on the same acquisition (Mondo and Orphanet–Mondo re-keys, CIViC-derived
+NCIt/OncoTree cancer layers, GWAS-Catalog EFO traits, HPA cell types,
+WormBase anatomy) exist on an in-review branch and are **not** counted or
+reported here `[L9]`.
+
+First runs of the merged layers, at FDR < 0.01 on single domains, give the
+counts in Table 5.
+
+**Table 5.** Significant single-domain associations per new layer.
+**PROVISIONAL — pending production run**: these counts were read from
+development-worktree outputs; the ledger rows point at the expected
+manifest-carrying artifacts (`results/production/run_manifest_<ontology>.json`),
+which the first production pass will supply `[L7]`.
+
+| Layer | Organism | Vocabulary | Significant (FDR < 0.01) |
+|---|---|---|---:|
+| `hpo` | human | Human Phenotype Ontology | 996 |
+| `syngo` | human | SynGO | 484 |
+| `mp` | mouse | Mammalian Phenotype | 873 |
+| `wbphenotype` | worm | WBPhenotype | 26,624 |
+| `zfa` | zebrafish | Zebrafish anatomy (affected) | 37,776 |
+| `fbcv` | fly | FlyBase phenotype class | 5,033 |
+| `fbbt` | fly | Drosophila anatomy (manifesting) | 10,791 |
+
+Two readings, and their limits. First, the spread follows curation shape, not
+biology: the worm, zebrafish and fly layers are large because their
+phenotype screens annotate tens of thousands of genes, while HPO's
+disease-derived gene set (5,204 mapped proteins) and SynGO's deliberately
+narrow expert curation (1,799) support correspondingly few domain
+associations. Second, and more important: **none of these counts is
+validated**. No held-out temporal test, no permutation control and no
+reference comparison has yet been run for any of these layers; the counts are
+the size of hypothesis sets, exactly as §3.1 cautions for GO. The
+model-organism layers carry the original dcGO's transfer argument — the
+association is learned on the model organism's proteins and the domain is
+species-agnostic — but that argument has not yet been tested here either
+(for instance, against human disease annotation via the HPO layer). We record
+the expansion as infrastructure with verified identifier mapping (§2.7) and
+honest per-layer semantics, not as validated predictive breadth.
+
 ---
 
 ## 4. Discussion
@@ -899,19 +1015,29 @@ almost all annotated, which leaves nothing to predict `[E15]`. A score that
 explicitly trades emergence against outstanding predictions is the obvious next
 step.
 
-**Relation to the original dcGO.** We have not compared output with the published
-dcGO `[G11]`. Our reading of the original papers — recorded in project
-documentation rather than re-verified here, and therefore marked provisional —
-is that it operated over all sequenced genomes with SCOP/SUPERFAMILY and Pfam
-domains at FDR < 10⁻³, combined an overall with a relative parental-background
-test, and transferred predictions by a per-target normalised sum `[G1–G5]`. Two
-of those pieces are present here (the p-score transfer; the relative test, though
-applied post hoc), one differs (InterPro entries rather than SCOP/Pfam
-signatures, a coarser but not disjoint universe, since InterPro integrates both
-`[G7]`), and one is looser (FDR < 0.01). A quantitative overlap analysis on the
-mappable domain space is the single most valuable missing comparison, and it is
-tractable: `protein2ipr` carries the member-signature accession, so re-keying the
-parser on `SSF`/`PF` identifiers would give a near-apples-to-apples reproduction.
+**Relation to the original dcGO.** Our reading of the original papers —
+recorded in project documentation rather than re-verified here, and therefore
+marked provisional — is that it operated over all sequenced genomes with
+SCOP/SUPERFAMILY and Pfam domains at FDR < 10⁻³, combined an overall with a
+relative parental-background test, and transferred predictions by a per-target
+normalised sum `[G1–G5]`. Three of those pieces are now present here (the
+p-score transfer; the relative test, folded into the inference before FDR
+correction as published; input-map propagation), one differs (InterPro entries
+rather than SCOP/Pfam signatures by default, a coarser but not disjoint
+universe, since InterPro integrates both `[G7]`), and one is looser
+(FDR < 0.01 against their 10⁻³, bracketed in the comparison below).
+
+The quantitative comparison the first draft called the single most valuable
+missing analysis has since been run: re-keying the parser on the `SSF`
+member-signature (`--domain-key ssf`) puts our associations in the published
+release's SCOP-superfamily space, where **precision — the fraction of our
+calls the published dcGO also made — sits in a narrow 0.537–0.625 band across
+six pre-declared threshold × definition variants** `[K9]`. Recall against them
+is not interpretable: they are all-species and 2016 where we are human-only
+and 2026, and 69.4% of their pairs have zero co-occurring human proteins, so
+a human universe cannot reach them at any threshold `[K9]`. Their SCOP-family
+half and their Pfam-keyed release remain unreachable pending a `pfam` domain
+key, and their non-GO tables (EC, keywords, UniPathway) have not been used.
 
 ---
 
@@ -957,7 +1083,14 @@ general performance, calibration, or superiority" `[H20]`.
    signal exists; they do not establish utility. No comparison exists against
    original dcGO output, against a homology-transfer baseline, or against any
    independent function predictor `[H10]`.
-8. **One species, one interval.** There is no external validation axis `[H11]`.
+8. **One species, one interval — partially addressed.** The reported results
+   remain human-trained over a single 2021 → 2026 interval `[H11]`. An
+   all-species training universe (1,464,355 proteins across 9,074 taxa) has
+   since been run and wins 8/9 F_max and 9/9 AUPRC cells on the same held-out
+   split — 9/9 and 9/9 under an experimental-evidence filter — but its
+   evaluation is pre-regulates-fix era and its support counts are inflated
+   ~2.44× by orthology, so we cite it as direction, not as a result of this
+   paper `[K10]`.
 9. **Prediction coverage is not reported** alongside F_max, although CAFA
    precision omits proteins with no predictions while recall includes them
    `[H17]`; and the F_max/AUPRC implementation has not been verified against
@@ -1042,7 +1175,15 @@ required before submission and do not yet exist.]*
 **Data.** All inputs are public: InterPro `protein2ipr` [7]; UniProt-GOA
 annotation files, including the dated archive from which release 205 (April 2021)
 was taken; the Gene Ontology `go-basic.obo` [4]; the UniProt Swiss-Prot flat file
-and its companion vocabularies [8]; Expasy ENZYME; and InterPro2GO.
+and its companion vocabularies [8]; Expasy ENZYME; InterPro2GO; and, for the
+layers of §2.7, the HPO `genes_to_phenotype` release with `hp.obo`, the SynGO
+bulk release, MGI's `MGI_GenePheno`/`MRK_SwissProt_TrEMBL` reports with
+`mp.obo`, WormBase's phenotype-association file with `wbphenotype.obo`, ZFIN's
+`phenoGeneCleanData_fish`/`uniprot.txt` with `zfa.obo`, FlyBase's
+genotype–phenotype and identifier-mapping tables with `fbcv.obo`/`fbbt.obo`,
+and UniProt's per-organism idmapping files. The acquisition record — source
+URLs, releases, integrity checks and licence status for all 39 fetched
+sources — is `data/ACQUISITION_MATRIX.md` `[L8]`.
 
 **Reproducibility status — machinery in place, numbers not yet regenerated.**
 Every run now emits a machine-readable manifest
@@ -1141,6 +1282,9 @@ completed.
    quoted only in prose; `validation/bench_A`–`bench_D` are untracked `[C5a–C5e,
    H12]`. Can these be regenerated and committed? Without them, the claim that
    the p-score transfer is "the main lever" cannot be reported.
+   *Partially resolved (2026-08-17): the bench_A–D metrics files are now
+   committed; the paired test and confidence intervals remain missing, and the
+   runs are pre-regulates-fix era.*
 6. **`protein binding` = 84.6% of human experimental MF annotations** appears in
    three documents but is computed nowhere `[C6a]`. Likewise the `hyper_score`
    saturation figure (~37% at exactly 100) `[C6c]`, the pre-filter supra-domain
@@ -1162,24 +1306,30 @@ completed.
    quantile sweep and upper-envelope trapezoidal rule are unverified `[C0g]`.
    This needs either an explanation backed by prediction-coverage numbers or a
    verified reimplementation.
-10. **Is the relative test going to be folded into inference, or stay post hoc?**
-    The original method combines the overall and relative tests before FDR
-    correction at 10⁻³; ours filters afterwards at a different threshold
-    `[G4, §2.5]`. The methods section currently has to describe a divergence from
-    the method it claims to reimplement.
+10. ~~**Is the relative test going to be folded into inference, or stay post
+    hoc?**~~ *Resolved (2026-08-17): folded into the inference before BH as
+    `max(overall_p, relative_p)`, per the original method (§2.5) `[K11]`. The
+    threshold divergence (0.01 vs their 10⁻³) remains and is bracketed in the
+    published-dcGO comparison `[K9]`.*
 11. **True Path Rule default.** The original made propagation central; here it is
     opt-in and was off in every reported run. Should the paper report a
-    propagated configuration as primary?
+    propagated configuration as primary? *Updated context: the paper-parity
+    configuration (§2.5) enables it, but the ablation's True Path rung
+    (confounded, pre-fix) is the current evidence against making it the
+    protein-centric primary `[K8]`; the re-measurement must come first.*
 12. **Species scope.** Human-only is a real limitation `[H11]`. Is a second
     species in scope for this paper, or is it explicitly deferred?
+    *Updated context: an all-species background run `[K10]` and the
+    model-organism phenotype layers (§3.9) both exist now; what remains open
+    is which of them this paper reports as results rather than direction.*
 
 **The breadth section.**
 
-13. **The species-filtering defect must be fixed and every UniProt-native
-    vocabulary retrained** before §3.7 can say anything `[F]`. Two sub-decisions:
-    should the contingency row space become the intersection of the annotation
-    and domain protein sets (our recommendation), and should Enzyme Commission
-    also be audited, since `enzyme.dat` is likewise all-species?
+13. ~~**The species-filtering defect must be fixed and every UniProt-native
+    vocabulary retrained** before §3.7 can say anything `[F]`.~~ *Resolved
+    (2026-08-04): the sources are species-restricted, the row space is the
+    intersection, and every §3.7 row was regenerated — the corrected values
+    and the superseded ones are both in the table and the ledger `[F]`.*
 14. **Should the breadth test be rerun with `--supra-only`?** As it stands it
     pools single domains and supra-domains, so it cannot address whether the
     *emergent* claim generalises beyond GO `[F12]` — which is the more
@@ -1197,10 +1347,11 @@ completed.
     scope, thresholds and validation are second-hand from project notes `[G1–G6,
     G10]`. Every such statement needs a direct check against the papers before
     submission.
-17. **The §3 comparison against published dcGO output has not been run** `[G11]`.
-    Given that both dcGO web resources were reported live and that `protein2ipr`
-    carries `SSF`/`PF` signatures, this appears tractable and is, in our view, the
-    single most valuable addition to the paper.
+17. ~~**The §3 comparison against published dcGO output has not been run**
+    `[G11]`.~~ *Resolved (2026-08-04): run via `--domain-key ssf`; precision
+    0.537–0.625 across six pre-declared variants, recall not interpretable —
+    see Discussion and `[K9]`. Still open within it: the `pfam` domain key and
+    the published non-GO tables.*
 18. **Author list for reference [3]** was not independently verified.
 
 **Framing.**
