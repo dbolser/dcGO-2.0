@@ -37,6 +37,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import (
+    IO,
     TYPE_CHECKING,
     Any,
     Callable,
@@ -339,7 +340,7 @@ def alpha_prefix_ancestors(term: str) -> List[str]:
     return ancestors
 
 
-def open_text(path: Path, *, label: str = "file"):
+def open_text(path: Path, *, label: str = "file") -> IO[str]:
     """Open ``path`` for text reading, transparently gunzipping ``.gz`` files.
 
     The idiom every annotation loader repeats — existence check, then
