@@ -1020,6 +1020,40 @@ layer). We record the expansion as infrastructure with verified identifier
 mapping (§2.7), honest per-layer semantics, and manifest-carrying first
 runs — not as validated predictive breadth.
 
+### 3.10 Training-universe and evidence-mode variants
+
+The production matrix also regenerated, under manifests and post-fix, the two
+GO variants this project has studied outside the primary human/`manual`
+configuration.
+
+**Training universe.** The all-species background (`--species allspecies`;
+1,464,355 proteins, 28,112 testable GO terms) yields 2,911,662 significant
+associations at baseline (535,133 single-domain) `[M3]` and 5,597,840 under
+paper-parity (1,051,061 single-domain) `[M4]`. Two things are worth stating
+plainly. First, the paper-parity configuration moves in the **opposite
+direction** from human GO — it roughly doubles the all-species set where it
+cut the human set by 42% — which is consistent with input propagation adding
+testable annotation mass faster than the relative test prunes it at this
+scale, though we have not isolated that mechanism. Second, the *evaluative*
+claims for the wider universe — 8/9 F_max and 9/9 AUPRC cells won on the
+held-out split, 9/9 and 9/9 under an experimental-evidence filter — still
+come from the pre-fix evaluation `[K10]` and remain provisional; what the
+matrix supplies is the manifest-carrying training runs a post-fix
+re-evaluation can now be built on. The known caveats travel with the counts:
+the all-species `manual` universe is majority-projected annotation and
+support is inflated ~2.44× by orthology `[K10]`, so the raw significant
+counts above should not be read as 17× the human evidence.
+
+**Evidence mode.** Restricting training to experimentally supported
+annotations (`--evidence-filter experimental`; 16,242 proteins, 12,966 terms)
+yields 62,426 significant associations at baseline (18,310 single-domain)
+`[M5]` and 28,250 under paper-parity (10,127 single-domain) `[M6]` — about
+38% of the `manual` baseline's count, the price of dropping curated-inference
+evidence from the training signal. No evaluation of the experimental-mode
+associations has been run at these settings; the cells exist so that the
+evidence-policy sensitivity of any future result can be quoted from
+manifest-carrying runs rather than re-derived.
+
 ---
 
 ## 4. Discussion
@@ -1144,7 +1178,10 @@ general performance, calibration, or superiority" `[H20]`.
    split — 9/9 and 9/9 under an experimental-evidence filter — but its
    evaluation is pre-regulates-fix era and its support counts are inflated
    ~2.44× by orthology, so we cite it as direction, not as a result of this
-   paper `[K10]`.
+   paper `[K10]`. Manifest-carrying post-fix training runs for both the
+   all-species and experimental-evidence variants now exist (§3.10
+   `[M3–M6]`); the missing piece is the post-fix re-evaluation on top of
+   them.
 9. **Prediction coverage is not reported** alongside F_max, although CAFA
    precision omits proteins with no predictions while recall includes them
    `[H17]`; and the F_max/AUPRC implementation has not been verified against
