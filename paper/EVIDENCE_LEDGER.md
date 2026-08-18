@@ -31,10 +31,12 @@ not marked.
 | **provisional** | Traceable only to a prose document (no machine-readable artifact found), **or** known to be affected by an identified defect, **or** contradicted by a second source in the repository. Must be labelled in the text. |
 | **unsupported** | Cannot be traced to any file. **Excluded from the manuscript.** |
 
-A cross-cutting caveat applies to every row: none of the runs below carries a
-run manifest pinning input releases and checksums
+A cross-cutting caveat applies to every row in blocks A–H: none of those runs
+carries a run manifest pinning input releases and checksums
 (`ENGINEERING_SCIENTIFIC_REVIEW_TODOS.md` P0/P1), so "the 2026 GOA snapshot" and
-"the current InterPro release" are not reproducible identifiers today.
+"the current InterPro release" are not reproducible identifiers for them. The
+2026-08-18 production matrix (block M) is the exception: every M row is backed
+by a manifest.
 
 ---
 

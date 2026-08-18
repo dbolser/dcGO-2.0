@@ -23,8 +23,10 @@
 > code — was produced before that fix and is marked **PROVISIONAL —
 > pre-regulates-fix era**. Run manifests record the policy as
 > `analysis.ontology.propagation_relations`; a manifest without that key (or an
-> artifact with no manifest at all, which includes every run in this draft)
-> identifies a pre-fix artifact `[K12]`. Numbers that never touch GO propagation
+> artifact with no manifest at all, which includes every run in blocks A–H of
+> the ledger — the 2026-08-18 production matrix, block M, is manifest-carrying
+> and post-fix) identifies a pre-fix artifact `[K12]`. Numbers that never touch
+> GO propagation
 > (dataset scale counts, download and survey figures, non-GO hierarchies read by
 > the `is_a`/`part_of`-only OBO reader) are not marked.
 
@@ -171,9 +173,10 @@ if an input is missing. Retrieved releases are still referenced through
 mutable "current" URLs `[H8]`, but every run now writes a machine-readable
 manifest (`run_manifest_<ontology>.json`) recording a SHA-256 digest and any
 release header for each input, the Git state, the dependency lock hash, the
-full command line and every threshold `[K12]`. **The numbers reported in this
-draft all predate the manifest machinery** and are therefore not covered by
-it; see §5.
+full command line and every threshold `[K12]`. The 2026-08-18 production
+matrix (§3.9–3.10) is fully manifest-carrying; **every number from earlier
+runs — including everything the evaluations of §3.2–3.7 rest on — predates
+the manifest machinery** and is not covered by it. See §5.
 
 ### 2.2 Domain features and supra-domains
 
@@ -1228,11 +1231,13 @@ general performance, calibration, or superiority" `[H20]`.
     (`validation/bench_A`–`bench_D`), closing the provenance gap the review
     raised `[H12]`; the comparison itself still lacks a paired test or
     confidence interval and stays provisional (§3.3).
-19. **Run manifests now exist but cover none of the reported numbers.** Every
-    run writes `run_manifest_<ontology>.json` with input/output SHA-256s,
-    release headers, Git state, dependency-lock hash, command line and
-    thresholds `[K12]` — but all numbers in this draft predate the machinery,
-    so none is exactly reproducible today. Regeneration under manifests is a
+19. **Run manifests cover the association counts but none of the
+    evaluations.** Every run writes `run_manifest_<ontology>.json` with
+    input/output SHA-256s, release headers, Git state, dependency-lock hash,
+    command line and thresholds `[K12]`, and the production matrix regenerated
+    every association count under one `[M0]` — but the evaluation results
+    (§3.2–3.7) all rest on pre-manifest runs and are not exactly reproducible
+    today. Regenerating the evaluations from the manifest-carrying runs is a
     prerequisite for submission.
 20. **Implementation caveats that touch reported behaviour:** a numerical failure
     in the hypergeometric score falls back to a value of 50.0, i.e. a plausible
@@ -1276,20 +1281,22 @@ and UniProt's per-organism idmapping files. The acquisition record — source
 URLs, releases, integrity checks and licence status for all 39 fetched
 sources — is `data/ACQUISITION_MATRIX.md` `[L8]`.
 
-**Reproducibility status — machinery in place, numbers not yet regenerated.**
-Every run now emits a machine-readable manifest
+**Reproducibility status — association counts regenerated, evaluations not
+yet.** Every run emits a machine-readable manifest
 (`run_manifest_<ontology>.json`: input/output SHA-256 digests, release headers
 where the format supplies one, Git state, dependency-lock hash, command line,
 thresholds, and the propagation-edge policy as an era marker), with a
-completion checklist in `REPRODUCIBILITY.md` `[K12]`. However, only the t0
-annotation release is pinned by identifier; the t1 snapshot, the GO release,
-the InterPro release and the Swiss-Prot releases are still referenced through
-mutable "current" URLs `[H8]`, and **every number in this manuscript predates
-the manifest machinery**. Regenerating the numbers exactly is therefore not
-currently possible from a clean checkout. Closing this — the post-fix,
-manifest-carrying regeneration of every table, pinned releases, an archived
-input snapshot, and one-command regeneration — is a prerequisite for
-submission.
+completion checklist in `REPRODUCIBILITY.md` `[K12]`, and the 2026-08-18
+production matrix regenerated every association count in this manuscript
+under one (63 cells, driver `scripts/run_production_matrix.py`) `[M0]`.
+However, only the t0 annotation release is pinned by identifier; the t1
+snapshot, the GO release, the InterPro release and the Swiss-Prot releases
+are still referenced through mutable "current" URLs `[H8]`; and **every
+evaluation result (§3.2–3.7) predates the manifest machinery**, so those
+numbers are not exactly reproducible from a clean checkout. Closing this —
+the post-fix, manifest-based regeneration of every evaluation table, pinned
+releases, an archived input snapshot, and one-command regeneration — is a
+prerequisite for submission.
 
 ---
 
