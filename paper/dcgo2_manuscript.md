@@ -1009,9 +1009,20 @@ moves in **both directions**: sparse re-keyed layers grow (input propagation
 pools annotations onto testable terms before the statistics — `mondo` 9 →
 112, `cofactor` and `tcdb` behave likewise `[M7]`), while richly annotated
 layers shrink as the intersection–union test prunes parent-driven
-associations. The extreme is `hpo`, which collapses 996 → 38; we flag that
-collapse as **unexplained** and requiring investigation before the layer's
-paper-parity output is used for anything. Third, and most important: **none
+associations. The extreme is `hpo`, which falls 996 → 38 — and the cause is
+measured, not mysterious `[M7a]`. The IC floor removed nothing (43 kept, 0
+dropped), and degenerate parents are rare (4.1% of sampled terms have a
+protein set identical to their direct-parent union); what the production log
+shows instead is the relative inference operating at full scope —
+13,742,781 pairs governed by the relative test, 92.7% of all evaluated
+pairs. That is consistent with the layer's baseline associations being
+overwhelmingly *inherited*: HPO's gene → phenotype annotation is
+disease-block derived and dense (332,599 rows over 5,274 genes), so most
+term-level signal is echoed from broader terms, and the combined
+`max(overall_p, relative_p)` removes it, leaving a level-specific residue —
+not a pipeline defect. Whether that reduction is correct specificity or
+over-conservatism of the union background is answerable only by the pending
+post-#67 temporal evaluation. Third, and most important: **none
 of these counts is validated**. No held-out temporal test, no permutation
 control and no reference comparison has yet been run for any of these
 layers; the counts are the size of hypothesis sets, exactly as §3.1 cautions
