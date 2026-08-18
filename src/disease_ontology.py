@@ -49,6 +49,21 @@ here explicitly and counted at parse time (:class:`XrefMapping` for the table,
   (``MIM:PS267700``, 332 of them). UniProt ``DR MIM`` lines only ever carry plain
   numeric ids, so these simply never match; they are counted separately rather
   than reported as failures.
+
+Mondo (``--ontology mondo`` / ``orphanet_mondo``)
+-------------------------------------------------
+The machinery is prefix- and target-generic, and Mondo is the second disease
+ontology it re-keys onto: ``mondo.obo`` cross-references the same UniProt
+disease layer under the prefixes ``OMIM:`` (10,176 xrefs at the 2026-08-04
+release; DO writes ``MIM:``) and ``Orphanet:`` (10,491; DO writes ``ORDO:``).
+The policy above applies unchanged — unmapped ids dropped and counted,
+one-to-many kept as genuine expansion, obsolete targets resolved through
+``replaced_by`` (Mondo has 4,612 obsolete terms, 2,485 with a replacement).
+Trailing ``{source="..."}`` qualifiers on Mondo's xref lines are ignored: a
+cross-reference is treated as a mapping whatever its provenance annotation, the
+same reading the DOID layer applies to DO's bare xrefs. The hierarchy is
+Mondo's ``is_a`` graph; its ``relationship:`` lines carry RO/BFO relation ids
+(never ``part_of`` by name) and are not traversed.
 """
 
 from __future__ import annotations
@@ -68,6 +83,11 @@ from src.uniprot_annotation_source import parse_uniprot_cross_refs
 #: Disease Ontology terms, e.g. ``DOID:9352``.
 DOID_SPEC = OntologySpec(
     ontology_id="DOID", name="Human Disease Ontology", term_prefix="DOID:"
+)
+
+#: Mondo Disease Ontology terms, e.g. ``MONDO:0007739``.
+MONDO_SPEC = OntologySpec(
+    ontology_id="MONDO", name="Mondo Disease Ontology", term_prefix="MONDO:"
 )
 
 _ID_RE = re.compile(r"^id:\s*(\S+)")
@@ -141,29 +161,44 @@ def _resolve_replacement(
     return current
 
 
-def build_doid_xref_map(path: Path, xref_prefix: str = "MIM") -> XrefMapping:
-    """Build ``{external id → {DOID}}`` from the ``xref`` lines of ``doid.obo``.
+def build_doid_xref_maps(
+    path: Path, xref_prefixes: Tuple[str, ...]
+) -> Dict[str, XrefMapping]:
+    """Build one :class:`XrefMapping` per prefix from a single pass over an OBO.
+
+    Written for ``doid.obo`` and generic over any OBO that cross-references
+    external catalogues on its term stanzas — ``mondo.obo`` uses the identical
+    machinery (only the prefixes differ, and trailing ``{source=...}``
+    qualifiers are ignored by the xref pattern). Accepting several prefixes at
+    once exists for the chains that need two namespaces from the same file
+    (the OncoTree route reads DO's ``NCI`` *and* ``UMLS_CUI`` xrefs): the file
+    is scanned once, not once per prefix.
 
     Args:
-        path: the Disease Ontology OBO file.
-        xref_prefix: which cross-reference namespace to index. ``"MIM"`` is
-            OMIM (what UniProt ``DR MIM`` carries — the prefix in the OBO is
-            ``MIM``, *not* ``OMIM``); ``"ORDO"`` is Orphanet.
+        path: the ontology OBO file.
+        xref_prefixes: which cross-reference namespaces to index. For DO,
+            ``"MIM"`` is OMIM (the prefix in the OBO is ``MIM``, *not*
+            ``OMIM``) and ``"ORDO"`` is Orphanet; Mondo writes the same two
+            namespaces as ``"OMIM"`` and ``"Orphanet"``.
 
     Returns:
-        an :class:`XrefMapping` whose targets are live DO terms only, plus the
-        counts needed to audit what the mapping dropped or duplicated.
+        ``{prefix: XrefMapping}`` whose targets are live (non-obsolete) terms
+        only, plus the counts needed to audit what each mapping dropped or
+        duplicated.
     """
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"Disease Ontology OBO not found: {path}")
 
+    wanted = set(xref_prefixes)
     # Pass 1: collect every stanza's id, obsolete flag, replacement and xrefs.
-    raw_xrefs: Dict[str, Set[str]] = defaultdict(set)  # source id → DO terms
+    raw_xrefs: Dict[str, Dict[str, Set[str]]] = {
+        prefix: defaultdict(set) for prefix in xref_prefixes
+    }
+    n_xrefs: Dict[str, int] = dict.fromkeys(xref_prefixes, 0)
     obsolete: Set[str] = set()
     replaced_by: Dict[str, str] = {}
     n_terms = 0
-    n_xrefs = 0
 
     term_id: Optional[str] = None
     in_term = False
@@ -188,76 +223,90 @@ def build_doid_xref_map(path: Path, xref_prefix: str = "MIM") -> XrefMapping:
             elif (match := _REPLACED_BY_RE.match(line)) is not None:
                 replaced_by[term_id] = match.group(1)
             elif (match := _XREF_RE.match(line)) is not None:
-                if match.group(1) == xref_prefix:
-                    raw_xrefs[match.group(2)].add(term_id)
-                    n_xrefs += 1
+                if match.group(1) in wanted:
+                    raw_xrefs[match.group(1)][match.group(2)].add(term_id)
+                    n_xrefs[match.group(1)] += 1
 
-    # Pass 2: resolve obsolete targets and record what each decision cost.
-    source_to_doids: Dict[str, Set[str]] = {}
-    n_obsolete_resolved = 0
-    n_obsolete_dropped = 0
-    without_target: Set[str] = set()
+    mappings: Dict[str, XrefMapping] = {}
+    for xref_prefix in xref_prefixes:
+        # Pass 2: resolve obsolete targets and record what each decision cost.
+        source_to_doids: Dict[str, Set[str]] = {}
+        n_obsolete_resolved = 0
+        n_obsolete_dropped = 0
+        without_target: Set[str] = set()
 
-    for source_id, targets in raw_xrefs.items():
-        live: Set[str] = set()
-        for target in targets:
-            if target not in obsolete:
-                live.add(target)
-                continue
-            replacement = _resolve_replacement(target, replaced_by, obsolete)
-            if replacement is None:
-                n_obsolete_dropped += 1
+        for source_id, targets in raw_xrefs[xref_prefix].items():
+            live: Set[str] = set()
+            for target in targets:
+                if target not in obsolete:
+                    live.add(target)
+                    continue
+                replacement = _resolve_replacement(target, replaced_by, obsolete)
+                if replacement is None:
+                    n_obsolete_dropped += 1
+                else:
+                    n_obsolete_resolved += 1
+                    live.add(replacement)
+            if live:
+                source_to_doids[source_id] = live
             else:
-                n_obsolete_resolved += 1
-                live.add(replacement)
-        if live:
-            source_to_doids[source_id] = live
-        else:
-            without_target.add(source_id)
+                without_target.add(source_id)
 
-    n_non_numeric = sum(1 for source_id in raw_xrefs if not source_id.isdigit())
-    n_one_to_many = sum(1 for targets in source_to_doids.values() if len(targets) > 1)
+        n_non_numeric = sum(
+            1 for source_id in raw_xrefs[xref_prefix] if not source_id.isdigit()
+        )
+        n_one_to_many = sum(
+            1 for targets in source_to_doids.values() if len(targets) > 1
+        )
 
-    mapping = XrefMapping(
-        xref_prefix=xref_prefix,
-        source_to_doids=source_to_doids,
-        n_terms=n_terms,
-        n_obsolete_terms=len(obsolete),
-        n_xrefs=n_xrefs,
-        n_source_ids=len(raw_xrefs),
-        n_non_numeric=n_non_numeric,
-        n_one_to_many=n_one_to_many,
-        n_obsolete_resolved=n_obsolete_resolved,
-        n_obsolete_dropped=n_obsolete_dropped,
-        source_ids_without_target=frozenset(without_target),
-    )
-    logger.info(
-        f"Parsed Disease Ontology {xref_prefix} cross-references from {path}: "
-        f"{mapping.n_terms:,} terms ({mapping.n_obsolete_terms:,} obsolete), "
-        f"{mapping.n_xrefs:,} {xref_prefix} xrefs over {mapping.n_source_ids:,} "
-        f"distinct ids → {len(mapping):,} mappable"
-    )
-    logger.info(
-        f"  one-to-many: {mapping.n_one_to_many:,} ids map to >1 DO term (kept, "
-        f"expanded); non-numeric (phenotypic series): {mapping.n_non_numeric:,}; "
-        f"obsolete targets: {mapping.n_obsolete_resolved:,} resolved via "
-        f"replaced_by, {mapping.n_obsolete_dropped:,} dropped"
-    )
-    return mapping
+        mapping = XrefMapping(
+            xref_prefix=xref_prefix,
+            source_to_doids=source_to_doids,
+            n_terms=n_terms,
+            n_obsolete_terms=len(obsolete),
+            n_xrefs=n_xrefs[xref_prefix],
+            n_source_ids=len(raw_xrefs[xref_prefix]),
+            n_non_numeric=n_non_numeric,
+            n_one_to_many=n_one_to_many,
+            n_obsolete_resolved=n_obsolete_resolved,
+            n_obsolete_dropped=n_obsolete_dropped,
+            source_ids_without_target=frozenset(without_target),
+        )
+        logger.info(
+            f"Parsed {xref_prefix} cross-references from {path}: "
+            f"{mapping.n_terms:,} terms ({mapping.n_obsolete_terms:,} obsolete), "
+            f"{mapping.n_xrefs:,} {xref_prefix} xrefs over "
+            f"{mapping.n_source_ids:,} distinct ids → {len(mapping):,} mappable"
+        )
+        logger.info(
+            f"  one-to-many: {mapping.n_one_to_many:,} ids map to >1 term (kept, "
+            f"expanded); non-numeric (phenotypic series): "
+            f"{mapping.n_non_numeric:,}; obsolete targets: "
+            f"{mapping.n_obsolete_resolved:,} resolved via replaced_by, "
+            f"{mapping.n_obsolete_dropped:,} dropped"
+        )
+        mappings[xref_prefix] = mapping
+    return mappings
+
+
+def build_doid_xref_map(path: Path, xref_prefix: str = "MIM") -> XrefMapping:
+    """One-prefix convenience over :func:`build_doid_xref_maps`."""
+    return build_doid_xref_maps(path, (xref_prefix,))[xref_prefix]
 
 
 def remap_protein_terms(
     protein_terms: Dict[str, Set[str]],
     mapping: XrefMapping,
     label: str = "OMIM→DOID",
+    target_label: str = "Disease Ontology term",
 ) -> Tuple[Dict[str, Set[str]], RemapCoverage]:
-    """Re-key a ``{protein: {source id}}`` map onto DO terms.
+    """Re-key a ``{protein: {source id}}`` map onto ontology terms.
 
     One-to-many source ids expand to every target; unmapped ones are dropped
     (and counted); proteins left with no term at all disappear from the map, as
     they must — the Fisher engine treats an absent protein as having no
     annotation, which is exactly right for a protein whose only diseases are
-    outside DO.
+    outside the target ontology.
 
     A thin DOID-flavoured wrapper over the generic :func:`src.remap.remap_values`
     (which the gene-keyed layers also use, on the protein axis).
@@ -272,30 +321,32 @@ def remap_protein_terms(
         label,
         key_label="protein",
         value_label="term",
-        target_label="Disease Ontology term",
+        target_label=target_label,
     )
 
 
 class DiseaseOntologyAnnotationSource(AnnotationSource):
-    """Domain annotations keyed by Disease Ontology term.
+    """Domain annotations keyed by a disease-ontology term (DOID or MONDO).
 
     Reads a UniProt ``DR`` disease vocabulary (OMIM phenotypes by default,
-    Orphanet with ``xref_prefix="ORDO"``) and re-keys it to DOID terms *before*
-    the annotations reach the statistics, so sparse per-locus disease entries
-    pool into the DO class that subsumes them.
+    Orphanet with ``xref_prefix="ORDO"``) and re-keys it to the target
+    ontology's terms *before* the annotations reach the statistics, so sparse
+    per-locus disease entries pool into the disease class that subsumes them.
+    ``spec`` and ``obo_path`` select the target: DO by default, Mondo with
+    ``spec=MONDO_SPEC`` and the Mondo prefixes (``OMIM`` / ``Orphanet``).
     """
 
     def __init__(
         self,
         dat_path: Path,
-        doid_obo_path: Path,
+        obo_path: Path,
         database: str = "MIM",
         id_type: Optional[str] = "phenotype",
         xref_prefix: str = "MIM",
         spec: OntologySpec = DOID_SPEC,
     ) -> None:
         self.dat_path = Path(dat_path)
-        self.doid_obo_path = Path(doid_obo_path)
+        self.obo_path = Path(obo_path)
         self.database = database
         self.id_type = id_type
         self.xref_prefix = xref_prefix
@@ -307,8 +358,11 @@ class DiseaseOntologyAnnotationSource(AnnotationSource):
         raw = parse_uniprot_cross_refs(
             self.dat_path, self.database, id_type=self.id_type
         )
-        mapping = build_doid_xref_map(self.doid_obo_path, self.xref_prefix)
+        mapping = build_doid_xref_map(self.obo_path, self.xref_prefix)
         remapped, self.coverage = remap_protein_terms(
-            raw, mapping, label=f"{self.xref_prefix}→DOID"
+            raw,
+            mapping,
+            label=f"{self.xref_prefix}→{self.spec.ontology_id}",
+            target_label=f"{self.spec.name} term",
         )
         return remapped

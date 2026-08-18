@@ -1,4 +1,8 @@
-"""Unit tests for the WormBase phenotype layer (WBGene re-keyed to UniProt)."""
+"""Unit tests for the WormBase layers (WBGene re-keyed to UniProt).
+
+Covers the phenotype GAF (NOT policy) and the expression-based anatomy GAF
+(WBbt, whose qualifier column grades the call — Uncertain dropped).
+"""
 
 import gzip
 
@@ -6,7 +10,9 @@ import pytest
 
 from src.gene_mapping import parse_idmapping_accession_map, parse_idmapping_accessions
 from src.wormbase_annotation_source import (
+    WormBaseAnatomyAnnotationSource,
     WormBasePhenotypeAnnotationSource,
+    parse_wb_anatomy_association,
     parse_wb_phenotype_association,
 )
 
@@ -107,6 +113,87 @@ class TestIdmappingAccessions:
     def test_missing_file_fails_loudly(self, tmp_path):
         with pytest.raises(FileNotFoundError):
             parse_idmapping_accessions(tmp_path / "gone.dat.gz")
+
+
+# Anatomy GAF: same shape, WBbt terms, expression qualifiers in column 4
+# (Certain / Enriched / Partial / Uncertain / blank).
+ANATOMY_GAF = (
+    "!gaf-version: 2.0\n"
+    "WB\tWBGene00000001\taap-1\tCertain\tWBbt:0003679\tWB_REF:x\tIDA\t"
+    "WB:Expr1\tA\t\tY110A7A.10\tgene\ttaxon:6239\t20251105\tWB\t\t\n"
+    "WB\tWBGene00000001\taap-1\tEnriched\tWBbt:0005772\tWB_REF:x\tIDA\t"
+    "WB:Expr2\tA\t\tY110A7A.10\tgene\ttaxon:6239\t20251105\tWB\t\t\n"
+    "WB\tWBGene00000001\taap-1\tUncertain\tWBbt:0005812\tWB_REF:x\tIDA\t"
+    "WB:Expr3\tA\t\tY110A7A.10\tgene\ttaxon:6239\t20251105\tWB\t\t\n"
+    "WB\tWBGene00000002\taat-1\t\tWBbt:0005772\tWB_REF:y\tIDA\t"
+    "WB:Expr4\tA\t\tF27C8.1\tgene\ttaxon:6239\t20251105\tWB\t\t\n"
+    "WB\tWBGene00000002\taat-1\tPartial\tWBbt:0003679\tWB_REF:y\tIDA\t"
+    "WB:Expr5\tA\t\tF27C8.1\tgene\ttaxon:6239\t20251105\tWB\t\t\n"
+)
+
+
+@pytest.fixture
+def anatomy_gaf(tmp_path):
+    path = tmp_path / "anatomy_association.wb.gz"
+    with gzip.open(path, "wt") as handle:
+        handle.write(ANATOMY_GAF)
+    return path
+
+
+class TestParseWBAnatomyAssociation:
+    def test_terms_are_grouped_by_gene(self, anatomy_gaf):
+        parsed = parse_wb_anatomy_association(anatomy_gaf)
+        assert parsed["WBGene00000001"] == {"WBbt:0003679", "WBbt:0005772"}
+
+    def test_uncertain_rows_are_dropped(self, anatomy_gaf):
+        # Curators flagged the call as doubtful; it must not become evidence.
+        parsed = parse_wb_anatomy_association(anatomy_gaf)
+        assert "WBbt:0005812" not in parsed["WBGene00000001"]
+
+    def test_uncertain_matches_pipe_separated_tokens(self, tmp_path):
+        # Qualifiers are |-lists; "Enriched|Uncertain" must drop like a bare
+        # "Uncertain", and a token merely containing the word must not.
+        import gzip as _gzip
+
+        gaf = (
+            "!gaf-version: 2.0\n"
+            "WB\tWBGene00000003\tabc-1\tEnriched|Uncertain\tWBbt:0005813\t"
+            "WB_REF:z\tIDA\tWB:Expr6\tA\t\tX.1\tgene\ttaxon:6239\t20251105\tWB\t\t\n"
+            "WB\tWBGene00000003\tabc-1\tUncertainty\tWBbt:0005814\t"
+            "WB_REF:z\tIDA\tWB:Expr7\tA\t\tX.1\tgene\ttaxon:6239\t20251105\tWB\t\t\n"
+        )
+        path = tmp_path / "anatomy_pipe.wb.gz"
+        with _gzip.open(path, "wt") as handle:
+            handle.write(gaf)
+        parsed = parse_wb_anatomy_association(path)
+        assert parsed["WBGene00000003"] == {"WBbt:0005814"}
+
+    def test_blank_and_partial_qualifiers_are_kept(self, anatomy_gaf):
+        parsed = parse_wb_anatomy_association(anatomy_gaf)
+        assert parsed["WBGene00000002"] == {"WBbt:0005772", "WBbt:0003679"}
+
+    def test_phenotype_terms_do_not_leak_in(self, anatomy_gaf):
+        # The parser is prefix-guarded, so a WBPhenotype row in the wrong file
+        # would be counted malformed rather than annotated.
+        parsed = parse_wb_anatomy_association(anatomy_gaf)
+        all_terms = {term for terms in parsed.values() for term in terms}
+        assert all(term.startswith("WBbt:") for term in all_terms)
+
+
+class TestWormBaseAnatomyAnnotationSource:
+    """End-to-end: anatomy GAF rows in, accession-keyed WBbt terms out."""
+
+    def test_parse_produces_accession_keyed_terms(self, anatomy_gaf, idmapping):
+        source = WormBaseAnatomyAnnotationSource(anatomy_gaf, idmapping)
+        parsed = source.parse()
+        assert parsed["P41932"] == {"WBbt:0003679", "WBbt:0005772"}
+        assert parsed["A0A000"] == parsed["P41932"]  # one-to-many expansion
+        assert parsed["Q20655"] == {"WBbt:0005772", "WBbt:0003679"}
+
+    def test_spec_declares_the_wbbt_prefix(self, anatomy_gaf, idmapping):
+        spec = WormBaseAnatomyAnnotationSource(anatomy_gaf, idmapping).spec
+        assert spec.term_prefix == "WBbt:"
+        assert spec.ontology_id == "WBbt"
 
 
 class TestWormBasePhenotypeAnnotationSource:

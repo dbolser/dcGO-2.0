@@ -32,8 +32,11 @@ agnostic:
 from __future__ import annotations
 
 import gzip
+import io
 import re
+import zipfile
 from collections import defaultdict
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import (
@@ -47,6 +50,7 @@ from typing import (
     List,
     Sequence,
     Set,
+    TextIO,
 )
 
 if TYPE_CHECKING:
@@ -417,6 +421,37 @@ def open_text(path: Path, *, label: str = "file") -> IO[str]:
     return gzip.open(path, "rt") if path.suffix == ".gz" else open(path, "rt")
 
 
+@contextmanager
+def open_text_or_zip(path: Path, *, label: str = "file") -> Iterator[TextIO]:
+    """Text handle for a plain file or a single-member ``.zip`` distribution.
+
+    The GWAS Catalog and HPA ship one TSV wrapped in a zip; opening the member
+    without a context manager leaks the ``ZipFile``'s descriptor (the wrapper
+    closes the member stream, not the archive), so this owns archive and
+    wrapper together. Non-zip paths open as plain text — the sibling of
+    :func:`open_text`, which handles the gzip case.
+
+    Raises:
+        FileNotFoundError: when ``path`` does not exist.
+        ValueError: when the zip does not contain exactly one member.
+    """
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"{label} not found: {path}")
+    if path.suffix == ".zip":
+        with zipfile.ZipFile(path) as archive:
+            members = archive.namelist()
+            if len(members) != 1:
+                raise ValueError(
+                    f"{label} {path} should contain exactly one member; found {members}"
+                )
+            with io.TextIOWrapper(archive.open(members[0]), encoding="utf-8") as handle:
+                yield handle
+    else:
+        with open(path, "rt", encoding="utf-8") as handle:
+            yield handle
+
+
 def parse_obo_child_parents(
     path: Path,
     relations: Iterable[str] = ("part_of",),
@@ -467,11 +502,21 @@ def parse_obo_child_parents(
             elif line.startswith("id:"):
                 term_id = line[3:].strip()
             elif line.startswith("is_a:"):
-                # "is_a: CHEBI:24431 ! chemical entity"
-                parents.add(line[5:].split("!")[0].strip())
+                # "is_a: CHEBI:24431 ! chemical entity". Mondo and EFO write
+                # trailing OBO qualifier blocks before the comment —
+                # "is_a: MONDO:0000001 {source=\"DOID:4\"} ! disease" — and a
+                # target id never contains '{', so everything from the first
+                # brace is stripped too. Left in place, the qualifier welds
+                # itself onto the parent id and the edge silently misses the
+                # real parent (42% of Mondo terms lost every parent this way).
+                target = line[5:].split("!")[0].split("{")[0].strip()
+                if target:
+                    parents.add(target)
             elif line.startswith("is_obsolete:"):
                 obsolete = line.split(":", 1)[1].strip().lower() == "true"
             elif line.startswith("relationship:"):
+                # Whitespace-split, so a trailing {qualifier} block lands in
+                # fields[2:] and cannot contaminate the id.
                 fields = line[13:].split("!")[0].split()
                 if len(fields) >= 2 and fields[0] in wanted:
                     parents.add(fields[1].strip())

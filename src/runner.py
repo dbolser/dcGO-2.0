@@ -38,15 +38,24 @@ class RunRequest:
     subcell: Path
     chebi_obo: Path
     doid_obo: Path
+    mondo_obo: Path
     hpo_g2p: Path
     hpo_obo: Path
+    gwas_associations: Path
+    efo_obo: Path
+    hpa_single_cell: Path
+    civic_evidence: Path
+    ncit_obo: Path
+    oncotree_json: Path
     syngo_zip: Path
     mgi_genepheno: Path
     mgi_marker_swissprot: Path
     mp_obo: Path
     wb_phenotype: Path
+    wb_anatomy: Path
     worm_idmapping: Path
     wbphenotype_obo: Path
+    wbbt_obo: Path
     zfin_phenotype: Path
     zfin_uniprot: Path
     zfa_obo: Path
@@ -100,15 +109,24 @@ class RunRequest:
             subcell=args.subcell,
             chebi_obo=args.chebi_obo,
             doid_obo=args.doid_obo,
+            mondo_obo=args.mondo_obo,
             hpo_g2p=args.hpo_genes_to_phenotype,
             hpo_obo=args.hpo_obo,
+            gwas_associations=args.gwas_associations,
+            efo_obo=args.efo_obo,
+            hpa_single_cell=args.hpa_single_cell,
+            civic_evidence=args.civic_evidence,
+            ncit_obo=args.ncit_obo,
+            oncotree_json=args.oncotree_json,
             syngo_zip=args.syngo_zip,
             mgi_genepheno=args.mgi_genepheno,
             mgi_marker_swissprot=args.mgi_marker_swissprot,
             mp_obo=args.mp_obo,
             wb_phenotype=args.wb_phenotype,
+            wb_anatomy=args.wb_anatomy,
             worm_idmapping=args.worm_idmapping,
             wbphenotype_obo=args.wbphenotype_obo,
+            wbbt_obo=args.wbbt_obo,
             zfin_phenotype=args.zfin_phenotype,
             zfin_uniprot=args.zfin_uniprot,
             zfa_obo=args.zfa_obo,
@@ -131,15 +149,24 @@ class RunRequest:
             "subcell": self.subcell,
             "chebi_obo": self.chebi_obo,
             "doid_obo": self.doid_obo,
+            "mondo_obo": self.mondo_obo,
             "hpo_g2p": self.hpo_g2p,
             "hpo_obo": self.hpo_obo,
+            "gwas_associations": self.gwas_associations,
+            "efo_obo": self.efo_obo,
+            "hpa_single_cell": self.hpa_single_cell,
+            "civic_evidence": self.civic_evidence,
+            "ncit_obo": self.ncit_obo,
+            "oncotree_json": self.oncotree_json,
             "syngo_zip": self.syngo_zip,
             "mgi_genepheno": self.mgi_genepheno,
             "mgi_marker_swissprot": self.mgi_marker_swissprot,
             "mp_obo": self.mp_obo,
             "wb_phenotype": self.wb_phenotype,
+            "wb_anatomy": self.wb_anatomy,
             "worm_idmapping": self.worm_idmapping,
             "wbphenotype_obo": self.wbphenotype_obo,
+            "wbbt_obo": self.wbbt_obo,
             "zfin_phenotype": self.zfin_phenotype,
             "zfin_uniprot": self.zfin_uniprot,
             "zfa_obo": self.zfa_obo,

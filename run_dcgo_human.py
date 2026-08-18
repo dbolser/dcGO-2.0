@@ -19,11 +19,13 @@ Options:
     --ontology STR           Ontology to associate domains with (default: go). See
                              src/ontology_registry.py, or --help, for the full list:
                              go, ec, reactome, keyword, disease, doid, orphanet,
-                             orphanet_doid, hpo, syngo, mp, wbphenotype, zfa,
-                             fbcv, fbbt, tcdb, merops, cazy, unipathway,
-                             complex, drugbank, pharos, condensate,
-                             subcellular, ligand, cofactor, rhea, xref
+                             orphanet_doid, mondo, orphanet_mondo, ncit,
+                             oncotree, hpo, efo, celltype, syngo, mp,
+                             wbphenotype, wbbt, zfa, fbcv, fbbt, tcdb, merops,
+                             cazy, unipathway, complex, drugbank, pharos,
+                             condensate, subcellular, ligand, cofactor, rhea, xref
     --doid-obo PATH          Path to doid.obo, used when --ontology doid|orphanet_doid
+    --mondo-obo PATH         Path to mondo.obo, used when --ontology mondo|orphanet_mondo
     --xref-db STR            UniProt DR database name, required when --ontology xref (e.g. KEGG, BRENDA)
     --xref-type STR          Optional DR third-field filter for --ontology xref (e.g. 'phenotype')
     --enzyme-dat PATH        Path to Expasy enzyme.dat, used when --ontology ec
@@ -67,11 +69,16 @@ Examples:
     # Gene-keyed layers (genes re-keyed to UniProt accessions at parse time)
     uv run python run_dcgo_human.py --ontology hpo                # HPO phenotypes (NCBI GeneID)
     uv run python run_dcgo_human.py --ontology syngo              # SynGO synaptic terms (HGNC)
+    uv run python run_dcgo_human.py --ontology efo                # GWAS Catalog traits (gene symbols)
+    uv run python run_dcgo_human.py --ontology celltype           # HPA cell types (Ensembl genes; flat)
+    uv run python run_dcgo_human.py --ontology ncit               # CIViC cancer evidence -> NCIt
+    uv run python run_dcgo_human.py --ontology oncotree           # ... -> OncoTree tumour types
 
     # Model-organism phenotype layers: learn the domain association on the
     # model organism's own proteins (domains are species-agnostic)
     uv run python run_dcgo_human.py --species mouse --ontology mp
     uv run python run_dcgo_human.py --species worm --ontology wbphenotype
+    uv run python run_dcgo_human.py --species worm --ontology wbbt  # expression-based anatomy
     uv run python run_dcgo_human.py --species zebrafish --ontology zfa
     uv run python run_dcgo_human.py --species fly --ontology fbcv
 
@@ -124,6 +131,7 @@ from src.release_pins import (
     FLYBASE_FBAL_TO_FBGN_FILENAME,
     FLYBASE_FBGN_UNIPROT_FILENAME,
     FLYBASE_GENOTYPE_PHENOTYPE_FILENAME,
+    WORMBASE_ANATOMY_FILENAME,
     WORMBASE_PHENOTYPE_FILENAME,
 )
 from src.run_manifest import RunManifest, describe_file, manifest_filename
@@ -162,15 +170,24 @@ INPUT_SOURCE_NAMES = {
     "subcell": "uniprot_subcell",
     "chebi_obo": "chebi",
     "doid_obo": "disease_ontology",
+    "mondo_obo": "mondo_ontology",
     "hpo_g2p": "hpo_annotations",
     "hpo_obo": "hpo_ontology",
+    "gwas_associations": "gwas_catalog",
+    "efo_obo": "efo_ontology",
+    "hpa_single_cell": "hpa_single_cell",
+    "civic_evidence": "civic_evidence",
+    "ncit_obo": "ncit_ontology",
+    "oncotree_json": "oncotree_tumortypes",
     "syngo_zip": "syngo",
     "mgi_genepheno": "mgi_genepheno",
     "mgi_marker_swissprot": "mgi_marker_swissprot",
     "mp_obo": "mp_ontology",
     "wb_phenotype": "wormbase_phenotype",
+    "wb_anatomy": "wormbase_anatomy",
     "worm_idmapping": "worm_idmapping",
     "wbphenotype_obo": "wbphenotype_ontology",
+    "wbbt_obo": "wbbt_ontology",
     "zfin_phenotype": "zfin_phenotype",
     "zfin_uniprot": "zfin_uniprot",
     "zfa_obo": "zfa_ontology",
@@ -742,6 +759,14 @@ def build_argument_parser() -> argparse.ArgumentParser:
         "used to re-key the annotations and the DAG they propagate up)",
     )
     parser.add_argument(
+        "--mondo-obo",
+        type=Path,
+        default=Path("data/raw/mondo/mondo.obo"),
+        help="Path to the Mondo Disease Ontology OBO, for --ontology "
+        "mondo/orphanet_mondo (supplies both the OMIM/Orphanet cross-references "
+        "used to re-key the annotations and the DAG they propagate up)",
+    )
+    parser.add_argument(
         "--hpo-genes-to-phenotype",
         type=Path,
         default=Path("data/raw/hpo/genes_to_phenotype.txt"),
@@ -754,6 +779,50 @@ def build_argument_parser() -> argparse.ArgumentParser:
         default=Path("data/raw/hpo/hp.obo"),
         help="Path to the Human Phenotype Ontology OBO, for --ontology hpo "
         "--enable-true-path",
+    )
+    parser.add_argument(
+        "--gwas-associations",
+        type=Path,
+        default=Path(
+            "data/raw/gwas_catalog/gwas-catalog-associations_ontology-annotated-full.zip"
+        ),
+        help="Path to the GWAS Catalog ontology-annotated association file "
+        "(zip or extracted TSV), for --ontology efo",
+    )
+    parser.add_argument(
+        "--efo-obo",
+        type=Path,
+        default=Path("data/raw/efo/efo.obo"),
+        help="Path to the Experimental Factor Ontology OBO, for --ontology "
+        "efo --enable-true-path",
+    )
+    parser.add_argument(
+        "--civic-evidence",
+        type=Path,
+        default=Path("data/raw/civic/nightly-ClinicalEvidenceSummaries.tsv"),
+        help="Path to CIViC's nightly clinical evidence summaries TSV, for "
+        "--ontology ncit/oncotree",
+    )
+    parser.add_argument(
+        "--ncit-obo",
+        type=Path,
+        default=Path("data/raw/ncit/ncit.obo"),
+        help="Path to the NCI Thesaurus OBO edition, for --ontology ncit "
+        "--enable-true-path",
+    )
+    parser.add_argument(
+        "--oncotree-json",
+        type=Path,
+        default=Path("data/raw/oncotree/oncotree_tumortypes.json"),
+        help="Path to the OncoTree tumour-types JSON (API dump; supplies "
+        "both the NCI/UMLS code mapping and the tree), for --ontology oncotree",
+    )
+    parser.add_argument(
+        "--hpa-single-cell",
+        type=Path,
+        default=Path("data/raw/hpa/rna_single_cell_type.tsv.zip"),
+        help="Path to HPA's rna_single_cell_type table (zip or extracted "
+        "TSV), for --ontology celltype",
     )
     parser.add_argument(
         "--syngo-zip",
@@ -789,6 +858,21 @@ def build_argument_parser() -> argparse.ArgumentParser:
         help="Path to WormBase's phenotype_association GAF (the filename "
         "carries the WormBase release), for --ontology wbphenotype "
         "(run with --species worm)",
+    )
+    parser.add_argument(
+        "--wb-anatomy",
+        type=Path,
+        default=Path("data/raw/wormbase") / WORMBASE_ANATOMY_FILENAME,
+        help="Path to WormBase's anatomy_association GAF (expression-based; "
+        "the filename carries the WormBase release), for --ontology wbbt "
+        "(run with --species worm)",
+    )
+    parser.add_argument(
+        "--wbbt-obo",
+        type=Path,
+        default=Path("data/raw/wormbase_ontology/wbbt.obo"),
+        help="Path to the C. elegans Gross Anatomy Ontology OBO, for "
+        "--ontology wbbt --enable-true-path",
     )
     parser.add_argument(
         "--worm-idmapping",
@@ -1046,9 +1130,9 @@ def main(argv: list[str] | None = None) -> int:
             input_processor = OntologyProcessor(args.go_ontology)
             input_ancestors = input_processor.get_ancestors
             # Membership test so terms the hierarchy no longer contains are
-            # handled instead of silently failing to propagate. Registry
-            # hierarchies expose only an ancestors function, so the remap and
-            # tally are GO-only for now.
+            # handled instead of silently failing to propagate (the alt_id
+            # remap below is GO-only — other ontologies resolve merges at
+            # parse time, e.g. the DOID/Mondo replaced_by resolution).
             known_term_fn = input_processor.go_graph.__contains__
 
             # Merged ids first: an annotation to an alt_id has an exact live
@@ -1077,7 +1161,16 @@ def main(argv: list[str] | None = None) -> int:
                 )
         else:
             input_ancestors = ontology_entry.build_ancestors(ontology_paths)
-            known_term_fn = None
+            # Same membership discipline for registry hierarchies: the
+            # annotation file and the hierarchy file are pinned separately and
+            # drift (NCIt ids minted after the pinned OBO, EFO traits the OBO
+            # release lacks), so terms the hierarchy has never heard of must
+            # be counted and dropped, not carried as untestable annotations.
+            known_term_fn = (
+                ontology_entry.build_known_terms(ontology_paths)
+                if ontology_entry.build_known_terms is not None
+                else None
+            )
 
         # Terms still unknown after the remap (obsolete or malformed ids) are
         # dropped, not carried: an unknown term cannot propagate and has no

@@ -9,8 +9,10 @@ those visible rather than silent.
 import pytest
 
 from src.disease_ontology import (
+    MONDO_SPEC,
     DiseaseOntologyAnnotationSource,
     build_doid_xref_map,
+    build_doid_xref_maps,
     remap_protein_terms,
 )
 from src.hierarchy import closure_ancestors, parse_obo_child_parents
@@ -149,6 +151,15 @@ class TestBuildXrefMap:
     def test_orphanet_prefix_uses_the_same_machinery(self, obo):
         assert build_doid_xref_map(obo, "ORDO").targets("900") == {"DOID:100"}
 
+    def test_multiple_prefixes_come_from_one_pass(self, obo):
+        # The OncoTree chain needs NCI and UMLS_CUI from the same file; the
+        # multi-prefix form must agree with the single-prefix calls.
+        mappings = build_doid_xref_maps(obo, ("MIM", "ORDO"))
+        assert mappings["MIM"].targets("100") == {"DOID:100"}
+        assert mappings["ORDO"].targets("900") == {"DOID:100"}
+        assert mappings["MIM"].n_xrefs == 7
+        assert mappings["ORDO"].n_xrefs == 1
+
     def test_missing_file_fails_loudly(self, tmp_path):
         with pytest.raises(FileNotFoundError):
             build_doid_xref_map(tmp_path / "nope.obo")
@@ -261,3 +272,77 @@ DR   MIM; 600; phenotype.
     def test_spec_declares_the_doid_prefix(self, dat, obo):
         spec = DiseaseOntologyAnnotationSource(dat, obo).spec
         assert spec.term_prefix == "DOID:"
+
+
+# A miniature mondo.obo: same UniProt disease layer, different xref prefixes
+# (OMIM:/Orphanet:, not MIM:/ORDO:) and trailing {source=...} qualifiers on
+# every xref line, which the pattern must ignore.
+MINI_MONDO = """format-version: 1.2
+data-version: releases/2026-08-04
+
+[Term]
+id: MONDO:0000001
+name: disease
+
+[Term]
+id: MONDO:0000100
+name: ataxia
+is_a: MONDO:0000001 ! disease
+xref: OMIM:100 {source="MONDO:equivalentTo"}
+xref: Orphanet:900 {source="MONDO:equivalentTo", source="DOID:100"}
+relationship: RO:0004026 UBERON:0001016 ! disease has location nervous system
+
+[Term]
+id: MONDO:0000103
+name: obsolete ataxia 2
+xref: OMIM:300 {source="MONDO:equivalentTo"}
+is_obsolete: true
+replaced_by: MONDO:0000100
+"""
+
+
+@pytest.fixture
+def mondo_obo(tmp_path):
+    path = tmp_path / "mondo.obo"
+    path.write_text(MINI_MONDO)
+    return path
+
+
+class TestMondoReusesTheMachinery:
+    """Mondo is the second target of the same re-keying (--ontology mondo)."""
+
+    def test_omim_prefix_with_source_qualifiers(self, mondo_obo):
+        mapping = build_doid_xref_map(mondo_obo, "OMIM")
+        assert mapping.targets("100") == {"MONDO:0000100"}
+
+    def test_orphanet_prefix(self, mondo_obo):
+        mapping = build_doid_xref_map(mondo_obo, "Orphanet")
+        assert mapping.targets("900") == {"MONDO:0000100"}
+
+    def test_obsolete_target_resolved_via_replaced_by(self, mondo_obo):
+        mapping = build_doid_xref_map(mondo_obo, "OMIM")
+        assert mapping.targets("300") == {"MONDO:0000100"}
+        assert mapping.n_obsolete_resolved == 1
+
+    def test_ro_relationships_stay_out_of_the_is_a_graph(self, mondo_obo):
+        # Mondo spells its non-is_a relations as RO ids; with relations=()
+        # (the registry's Mondo loader) only the classification edge remains.
+        child_to_parents = parse_obo_child_parents(mondo_obo, relations=())
+        assert child_to_parents["MONDO:0000100"] == {"MONDO:0000001"}
+
+    def test_end_to_end_produces_mondo_terms(self, tmp_path, mondo_obo):
+        dat = tmp_path / "uniprot_sprot.dat"
+        dat.write_text(
+            "AC   P00001;\nDR   MIM; 100; phenotype.\n//\n"
+            "AC   P00002;\nDR   MIM; 300; phenotype.\n//\n"
+        )
+        source = DiseaseOntologyAnnotationSource(
+            dat, mondo_obo, xref_prefix="OMIM", spec=MONDO_SPEC
+        )
+        # 100 maps directly, 300 through the obsolete term's replacement:
+        # two sparse OMIM phenotypes pool onto one Mondo class.
+        assert source.parse() == {
+            "P00001": {"MONDO:0000100"},
+            "P00002": {"MONDO:0000100"},
+        }
+        assert source.spec.term_prefix == "MONDO:"

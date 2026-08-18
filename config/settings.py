@@ -21,6 +21,7 @@ from src.release_pins import (
     FLYBASE_FBGN_UNIPROT_FILENAME,
     FLYBASE_GENOTYPE_PHENOTYPE_FILENAME,
     FLYBASE_RELEASE,
+    WORMBASE_ANATOMY_FILENAME,
     WORMBASE_PHENOTYPE_FILENAME,
     WORMBASE_RELEASE,
 )
@@ -66,6 +67,10 @@ class DataSource:
     #: URL embeds a release name and therefore *will* break on upstream
     #: release turnover (WormBase, FlyBase).
     update_hint: Optional[str] = None
+    #: On-disk filename, when the URL's last path segment is not a usable one
+    #: (API endpoints like OncoTree's ``/api/tumorTypes``). Defaults to the
+    #: URL basename.
+    filename: Optional[str] = None
 
     def __post_init__(self) -> None:
         """Validate data source configuration."""
@@ -365,6 +370,19 @@ class Config:
                 required=False,
                 checksum="sha256:5b9803aa17eeabf4c70f144c64216294d01e66335da3e560576d4eb2dc9ff490",
             ),
+            # Mondo Disease Ontology. Like doid.obo it supplies both the term
+            # DAG and the OMIM/Orphanet cross-references (prefixes OMIM: and
+            # Orphanet:, vs DO's MIM:/ORDO:) that re-key UniProt's disease
+            # layer, for --ontology mondo|orphanet_mondo. Pinned to an
+            # immutable release PURL; bump URL and checksum together.
+            "mondo_ontology": DataSource(
+                name="mondo_ontology",
+                url="https://purl.obolibrary.org/obo/mondo/releases/2026-08-04/mondo.obo",
+                description="Mondo Disease Ontology (DAG + OMIM/Orphanet xrefs) for --ontology mondo",
+                required=False,
+                subdir="mondo",
+                checksum="sha256:fce4bccd97c4eb66161e88272ca0bd6ecd28c003afa878bbec8eae0ceb78fba8",
+            ),
             # Human Phenotype Ontology annotation and ontology files, for
             # run_dcgo_human.py --ontology hpo (src/hpo_annotation_source.py).
             # Both land in data/raw/hpo/. genes_to_phenotype.txt is NCBI-GeneID
@@ -383,6 +401,71 @@ class Config:
                 description="Human Phenotype Ontology DAG (True Path for --ontology hpo)",
                 required=False,
                 subdir="hpo",
+            ),
+            # GWAS Catalog association file, EFO-annotated, for --ontology efo
+            # (src/gwas_annotation_source.py). The per-file .tsv names on the
+            # FTP are gone; associations now ship as one zip under
+            # releases/latest/ (a moving target — the run manifest's SHA-256
+            # identifies the actual snapshot; 2026-08-02 at acquisition).
+            "gwas_catalog": DataSource(
+                name="gwas_catalog",
+                url="https://ftp.ebi.ac.uk/pub/databases/gwas/releases/latest/"
+                "gwas-catalog-associations_ontology-annotated-full.zip",
+                description="GWAS Catalog SNP → EFO trait associations (--ontology efo)",
+                required=False,
+                subdir="gwas_catalog",
+            ),
+            # EFO ships versioned releases on GitHub; pinned like the other
+            # ontology releases (bump URL and checksum together).
+            "efo_ontology": DataSource(
+                name="efo_ontology",
+                url="https://github.com/EBISPOT/efo/releases/download/v3.93.0/efo.obo",
+                description="Experimental Factor Ontology DAG (True Path for --ontology efo)",
+                required=False,
+                subdir="efo",
+                checksum="sha256:66e87fc65a6254c6d69281ed3d286784ee5f8265b1e57691efddd29b20570c46",
+            ),
+            # CIViC-derived cancer layers (--ontology ncit|oncotree,
+            # src/civic_annotation_source.py). CIViC's nightly is a moving
+            # target (CC0); the run manifest's SHA-256 identifies the snapshot.
+            "civic_evidence": DataSource(
+                name="civic_evidence",
+                url="https://civicdb.org/downloads/nightly/"
+                "nightly-ClinicalEvidenceSummaries.tsv",
+                description="CIViC clinical evidence, DOID-keyed (--ontology ncit/oncotree)",
+                required=False,
+                subdir="civic",
+            ),
+            # NCIt OBO edition, pinned to the release we validated against
+            # (248 MB; the OBO reader streams it). Bump URL+checksum together.
+            "ncit_ontology": DataSource(
+                name="ncit_ontology",
+                url="https://purl.obolibrary.org/obo/ncit/releases/2026-03-19/ncit.obo",
+                description="NCI Thesaurus OBO edition (True Path for --ontology ncit)",
+                required=False,
+                subdir="ncit",
+                checksum="sha256:8fdc2d29c9ebd91ada8330ed023b0c56ae787a31e6aedff453ee9bfef6fc18f6",
+            ),
+            # The OncoTree API endpoint has no filename in its path (and
+            # rejects HEAD, but serves GET); `filename` names the dump.
+            "oncotree_tumortypes": DataSource(
+                name="oncotree_tumortypes",
+                url="https://oncotree.mskcc.org/api/tumorTypes",
+                description="OncoTree tumour types + NCI/UMLS xrefs (--ontology oncotree)",
+                required=False,
+                subdir="oncotree",
+                filename="oncotree_tumortypes.json",
+            ),
+            # HPA single-cell expression matrix, for --ontology celltype
+            # (src/hpa_annotation_source.py). Unversioned "current release"
+            # URL (HPA v25 at acquisition, 2025-12-12); the run manifest's
+            # SHA-256 identifies the snapshot.
+            "hpa_single_cell": DataSource(
+                name="hpa_single_cell",
+                url="https://www.proteinatlas.org/download/tsv/rna_single_cell_type.tsv.zip",
+                description="HPA single-cell gene × cell-type expression (--ontology celltype)",
+                required=False,
+                subdir="hpa",
             ),
             # SynGO bulk release: one zip carrying both the HGNC-keyed
             # annotations and the term hierarchy, for --ontology syngo
@@ -441,6 +524,29 @@ class Config:
                     "WORMBASE_RELEASE in src/release_pins.py (updates this URL "
                     "and the --wb-phenotype default together)"
                 ),
+            ),
+            # Same host and release-in-filename caveat as wormbase_phenotype
+            # above; expression-based anatomy associations for --ontology wbbt.
+            "wormbase_anatomy": DataSource(
+                name="wormbase_anatomy",
+                url="https://downloads.wormbase.org/releases/"
+                "current-production-release/ONTOLOGY/"
+                f"{WORMBASE_ANATOMY_FILENAME}",
+                description="WormBase gene → anatomy expression GAF (--ontology wbbt)",
+                required=False,
+                subdir="wormbase",
+                update_hint=(
+                    f"WormBase has likely moved past {WORMBASE_RELEASE}: bump "
+                    "WORMBASE_RELEASE in src/release_pins.py (updates this URL "
+                    "and the --wb-anatomy default together)"
+                ),
+            ),
+            "wbbt_ontology": DataSource(
+                name="wbbt_ontology",
+                url="https://purl.obolibrary.org/obo/wbbt.obo",
+                description="C. elegans Gross Anatomy Ontology DAG (True Path for --ontology wbbt)",
+                required=False,
+                subdir="wormbase_ontology",
             ),
             "wbphenotype_ontology": DataSource(
                 name="wbphenotype_ontology",
