@@ -53,12 +53,13 @@ now reproduces the original pipeline's structure: the relative
 (parental-background) test is combined with the overall test before FDR
 correction, input annotations are propagated by the True Path Rule, GO
 propagation is restricted to `is_a`/`part_of`, and an information-content
-floor removes vacuous near-root terms `[K3, K11]`. On human data the earlier
-default configuration performs 1.64 × 10⁹ tests and reports 164,549
-associations at FDR < 0.01 `[A5, A7]` (**PROVISIONAL** — a pre-fix,
-manifest-less run; the paper-parity single-domain configuration reports
-30,655 `[K4]`). We assess the associations in three retrospective settings,
-all of which predate the propagation fix and are marked provisional in the
+floor removes vacuous near-root terms `[K3, K11]`. On current human data the
+baseline configuration performs 1.69 × 10⁹ tests and reports 165,687
+associations at FDR < 0.01; the paper-parity configuration reports 96,419, of
+which 30,302 are single-domain under the information floor — both from
+manifest-carrying post-fix runs `[M1, M2]`. We assess the associations in
+three retrospective settings; all three were evaluated against the 2021
+training run, predate the propagation fix, and are marked provisional in the
 text pending regeneration. (i) Against the curated InterPro2GO map, treated
 strictly as an incomplete positive reference, the association set recovers 64.7%
 of curated pairs on shared domains after propagation `[B1]`. (ii) In a CAFA-style
@@ -196,9 +197,14 @@ For each (feature *f*, term *t*) pair a 2 × 2 contingency table is formed over 
 protein universe — proteins carrying *f* and annotated *t*; carrying *f* only;
 annotated *t* only; neither — using sparse matrix products, and a one-sided
 Fisher exact test is evaluated with a vectorised Cython implementation.
-*p*-values are adjusted across the full family of tests by the
-Benjamini–Hochberg procedure [5], and pairs with adjusted *p* < 0.01 are
-retained. A hypergeometric association score rescaled to 1–100 is also emitted.
+*p*-values are adjusted by the Benjamini–Hochberg procedure [5], with single
+domains and supra-domains corrected as **separate hypothesis families**, each
+against its own dense pair count — a supra-domain is not an exchangeable
+sibling of its constituent domains — and pairs with adjusted *p* < 0.01 are
+retained; run manifests record the two families and their BH thresholds
+`[M9]`. (Runs made before 2026-08-05 used a single pooled family; the 2021
+training run of §2.8 is one of them.) A hypergeometric association score
+rescaled to 1–100 is also emitted.
 
 Two properties of this design are load-bearing for the interpretation of the
 results and are stated here rather than in the discussion. (i) The hypothesis
@@ -215,14 +221,15 @@ prediction quality in any of 12 aspect × IC cells. **The step has been removed
 from the codebase** (2026-08-05) `[K7]`; it was already off in every run
 reported here `[H5]`, so no number in this draft depends on it.
 
-The current-release human run reports 165,823 associations at FDR < 0.01
-`[A8]`; the 2021 training run used for all temporal evaluation reports 164,549
-`[A7]` from 1,640,917,330 tests `[A5]` over 18,382 proteins and 16,055 GO terms
-`[A1, A4]`. (Both runs predate the propagation fix and the manifest machinery;
-see the era note in the draft conventions. The Fisher stage itself does not
-propagate, but these headline counts belong to a superseded configuration —
-the paper-parity configuration of §2.5 reports 30,655 single-domain
-associations `[K4]` — and will be regenerated from manifest-carrying runs.)
+The current human baseline run — manifest-carrying, at the production commit —
+reports 165,687 associations at FDR < 0.01 (44,453 single-domain / 121,234
+supra-domain) from 1,690,803,963 tests over 18,908 proteins and 16,389 GO
+terms `[M1]`; the paper-parity configuration of §2.5 reports 96,419, of which
+30,302 are single-domain under the `--min-ic 1` floor `[M2]`. The 2021
+training run used for all temporal evaluation reports 164,549 `[A7]` from
+1,640,917,330 tests `[A5]` over 18,382 proteins and 16,055 GO terms
+`[A1, A4]`; that run predates the manifest machinery and the per-family BH
+split, and its era is discussed in the draft conventions.
 
 By default no minimum-support or effect-size floor is applied beyond FDR
 significance. Two opt-in **reporting** filters exist, both applied *after* the
@@ -307,9 +314,11 @@ floored-away ancestor. What the floor does and does not fix is measured in
 The **paper-parity configuration** referred to throughout this draft is
 `--propagate-annotations --enable-relative-inference --enable-true-path`, with
 `--min-ic 1` as the recommended reporting floor; on human GO single domains it
-reports 30,655 significant associations at FDR < 0.01 before the floor `[K4]`.
-The measurement in §3.4 predates this design and evaluated the earlier
-post-hoc variant.
+reports 30,655 significant associations at FDR < 0.01 before the floor `[K4]`,
+and the manifest-carrying production run reproduces the floored count exactly
+— 30,302 single-domain associations under `--min-ic 1` `[M2]`, matching the
+sweep's floor-1 row `[K5]`. The measurement in §3.4 predates this design and
+evaluated the earlier post-hoc variant.
 
 ### 2.6 The annotation seam and the vocabulary registry
 
@@ -519,18 +528,20 @@ recomputation.
 ### 3.1 Scale of the association set
 
 On the 2021 human training snapshot the pipeline tested 1.64 × 10⁹ feature–term
-pairs and retained 164,549 at FDR < 0.01 `[A5, A7]` — about 0.01% of tests. The
-current-release run retains 165,823 `[A8]`. Feature space is dominated by
-combinations: 19,230 single domains expand to 102,206 features once contiguous
-pairs and triples are included `[A2, A3]`.
+pairs and retained 164,549 at FDR < 0.01 `[A5, A7]` — about 0.01% of tests.
+The current, manifest-carrying baseline run retains 165,687 (44,453
+single-domain / 121,234 supra-domain) `[M1]`, and the paper-parity
+configuration retains 96,419, of which 30,302 are single-domain under the
+`--min-ic 1` floor `[M2]`. Feature space is dominated by combinations: 19,230
+single domains expand to 102,206 features once contiguous pairs and triples
+are included `[A2, A3]`.
 
-> **PROVISIONAL — pre-regulates-fix era.** Both headline counts come from
-> manifest-less runs of the superseded configuration (no relative inference,
-> no input propagation) and are to be regenerated from post-fix,
-> manifest-carrying runs. The Fisher stage itself does not propagate, so
-> these counts are not corrupted by the edge defect — but they no longer
-> describe the method §2 now specifies. Under the paper-parity single-domain
-> configuration the corresponding count is 30,655 `[K4]`.
+> **Era status (updated 2026-08-18).** The current-release headline is now
+> **resolved**: the production matrix regenerated it post-fix under a
+> manifest (165,687, superseding the earlier manifest-less 165,823 `[A8]`).
+> The 164,549 figure remains the **pre-fix, manifest-less 2021 training run**
+> on which every temporal evaluation below rests; it stays quoted because it
+> is what those evaluations used, and it carries their era marking.
 
 We stress that "significant" here means only that: no minimum-support or
 effect-size policy is applied, so the set includes associations resting on very
@@ -896,8 +907,10 @@ configuration, FDR < 0.01. "On a chain" is the share of significant
 associations whose term is an ancestor of another significant term for the
 same domain — the specificity failure the relative test exists to prevent.
 Values from the sweep in `VALIDATION_PLAN.md` (item 2), computed with
-`validation/specificity_metrics.py`; no machine-readable artifact is committed
-yet, so the ledger carries these as provisional `[K4, K5]`.
+`validation/specificity_metrics.py`; the sweep itself has no committed
+machine-readable artifact, so the ledger carries it as provisional
+`[K4, K5]` — but its floor-1 significant count is now independently
+confirmed by the manifest-carrying production run (30,302 `[M2]`).
 
 | `--min-ic` (bits) | significant | mean #ancestors | on an ancestor chain | GO roots present |
 |---:|---:|---:|---:|---|
