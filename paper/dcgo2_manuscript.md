@@ -44,11 +44,11 @@ signal from recovery of the annotation base rate.
 **Results.** We present dcGO-2.0, an open reimplementation that associates
 InterPro entries and contiguous InterPro combinations ("supra-domains") with
 ontology terms by Fisher's exact tests with Benjamini–Hochberg control, and that
-generalises the annotation input behind a single interface: twenty-six
+generalises the annotation input behind a single interface: thirty-three
 vocabularies beyond the Gene Ontology are registered — UniProt-native layers,
-Enzyme Commission, disease, and human and model-organism phenotype ontologies
-whose gene-keyed annotations are re-keyed to protein accessions under an
-audited mapping policy — without touching the statistics `[K1]`. The method
+Enzyme Commission, disease, expression, and human and model-organism phenotype
+ontologies whose gene-keyed annotations are re-keyed to protein accessions
+under an audited mapping policy — without touching the statistics `[M8]`. The method
 now reproduces the original pipeline's structure: the relative
 (parental-background) test is combined with the overall test before FDR
 correction, input annotations are propagated by the True Path Rule, GO
@@ -75,11 +75,12 @@ curation added by 2026 at 12.5-fold the terms' own acquisition rates (2,181 hits
 on 170,416 predictions; bootstrap CI 10.6–14.1) `[E2]`; however, a proposed
 "surprise" ranking of emergent combinations shows **no demonstrated advantage**
 over ranking by the dcGO q-value, with a paired bootstrap interval spanning zero
-at every prediction budget `[E9, E10]`. Applying the unchanged statistics to the phenotype vocabularies —
-HPO, SynGO, and mouse, worm, zebrafish and fly phenotype layers learned on
-each organism's own proteins, with domains transferring species-agnostically —
-yields per-layer association sets whose counts await the first
-manifest-carrying production run `[L7]`; none is yet validated.
+at every prediction budget `[E9, E10]`. Applying the unchanged statistics to the expansion vocabularies —
+HPO, SynGO, disease and trait re-keys, expression layers, and mouse, worm,
+zebrafish and fly phenotype layers learned on each organism's own proteins,
+with domains transferring species-agnostically — yields per-layer association
+sets now measured by a 63-cell, manifest-carrying production matrix
+`[M0, M7]`; none of these layers is yet validated.
 
 **Conclusions.** Domain-derived associations contain predictive signal for later
 human GO annotations and outperform simple baselines in several retrospective
@@ -317,8 +318,9 @@ map, so the inference engine never sees anything ontology-specific. A registry
 holds one entry per vocabulary: a source factory, an ancestors factory and a
 direct-parents factory (or `None` when the vocabulary has no hierarchy), and
 the input files required, so a run fails early on a missing input.
-**Twenty-eight `--ontology` keys are registered** `[K1]` (nineteen at the time
-this draft was first compiled `[A12]`), in six kinds:
+**Thirty-five `--ontology` keys are registered** `[M8]` (nineteen at the time
+this draft was first compiled `[A12]`, twenty-eight at the 2026-08-17 update
+`[K1]`), in seven kinds:
 
 - the **Gene Ontology**, from the species GAF file;
 - **Enzyme Commission**, from Expasy `enzyme.dat` (UniProt-keyed already);
@@ -329,12 +331,18 @@ this draft was first compiled `[A12]`), in six kinds:
   (`CC SUBCELLULAR LOCATION` mapped to `SL-` terms, `FT /ligand_id` ChEBI
   ligands, `CC COFACTOR` ChEBI cofactors, `CC CATALYTIC ACTIVITY` Rhea
   reactions);
-- **term re-keys**: the OMIM and Orphanet disease layers re-keyed onto Disease
-  Ontology terms at parse time (`doid`, `orphanet_doid`), which is what gives
-  the disease curation a hierarchy at all;
-- **gene-keyed human layers** (HPO, SynGO) and **model-organism phenotype
-  layers** (MP, WBPhenotype, ZFA, FBcv, FBbt), whose identifier mapping is the
-  subject of §2.7;
+- **term re-keys**: the OMIM and Orphanet disease layers re-keyed at parse
+  time onto Disease Ontology terms (`doid`, `orphanet_doid`) or Mondo terms
+  (`mondo`, `orphanet_mondo`), which is what gives the disease curation a
+  hierarchy at all;
+- **gene-keyed human layers** (HPO, SynGO, GWAS-Catalog EFO traits, HPA
+  cell-type expression) and **model-organism layers** (MP, WBPhenotype, ZFA,
+  FBcv, FBbt phenotypes; WBbt anatomy expression), whose identifier mapping
+  is the subject of §2.7;
+- **cross-reference-chained cancer layers** (`ncit`, `oncotree`): CIViC's
+  CC0 gene → disease evidence carried through DOID's NCI Thesaurus
+  cross-references, and onward to OncoTree codes via shared NCI/UMLS ids —
+  two mapping hops, every stage counted `[L10]`;
 - a generic `xref` escape hatch reaching any other `DR` database by name.
 
 UniProt-derived vocabularies were selected by a survey of all ~150 `DR`
@@ -346,13 +354,15 @@ proteins/term (keywords) through 5.0 (Reactome) to 1.5 (ComplexPortal) and 0.4
 circular) are deliberately excluded `[F15, F16]`.
 
 Hierarchies come from five mechanisms: OBO graphs (GO via its own processor;
-ChEBI, DOID, HP, MP, WBPhenotype, ZFA, FBcv, FBbt via a light `is_a`/`part_of`
-reader), structure implicit in the identifier (EC, TCDB, MEROPS, CAZy),
-companion hierarchy files (Reactome, UniProt keywords, subcellular locations),
-a hierarchy sheet shipped inside the annotation release itself (SynGO), and
-none at all — for which `--enable-true-path` and `--enable-relative-inference`
-fail explicitly rather than degrading silently. Nineteen of the twenty-eight
-entries have a hierarchy `[K2]`.
+ChEBI, DOID, Mondo, HP, MP, WBPhenotype, WBbt, ZFA, FBcv, FBbt, EFO and NCIt
+via a light `is_a`/`part_of` reader), structure implicit in the identifier
+(EC, TCDB, MEROPS, CAZy), companion hierarchy files (Reactome, UniProt
+keywords, subcellular locations, OncoTree's JSON parent tree), a hierarchy
+sheet shipped inside the annotation release itself (SynGO), and none at all —
+for which `--enable-true-path` and `--enable-relative-inference` fail
+explicitly rather than degrading silently. Twenty-five of the thirty-five
+entries have a hierarchy `[M8]` (nineteen of twenty-eight at the previous
+update `[K2]`).
 
 > **Resolved defect (fixed 2026-08-04).** An earlier version of the
 > UniProt-native sources parsed the entire Swiss-Prot flat file with no
@@ -917,56 +927,85 @@ it here.
 
 ### 3.9 The multi-vocabulary expansion
 
-The registry now holds twenty-eight `--ontology` keys `[K1]`, and the round
-of work reported here added the annotation layers with the largest scope: the
-Human Phenotype Ontology, SynGO, and five model-organism phenotype
-vocabularies learned on their own organisms' proteomes (§2.7). A systematic
-acquisition pass preceded the adapters: **39 open annotation and ontology
-sources were fetched, integrity-checked and versioned** against UniProt
-release 2026_02 `[L8]`. The boundary of the open data is itself a finding:
-SNOMED CT and MedDRA are licence-gated and were not attempted; OMIM's
-`genemap2.txt` is registration-gated, with UniProt's `MIM` cross-references
-covering the open part; and MAxO publishes an ontology but no released
-annotation source, so there is nothing to test `[L8]`. Further layers built
-on the same acquisition (Mondo and Orphanet–Mondo re-keys, CIViC-derived
-NCIt/OncoTree cancer layers, GWAS-Catalog EFO traits, HPA cell types,
-WormBase anatomy) exist on an in-review branch and are **not** counted or
-reported here `[L9]`.
+The registry now holds thirty-five `--ontology` keys `[M8]`, and the round of
+work reported here added fourteen annotation layers in two waves. The first
+wave is the gene-keyed phenotype infrastructure of §2.7: the Human Phenotype
+Ontology, SynGO, and five model-organism phenotype vocabularies learned on
+their own organisms' proteomes. The second (merged after the first draft of
+this section) extends the same machinery `[L9, L10]`: Mondo and
+Orphanet–Mondo term re-keys of the UniProt disease layer; GWAS-Catalog EFO
+traits (genetic-association evidence — the loosest evidence type in the
+registry, and labelled as such); HPA single-cell **expression** layers
+(`celltype`, flat, on HPA's own cell-type names after Cell Ontology name
+matching fell below the pre-set usefulness floor); WormBase anatomy
+**expression** (`wbbt` — "expressed in", unlike the phenotype layers'
+"abnormal when mutated"); and the CIViC-chained cancer layers (`ncit`,
+`oncotree`). A systematic acquisition pass preceded the adapters: **39 open
+annotation and ontology sources were fetched, integrity-checked and
+versioned** against UniProt release 2026_02 `[L8]`. The boundary of the open
+data is itself a finding: SNOMED CT and MedDRA are licence-gated and were not
+attempted; OMIM's `genemap2.txt` is registration-gated, with UniProt's `MIM`
+cross-references covering the open part; and MAxO publishes an ontology but
+no released annotation source, so there is nothing to test `[L8]`.
 
-First runs of the merged layers, at FDR < 0.01 on single domains, give the
-counts in Table 5.
+**The production matrix.** Every runnable registry ontology has now been run
+under manifests: 63 cells, zero failures — one *baseline* cell per ontology,
+one *paper-parity* cell wherever a hierarchy exists, plus all-species and
+experimental-evidence GO variants (§3.10) — each writing
+`results/production/<cell>/run_manifest_<ontology>.json` with the
+`is_a`/`part_of` edge policy recorded, i.e. post-fix era throughout `[M0]`.
+Table 5 reads the expansion layers from those artifacts.
 
-**Table 5.** Significant single-domain associations per new layer.
-**PROVISIONAL — pending production run**: these counts were read from
-development-worktree outputs; the ledger rows point at the expected
-manifest-carrying artifacts (`results/production/run_manifest_<ontology>.json`),
-which the first production pass will supply `[L7]`.
+**Table 5.** Significant single-domain associations per expansion layer, from
+the production matrix `[M7]`. *Baseline* is the default configuration (no
+propagation, no relative inference, no floors); *paper-parity* is
+`--propagate-annotations --enable-relative-inference --enable-true-path
+--min-ic 1` (§2.5). Both columns count rows with `domain_type = single` in
+the cell's `domain_<ontology>_associations_significant.tsv`; single domains
+and supra-domains are corrected as separate BH families (§2.3), so each count
+is FDR < 0.01 within the single-domain family. `celltype` is a flat
+vocabulary and has no paper-parity cell.
 
-| Layer | Organism | Vocabulary | Significant (FDR < 0.01) |
-|---|---|---|---:|
-| `hpo` | human | Human Phenotype Ontology | 996 |
-| `syngo` | human | SynGO | 484 |
-| `mp` | mouse | Mammalian Phenotype | 873 |
-| `wbphenotype` | worm | WBPhenotype | 26,624 |
-| `zfa` | zebrafish | Zebrafish anatomy (affected) | 37,776 |
-| `fbcv` | fly | FlyBase phenotype class | 5,033 |
-| `fbbt` | fly | Drosophila anatomy (manifesting) | 10,791 |
+| Layer | Organism | Vocabulary (semantics) | Baseline | Paper-parity |
+|---|---|---|---:|---:|
+| `hpo` | human | Human Phenotype Ontology | 996 | 38 |
+| `syngo` | human | SynGO | 484 | 241 |
+| `mondo` | human | Mondo (re-keyed OMIM) | 9 | 112 |
+| `orphanet_mondo` | human | Mondo (re-keyed Orphanet) | 205 | 116 |
+| `efo` | human | EFO (GWAS traits) | 1,504 | 814 |
+| `celltype` | human | HPA cell-type expression | 1,236 | — |
+| `ncit` | human | NCI Thesaurus (via CIViC) | 9 | 10 |
+| `oncotree` | human | OncoTree (via CIViC) | 5 | 0 |
+| `mp` | mouse | Mammalian Phenotype | 873 | 261 |
+| `wbphenotype` | worm | WBPhenotype | 26,624 | 13,809 |
+| `wbbt` | worm | WormBase anatomy expression | 67,379 | 50,259 |
+| `zfa` | zebrafish | Zebrafish anatomy (affected) | 37,776 | 31,994 |
+| `fbcv` | fly | FlyBase phenotype class | 5,033 | 2,704 |
+| `fbbt` | fly | Drosophila anatomy (manifesting) | 10,791 | 8,316 |
 
-Two readings, and their limits. First, the spread follows curation shape, not
-biology: the worm, zebrafish and fly layers are large because their
-phenotype screens annotate tens of thousands of genes, while HPO's
-disease-derived gene set (5,204 mapped proteins) and SynGO's deliberately
-narrow expert curation (1,799) support correspondingly few domain
-associations. Second, and more important: **none of these counts is
-validated**. No held-out temporal test, no permutation control and no
-reference comparison has yet been run for any of these layers; the counts are
-the size of hypothesis sets, exactly as §3.1 cautions for GO. The
-model-organism layers carry the original dcGO's transfer argument — the
-association is learned on the model organism's proteins and the domain is
-species-agnostic — but that argument has not yet been tested here either
-(for instance, against human disease annotation via the HPO layer). We record
-the expansion as infrastructure with verified identifier mapping (§2.7) and
-honest per-layer semantics, not as validated predictive breadth.
+Three readings, and their limits. First, the spread follows curation shape,
+not biology: the expression and phenotype screens that annotate tens of
+thousands of genes (worm, zebrafish, fly) support the largest sets, while
+HPO's disease-derived universe (5,180 analysable proteins `[M7]`), SynGO's
+deliberately narrow expert curation (1,781), and the two-hop cancer layers
+(435 and 300) support correspondingly few. Second, the paper-parity column
+moves in **both directions**: sparse re-keyed layers grow (input propagation
+pools annotations onto testable terms before the statistics — `mondo` 9 →
+112, `cofactor` and `tcdb` behave likewise `[M7]`), while richly annotated
+layers shrink as the intersection–union test prunes parent-driven
+associations. The extreme is `hpo`, which collapses 996 → 38; we flag that
+collapse as **unexplained** and requiring investigation before the layer's
+paper-parity output is used for anything. Third, and most important: **none
+of these counts is validated**. No held-out temporal test, no permutation
+control and no reference comparison has yet been run for any of these
+layers; the counts are the size of hypothesis sets, exactly as §3.1 cautions
+for GO. The model-organism layers carry the original dcGO's transfer
+argument — the association is learned on the model organism's proteins and
+the domain is species-agnostic — but that argument has not yet been tested
+here either (for instance, against human disease annotation via the HPO
+layer). We record the expansion as infrastructure with verified identifier
+mapping (§2.7), honest per-layer semantics, and manifest-carrying first
+runs — not as validated predictive breadth.
 
 ---
 
