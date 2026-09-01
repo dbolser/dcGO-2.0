@@ -12,14 +12,27 @@ Usage: ``uv run python scripts/verify_gene_coverage.py [data/raw]``
 
 import sys
 from pathlib import Path
+from typing import Dict, Optional, Protocol, Set
+
+from src.remap import RemapCoverage
 
 RAW = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("data/raw")
 SPROT = RAW / "uniprot_sprot_dat" / "uniprot_sprot.dat.gz"
 
 
-def report(name, source):
+class GeneKeyedSource(Protocol):
+    """The slice of a gene-keyed adapter this script reports on."""
+
+    coverage: Optional[RemapCoverage]
+
+    def parse(self) -> Dict[str, Set[str]]: ...
+
+
+def report(name: str, source: GeneKeyedSource) -> None:
     ann = source.parse()
     cov = source.coverage
+    if cov is None:
+        raise RuntimeError(f"{name}: adapter recorded no remap coverage")
     print(
         f"{name}: {cov.n_mapped_values:,}/{cov.n_source_values:,} gene ids mapped "
         f"({100 * cov.value_coverage:.1f}%); proteins in layer: {len(ann):,}; "
@@ -27,7 +40,7 @@ def report(name, source):
     )
 
 
-def main():
+def main() -> None:
     from src.mgi_annotation_source import MGIAnnotationSource
     from src.wormbase_annotation_source import WormBasePhenotypeAnnotationSource
     from src.zfin_annotation_source import ZFINAnatomyAnnotationSource

@@ -278,9 +278,11 @@ edges, which put proteins annotated to "negative regulation of X" into X's
 propagated background `[K3]`. **This changes every previously quoted number
 that passed through GO propagation**, which is why the affected results below
 carry era markers. Run manifests record the edge policy as
-`analysis.ontology.propagation_relations` `[K12]`. The runs reported in this
-draft were made before the fix; output-side propagation was disabled in them,
-but evaluation-side propagation was not.
+`analysis.ontology.propagation_relations` `[K12]`. The evaluation runs
+reported in this draft (§§3.2–3.4, §3.6 and the §3.7 GO anchor) were made
+before the fix; output-side propagation was disabled in them, but
+evaluation-side propagation was not. The production-matrix runs (§§3.9–3.10,
+block M) are post-fix and manifest-carrying.
 
 ### 2.5 The relative (parental-background) test
 
@@ -410,9 +412,11 @@ mostly unreviewed, so the map must include TrEMBL — with coverage of **85.0%**
 of MGI genes (14,033/16,509), **82.5%** of WBGene ids (8,704/10,550), and
 **68.6%** of ZDB-GENE ids (5,139/7,487) `[L3, L4, L5]`. The fly layers map
 **35.1%** (FBcv; 6,121/17,438) and **42.0%** (FBbt; 3,358/7,987) of FBgn ids
-`[L6]` — low by design rather than by defect: FlyBase issues gene identifiers
-to transgenic constructs and drivers that have no *Drosophila* protein
-product, and those dominate the unmapped tail `[L6a]`.
+`[L6]` — low coverage that may reflect design rather than defect: FlyBase
+issues gene identifiers to transgenic constructs and drivers that have no
+*Drosophila* protein product, and spot checks of the unmapped tail are
+consistent with those dominating it, though the tail has not been
+exhaustively classified `[L6a]`.
 
 Genotype-to-gene attribution is handled per database, and restrictively. MGI
 rows are kept only for **single-gene genotypes** (a phenotype observed on an
@@ -956,9 +960,11 @@ registry, and labelled as such); HPA single-cell **expression** layers
 matching fell below the pre-set usefulness floor); WormBase anatomy
 **expression** (`wbbt` — "expressed in", unlike the phenotype layers'
 "abnormal when mutated"); and the CIViC-chained cancer layers (`ncit`,
-`oncotree`). A systematic acquisition pass preceded the adapters: **39 open
-annotation and ontology sources were fetched, integrity-checked and
-versioned** against UniProt release 2026_02 `[L8]`. The boundary of the open
+`oncotree`). A systematic acquisition pass preceded the adapters: **40 open
+annotation and ontology sources were attempted; 39 were fetched,
+integrity-checked and versioned** against UniProt release 2026_02, and one
+failed (CellMarker 2.0, HTTP 403 — HPA substituted as the cell-type source)
+`[L8]`. The boundary of the open
 data is itself a finding: SNOMED CT and MedDRA are licence-gated and were not
 attempted; OMIM's `genemap2.txt` is registration-gated, with UniProt's `MIM`
 cross-references covering the open part; and MAxO publishes an ontology but
@@ -1007,7 +1013,8 @@ deliberately narrow expert curation (1,781), and the two-hop cancer layers
 (435 and 300) support correspondingly few. Second, the paper-parity column
 moves in **both directions**: sparse re-keyed layers grow (input propagation
 pools annotations onto testable terms before the statistics — `mondo` 9 →
-112, `cofactor` and `tcdb` behave likewise `[M7]`), while richly annotated
+112 `[M7]`; `cofactor` 567 → 1,250 and `tcdb` 68 → 753 behave likewise
+`[M7b]`), while richly annotated
 layers shrink as the intersection–union test prunes parent-driven
 associations. The extreme is `hpo`, which falls 996 → 38 — and the cause is
 measured, not mysterious `[M7a]`. The IC floor removed nothing (43 kept, 0
@@ -1233,11 +1240,13 @@ general performance, calibration, or superiority" `[H20]`.
 
 **Scope and implementation.**
 
-17. **Every GO-propagated result in this draft is pre-regulates-fix era.** The
+17. **The GO-propagated *evaluation* results — §§3.2–3.4, §3.6 and the §3.7 GO
+    anchor — are pre-regulates-fix era.** (The GO-propagated *production*
+    counts in §§3.9–3.10 are post-fix and manifest-carrying — block M.) The
     species-filtering defect that previously invalidated §3.7 has been fixed
     and those rows regenerated `[F]`; the outstanding regeneration debt is now
-    the propagation-edge fix: §3.2–3.4, §3.6 and the §3.7 GO anchor must be
-    reproduced from post-#67, manifest-carrying runs `[K3, K12]`.
+    the propagation-edge fix: those evaluation sections must be reproduced
+    from post-#67, manifest-carrying runs `[K3, K12]`.
 18. **The A–D configuration-comparison artifacts are now committed**
     (`validation/bench_A`–`bench_D`), closing the provenance gap the review
     raised `[H12]`; the comparison itself still lacks a paired test or
