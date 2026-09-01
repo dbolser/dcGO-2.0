@@ -83,7 +83,10 @@ def build_matrix() -> list[tuple[str, list[str]]]:
     go = ["--ontology", "go"]
     cells.append(("go_allspecies_baseline", go + ["--species", "allspecies"]))
     cells.append(
-        ("go_allspecies_paperparity", go + ["--species", "allspecies"] + PAPER_PARITY_FLAGS)
+        (
+            "go_allspecies_paperparity",
+            go + ["--species", "allspecies"] + PAPER_PARITY_FLAGS,
+        )
     )
     cells.append(
         ("go_experimental_baseline", go + ["--evidence-filter", "experimental"])
@@ -104,9 +107,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--only", nargs="*", default=None, help="run only these cell names"
     )
-    parser.add_argument(
-        "--list", action="store_true", help="print the matrix and exit"
-    )
+    parser.add_argument("--list", action="store_true", help="print the matrix and exit")
     args = parser.parse_args(argv)
 
     cells = build_matrix()
@@ -148,8 +149,11 @@ def main(argv: list[str] | None = None) -> int:
         wall = time.time() - start
         if result.returncode != 0:
             failures.append(name)
-            print(f"[{i}/{len(cells)}] {name}: FAILED rc={result.returncode} "
-                  f"({wall:.0f}s) — see {log_path}", flush=True)
+            print(
+                f"[{i}/{len(cells)}] {name}: FAILED rc={result.returncode} "
+                f"({wall:.0f}s) — see {log_path}",
+                flush=True,
+            )
         else:
             print(f"[{i}/{len(cells)}] {name}: done ({wall:.0f}s)", flush=True)
 
