@@ -26,15 +26,24 @@ def paths(tmp_path):
         "subcell",
         "chebi_obo",
         "doid_obo",
+        "mondo_obo",
         "hpo_g2p",
         "hpo_obo",
+        "gwas_associations",
+        "efo_obo",
+        "hpa_single_cell",
+        "civic_evidence",
+        "ncit_obo",
+        "oncotree_json",
         "syngo_zip",
         "mgi_genepheno",
         "mgi_marker_swissprot",
         "mp_obo",
         "wb_phenotype",
+        "wb_anatomy",
         "worm_idmapping",
         "wbphenotype_obo",
+        "wbbt_obo",
         "zfin_phenotype",
         "zfin_uniprot",
         "zfa_obo",
@@ -192,12 +201,25 @@ class TestSourceConstruction:
         source = get_ontology("doid").build_source(paths, {})
         assert (source.database, source.id_type) == ("MIM", "phenotype")
         assert source.xref_prefix == "MIM"
-        assert source.doid_obo_path == paths["doid_obo"]
+        assert source.obo_path == paths["doid_obo"]
 
     def test_orphanet_doid_rekeys_the_orphanet_layer(self, paths):
         source = get_ontology("orphanet_doid").build_source(paths, {})
         assert (source.database, source.id_type) == ("Orphanet", None)
         assert source.xref_prefix == "ORDO"
+
+    def test_mondo_rekeys_the_same_layer_with_mondo_prefixes(self, paths):
+        source = get_ontology("mondo").build_source(paths, {})
+        assert (source.database, source.id_type) == ("MIM", "phenotype")
+        assert source.xref_prefix == "OMIM"  # Mondo writes OMIM:, DO writes MIM:
+        assert source.obo_path == paths["mondo_obo"]
+        assert source.spec.term_prefix == "MONDO:"
+
+    def test_orphanet_mondo_rekeys_the_orphanet_layer(self, paths):
+        source = get_ontology("orphanet_mondo").build_source(paths, {})
+        assert (source.database, source.id_type) == ("Orphanet", None)
+        assert source.xref_prefix == "Orphanet"
+        assert source.spec.term_prefix == "MONDO:"
 
     def test_doid_needs_the_obo_even_without_true_path(self, paths, tmp_path):
         # The OBO supplies the mapping table, not just the hierarchy, so a run
@@ -214,6 +236,34 @@ class TestSourceConstruction:
         source = get_ontology("syngo").build_source(paths, {})
         assert source.zip_path == paths["syngo_zip"]
         assert source.dat_path == paths["uniprot_dat"]
+
+
+class TestKnownTerms:
+    """build_known_terms: the membership test --propagate-annotations needs."""
+
+    # Hierarchies encoded in the id itself have no closed term universe.
+    ID_ENCODED = {"ec", "tcdb", "merops", "cazy"}
+
+    def test_every_map_backed_hierarchy_exposes_membership(self):
+        for key, entry in ONTOLOGIES.items():
+            if entry.build_ancestors is None or key in self.ID_ENCODED:
+                assert entry.build_known_terms is None, key
+            else:
+                assert entry.build_known_terms is not None, key
+
+    def test_membership_covers_children_and_edge_only_parents(self, paths, tmp_path):
+        obo = tmp_path / "known_terms_doid.obo"
+        # DOID:1 exists only as a parent (a root): it must still be known,
+        # while an id in neither column must not be.
+        obo.write_text(
+            "format-version: 1.2\n\n"
+            "[Term]\nid: DOID:100\nname: ataxia\nis_a: DOID:1 ! disease\n"
+        )
+        paths["doid_obo"] = obo
+        known = get_ontology("doid").build_known_terms(paths)
+        assert known("DOID:100")
+        assert known("DOID:1")
+        assert not known("DOID:404")
 
 
 class TestGeneKeyedPreflight:

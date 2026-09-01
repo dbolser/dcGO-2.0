@@ -128,6 +128,44 @@ def parse_gene_accession_index(dat_path: Path) -> GeneAccessionIndex:
     return index
 
 
+def parse_ensembl_gene_accession_map(dat_path: Path) -> GeneAccessionMap:
+    """Build an Ensembl gene id → UniProt accessions map from the flat file.
+
+    The Swiss-Prot ``DR Ensembl`` lines carry the gene id in their *fourth*
+    field (``DR   Ensembl; ENST…; ENSP…; ENSG00000166913.14. [P31946-1]``),
+    which :func:`src.uniprot_annotation_source.iter_uniprot_entries` does not
+    surface (its cross-refs are ``(db, id, type)`` triples), so this is a
+    dedicated line scan — same single pass over the file, different field.
+    Version suffixes and isoform brackets are stripped; ids are kept for every
+    species (Ensembl gene ids are namespace-unique — ``ENSG`` is human,
+    ``ENSMUSG`` mouse — so annotations keyed by one species' ids can only ever
+    match that species' entries).
+    """
+    logger.info(f"Building Ensembl gene → accession map from {dat_path}")
+    mapping: Dict[str, Set[str]] = defaultdict(set)
+    n_entries = 0
+    accession: str | None = None
+    with open_text(Path(dat_path), label="UniProt flat file") as handle:
+        for line in handle:
+            if line.startswith("AC") and accession is None:
+                accession = line[5:].split(";")[0].strip() or None
+            elif line.startswith("DR   Ensembl;") and accession is not None:
+                fields = [field.strip() for field in line[5:].split(";")]
+                if len(fields) >= 4:
+                    gene = fields[3].split()[0].rstrip(".").split(".")[0]
+                    if gene:
+                        mapping[gene].add(accession)
+            elif line.startswith("//"):
+                n_entries += 1
+                accession = None
+    gene_map = GeneAccessionMap("Ensembl gene", dict(mapping), n_entries)
+    logger.info(
+        f"  Entries scanned: {n_entries:,}; Ensembl gene ids: {len(gene_map):,} "
+        f"({gene_map.n_one_to_many:,} one-to-many)"
+    )
+    return gene_map
+
+
 def parse_idmapping_accession_map(
     path: Path, id_type: str, *, id_space: str | None = None
 ) -> GeneAccessionMap:

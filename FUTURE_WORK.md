@@ -1,5 +1,12 @@
 # Future Work: Expanding Ontology Coverage for Human Proteins
 
+> **Status (2026-08-31): the expansion described below is built.** The registry
+> holds **35 `--ontology` keys**, and the full production matrix (63 cells:
+> every layer × baseline, plus paper-parity for every hierarchical layer) ran
+> clean on 2026-08-18. See [STATUS.md](STATUS.md) for the snapshot and
+> [TODO.md](TODO.md) for what remains — chiefly evaluation and reproducibility,
+> not new adapters. The sections below are kept as the design record.
+>
 > **Status (foundations landed).** Two enabling seams are now in place:
 > (1) the whole path is **species-parameterised** (`--species` on download /
 > extract / run), so non-human annotations no longer need code changes; and
@@ -27,11 +34,14 @@
 > human subset and sorted them by proteins-per-term
 > (`docs/uniprot_ontology_survey.md`); the usable ones are registered in
 > **`src/ontology_registry.py`**, which is now the single dispatch table for
-> `--ontology` (source factory + hierarchy factory + required inputs). 21 keys:
-> `go`, `ec`, `reactome`, `keyword`, `disease`, `doid`, `orphanet`,
-> `orphanet_doid`, `tcdb`, `merops`, `cazy`, `unipathway`, `complex`,
-> `drugbank`, `pharos`, `condensate`,
-> `subcellular`, `ligand`, `cofactor`, `rhea`, `xref`. Beyond `DR` lines, three
+> `--ontology` (source factory + hierarchy factory + required inputs). 35 keys:
+> the UniProt-native set (`go`, `ec`, `reactome`, `keyword`, `disease`, `doid`,
+> `orphanet`, `orphanet_doid`, `tcdb`, `merops`, `cazy`, `unipathway`,
+> `complex`, `drugbank`, `pharos`, `condensate`, `subcellular`, `ligand`,
+> `cofactor`, `rhea`, `xref`), the gene-keyed layers (`hpo`, `syngo`, #66), the
+> model-organism phenotype layers (`mp`, `wbphenotype`, `wbbt`, `zfa`, `fbcv`,
+> `fbbt`, #68) and wave 3 (`mondo`, `orphanet_mondo`, `efo`, `celltype`,
+> `ncit`, `oncotree`, #71). Beyond `DR` lines, three
 > layers curated into the entry *body* are now harvested too: subcellular
 > location (`CC` prose matched against `subcell.txt`), ChEBI ligands (`FT
 > /ligand_id`) and cofactors, and Rhea reactions. Deliberately **not** registered:
@@ -47,12 +57,22 @@
 > carries the cross-ontology mapping itself (`xref: MIM:`, `xref: ORDO:`), so
 > `--ontology doid` / `orphanet_doid` re-key UniProt's own disease
 > cross-references onto DOID terms at parse time and then propagate up DO's
-> `is_a` DAG (`src/disease_ontology.py`). Mondo would work identically.
+> `is_a` DAG (`src/disease_ontology.py`). Mondo now works identically
+> (`--ontology mondo` / `orphanet_mondo`, #71).
 >
-> **What is left needs the identifier-mapping backbone** (§3), because it is not
-> UniProt-keyed: HPO gene–phenotype assertions (HGNC) and MGI Mammalian
-> Phenotype (mouse gene + orthology projection). Reach for UniProt-native
-> cross-references first; build the backbone only for these.
+> **The central identifier-mapping backbone (§3) turned out not to be needed.**
+> HPO, SynGO and the model-organism layers re-key gene → UniProt accession at
+> parse time using each source's own id-mapping data (Swiss-Prot `DR GeneID` /
+> `DR HGNC` lines; MGI/WormBase/ZFIN/FlyBase mapping files, TrEMBL included),
+> with the DOID layer's counted policy for unmapped and one-to-many ids. Also
+> notable: the model-organism layers need **no orthology projection** — the
+> dcGO trick is that the association is learned on the model organism's own
+> proteins and domains are species-agnostic.
+>
+> **What is left is blocked on inputs, not code:** MAxO (ontology on disk, no
+> annotation source — needs Monarch's `maxo-annotations`) and the gated
+> sources (SNOMED CT and MedDRA licences, OMIM `genemap2.txt` registration).
+> The full acquisition ledger is `data/ACQUISITION_MATRIX.md` (untracked).
 
 ## Objectives
 - Extend dcGO beyond Gene Ontology (GO) annotations to cover a broader ontology landscape relevant to human protein function, disease, phenotypes, and enzymatic activity.
@@ -74,19 +94,24 @@
    - *Implementation*: `src/disease_ontology.py`; the mapping policy for
      unmapped, one-to-many and obsolete ids is documented there and counted at
      parse time.
-   - *Still open*: Mondo as the unifying layer (same mechanism, different OBO);
+   - *Landed since*: Mondo as the unifying layer (`--ontology mondo` /
+     `orphanet_mondo`, #71 — same mechanism, different OBO). *Still open*:
      annotation sources beyond UniProt's own cross-references (Monarch,
-     DisGeNET) — those would need §3.
-2. **[open]** **Human Phenotype Ontology (HPO)**
-   - *Ontology*: `HPO OBO/OWL`.
-   - *Annotations*:
-     - HPOA gene-phenotype annotation files (official releases) keyed by HGNC, OMIM, Ensembl.
-     - Monarch Initiative phenogrid exports (for cross-species phenotype integration).
-3. **[open]** **Mammalian Phenotype (MP)**
-   - *Ontology*: MGI Mammalian Phenotype.
-   - *Annotations*:
-     - Mouse Genome Informatics (MGI) gene-to-MP associations.
-     - Monarch cross-species mapping to human orthologs (via HGNC/Ensembl).
+     DisGeNET).
+2. **[done]** **Human Phenotype Ontology (HPO)** — `--ontology hpo` (#66):
+   `genes_to_phenotype.txt` (NCBI-GeneID-keyed) re-keyed to UniProt via
+   Swiss-Prot's own `DR GeneID` lines, propagated over `hp.obo`
+   (`src/hpo_annotation_source.py`). SynGO landed in the same PR
+   (`--ontology syngo`, HGNC-keyed).
+   - *Open question*: the paper-parity configuration collapses HPO 996 → 38
+     associations, driven by relative inference — see TODO.md P0.
+3. **[done]** **Mammalian Phenotype (MP)** — `--ontology mp --species mouse`
+   (#68): MGI gene-to-MP associations restricted to single-gene genotypes,
+   re-keyed via MGI's own id-mapping files (TrEMBL included,
+   `src/mgi_annotation_source.py`). No orthology projection — the association
+   is learned on mouse proteins; domains are species-agnostic. The same PR
+   added `wbphenotype`/`wbbt` (worm), `zfa` (zebrafish affected anatomy — ZP is
+   not derivable from the on-disk files) and `fbcv`/`fbbt` (fly).
 4. **[done]** **Enzyme Commission (EC)** — `--ontology ec`, plus the finer
    `--ontology rhea` (individual catalysed reactions from `CC CATALYTIC
    ACTIVITY`).
@@ -160,11 +185,15 @@
 - **Community Alignment**: Track OBO Foundry conventions; align evidence codes with ECO to facilitate interoperability.
 
 ## Milestones
-1. Prototype ingestion for DO and HPO with UniProt + HPOA data (MVP multi-ontology support).
-2. Integrate MP via orthology mapping; validate cross-species pipeline.
-3. Add EC and Reactome pathway layers to cover enzymatic and pathway context.
-4. Implement configuration-driven onboarding for additional ontologies (KEGG, ChEBI, etc.).
-5. Deploy monitoring dashboards summarizing ontology coverage per release.
+1. **[done]** Prototype ingestion for DO and HPO (MVP multi-ontology support).
+2. **[done]** Integrate MP — via the model organism's own proteins rather than
+   orthology mapping; cross-species pipeline validated by the production
+   matrix.
+3. **[done]** Add EC and Reactome pathway layers.
+4. **[partial]** Configuration-driven onboarding: the registry
+   (`src/ontology_registry.py`) makes a new ontology one declarative entry;
+   YAML/JSON-driven onboarding without code remains open.
+5. **[open]** Monitoring dashboards summarizing ontology coverage per release.
 
 ## Open Questions
 - Best approach for harmonizing conflicting disease ontologies (DO vs. Mondo vs. OMIM)? Evaluate adopting Mondo as unifying layer.

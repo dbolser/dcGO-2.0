@@ -20,6 +20,7 @@ from __future__ import annotations
 #: under current-production-release/ (the per-release archive paths 403).
 WORMBASE_RELEASE = "WS298"
 WORMBASE_PHENOTYPE_FILENAME = f"phenotype_association.{WORMBASE_RELEASE}.wb.gz"
+WORMBASE_ANATOMY_FILENAME = f"anatomy_association.{WORMBASE_RELEASE}.wb.gz"
 
 #: FlyBase release, as it appears in URL paths (``FB2026_02``); filenames
 #: carry it as ``fb_2026_02`` (underscore after the prefix).

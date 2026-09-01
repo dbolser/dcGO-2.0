@@ -329,6 +329,30 @@ class TestParseObo:
         with pytest.raises(FileNotFoundError):
             parse_obo_child_parents(tmp_path / "nope.obo")
 
+    def test_is_a_qualifier_blocks_are_stripped(self, tmp_path):
+        # Mondo/EFO annotate edges with trailing {qualifier} blocks; keeping
+        # them welded the qualifier onto the parent id, so 42% of Mondo terms
+        # lost every real parent. With and without the trailing '!' comment.
+        obo = (
+            "format-version: 1.2\n\n"
+            "[Term]\n"
+            "id: MONDO:0004992\n"
+            'is_a: MONDO:0000001 {source="DOID:162"} ! disease\n'
+            'is_a: MONDO:0045024 {source="NCIT:C9305", source="DOID:162"}\n'
+        )
+        parents = parse_obo_child_parents(self._write(tmp_path, text=obo))
+        assert parents["MONDO:0004992"] == {"MONDO:0000001", "MONDO:0045024"}
+
+    def test_relationship_qualifier_blocks_cannot_reach_the_id(self, tmp_path):
+        obo = (
+            "format-version: 1.2\n\n"
+            "[Term]\n"
+            "id: X:1\n"
+            'relationship: part_of X:2 {source="Y"} ! whole\n'
+        )
+        parents = parse_obo_child_parents(self._write(tmp_path, text=obo))
+        assert parents["X:1"] == {"X:2"}
+
     def test_feeds_closure_ancestors(self, tmp_path):
         parents = parse_obo_child_parents(self._write(tmp_path))
         assert closure_ancestors(parents)("CHEBI:29105") == {
