@@ -705,6 +705,17 @@ class Config:
                 description="Expasy ENZYME (EC number → UniProt accession) for the EC ontology path",
                 required=False,
             ),
+            # Companion class/subclass/sub-subclass names ("3.1.-.-" → "Acting
+            # on ester bonds"): enzyme.dat names only complete 4-part numbers,
+            # so the hierarchy interior ids minted by EC True Path propagation
+            # need this file. Consumed by scripts/build_domain2ontology.py.
+            "enzclass": DataSource(
+                name="enzclass",
+                url="https://ftp.expasy.org/databases/enzyme/enzclass.txt",
+                description="Expasy ENZYME class names (EC hierarchy interior nodes)",
+                required=False,
+                subdir="enzyme",
+            ),
             # Curated InterPro->GO mapping used as a validation reference (§1)
             "interpro2go": DataSource(
                 name="interpro2go",

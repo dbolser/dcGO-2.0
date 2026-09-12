@@ -130,10 +130,14 @@ implementation.
   and two "dcGO ÷ random" cells); the pre-August design docs
   (`IMPLEMENTATION_GUIDE.md`, `SUMMARY.md`, `THINKING.md`) are stale relative
   to the code.
-- [ ] Add InterPro names, gene names, and ontology labels to result TSVs (or a
-  deterministic annotation companion table) for usable downstream output. The
-  production surprise run already emits per-ontology term-name tables
-  (`results/production/surprise/names/`) — fold that into the supported path.
+- [x] Add InterPro names and ontology labels to result TSVs
+  (`scripts/build_domain2ontology.py`, 2026-09-11): the annotated release in
+  `results/final/` — one `domain2-<cell>.tsv.gz` per production cell with
+  `domain_name`/`term_name` columns, id→name companion tables under
+  `results/final/names/`, and `INDEX.md` with counts, coverage, and manifest
+  provenance. Known unnameable ids (MEROPS families, defunct UniPathway,
+  TCDB class levels) are documented there. Gene names don't apply to the
+  domain→term tables (no gene axis).
 - [ ] Remove or formalize `scratch_allspecies/` scripts after the multi-species
   workflow is captured by supported, tested commands; likewise the ad-hoc
   `collect_stats.py` / `gene_collapse_check.py` under
