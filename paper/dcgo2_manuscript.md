@@ -691,30 +691,6 @@ pairwise difference and the runs are pre-regulates-fix era, so we mark that
 comparison **provisional** and draw no conclusion about which component matters
 more from protein-centric metrics alone.
 
-### 3.4 Domain-centric effect of the relative test
-
-> **PROVISIONAL — superseded machinery, pre-regulates-fix era.** This
-> measurement evaluated the earlier *post-hoc* relative filter, which has
-> since been replaced by the in-inference combination of §2.5, and its
-> propagation ran over the pre-#67 edge set `[K3]`. It is retained as the
-> only committed measurement of the relative test's domain-centric direction;
-> it must be re-run under the current design (`--enable-relative-inference`)
-> before any number here is quoted.
-
-Scored directly against propagated InterPro2GO on the shared single-domain
-space, the base association set gives coverage 0.631 at a precision floor of
-0.218 (134,610 predicted pairs, 29,382 recovered); adding the relative
-parental-background filter gives 0.430 coverage at a precision floor of 0.253
-(69,206 pairs, 17,525 recovered) `[B7, B8]`. The filter thus raises the precision
-floor by 0.035 while halving the association set `[B9]`, consistent with its
-intended role of pruning generic, parent-driven associations. F1 is essentially
-unchanged (0.324 vs 0.319).
-
-Two caveats bound this. The reference is the **current** InterPro2GO rather than a
-2021 snapshot, so this is not a temporal test on the domain side `[B10]`. And no
-uncertainty was computed for the 0.218 → 0.253 difference `[B9]`, so it should be
-read as a direction, not as a significant improvement.
-
 ### 3.5 Emergent domain combinations
 
 > **Era note.** The candidate set derives from the current-release
@@ -1177,17 +1153,14 @@ general performance, calibration, or superiority" `[H20]`.
 5. **The random-domain null is a single seeded shuffle**, not a permutation
    distribution `[H3]`. No empirical p-value or null interval exists, so
    "1.3–25× above random" is a ratio of two point estimates.
-6. **The component ablation has now been run, and it is negative for two of
-   three components.** Over 12 aspect × IC cells with a protein-level paired
-   bootstrap: supra-domains improve 0/12 cells; the shrinkage rung moved
-   0/12 cells (and the step has since been removed `[K7]`); and the True Path
-   rung is significantly worse in 12/12 — but that last figure is a statement
-   about the then-combined filter-plus-propagation, measured with a
-   background defect since fixed and over the pre-fix edge set, so it cannot
-   be attributed to propagation and must be re-measured against the split
-   flags `[K8]`. On this benchmark the best configuration is single domains
-   only; the supra-domain machinery's demonstrated value is the emergent
-   combinations of §3.5–3.6, not protein-centric F_max.
+6. **The current component ablation separates the hierarchy stages.** In the
+   nine-configuration post-#67 factorial, supra-domains have little
+   protein-centric effect. Relative inference lowers F_max and AUPRC in eight of
+   nine cells when added directly to supra; input propagation rescues
+   relative-inference configurations; output propagation is generally
+   neutral-to-helpful. No configuration wins every aspect and IC floor, so the
+   primary configuration remains to be pre-specified for an untouched final
+   evaluation `[K8]`.
 7. **Weak comparators.** A frequency baseline and a shuffled null establish that
    signal exists; they do not establish utility. No comparison exists against
    original dcGO output, against a homology-transfer baseline, or against any

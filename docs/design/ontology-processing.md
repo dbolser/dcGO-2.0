@@ -1,7 +1,6 @@
 # Ontology processing invariants
 
-This note preserves implementation history that is useful for preventing
-scientific regressions but is too detailed for production docstrings.
+This note records ontology-processing invariants required by the current pipeline.
 
 ## Parental-background filter
 
@@ -10,14 +9,6 @@ the proteins annotated to the parent. The term index must therefore implement
 the True Path Rule: a protein annotated to a child also belongs to every
 ancestor's background. Domain membership remains direct because domains have no
 hierarchy in this stage.
-
-An earlier implementation indexed only direct term annotations. Parents without
-direct annotations then appeared to have empty backgrounds, causing 54,951
-human t0 associations to be rejected without a test. Only about 14% of
-associations survived, which invalidated the affected True Path ablation.
-Any ablation result produced with the unpropagated background must not be cited
-or compared as scientific evidence; rerun it with the corrected index. Keep the
-propagated-background regression tests when changing this code.
 
 The maps are inverted once per filtering run. Re-scanning the proteome for each
 domain–child–parent test produces the same contingency cells but is prohibitive

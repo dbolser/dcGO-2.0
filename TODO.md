@@ -34,11 +34,9 @@ implementation.
   justify a weighting scheme), report pooled and corrected counts side by side,
   and repeat held-out and permutation analyses after correction. No claims from
   the affected layers until then.
-- [ ] **Re-run the stale evaluations post-#67 (regulates-edge fix).** The
-  manuscript's §3.2–3.7 blocks are marked PROVISIONAL because they predate the
-  fix, and the §4 ablation's "True Path worse in 12/12 cells" predates both the
-  background fix (#46) and the relative-inference/True-Path flag split —
-  re-measure before citing either.
+- [ ] **Re-run manuscript evaluations §3.2–§3.7 post-#67.** The current §4
+  component ablation is complete; the other provisional manuscript blocks still
+  need current-code regeneration.
 - [ ] **Choose and justify the primary method configuration.** The (stale)
   ablation finds no protein-centric gain from supra-domains, although they
   remain central to the emergent-association claim. Pre-specify whether the

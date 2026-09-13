@@ -66,10 +66,10 @@ class TestLadder:
         names = [r.name for r in ab.LADDER]
         assert len(names) == len(set(names))
 
-    def test_true_path_rungs_read_the_propagated_file(self, tmp_path):
+    def test_output_propagation_rungs_read_the_propagated_file(self, tmp_path):
         by_name = {r.name: r for r in ab.LADDER}
         assert (
-            ab.rung_prediction_file(tmp_path, by_name["supra_tpr"]).name
+            ab.rung_prediction_file(tmp_path, by_name["supra_output"]).name
             == "domain_go_annotations_propagated.tsv"
         )
         assert (
@@ -77,11 +77,23 @@ class TestLadder:
             == "domain_go_associations_significant.tsv"
         )
 
-    def test_true_path_rungs_reuse_their_base_run_directory(self):
-        by_name = {r.name: r for r in ab.LADDER}
-        # supra_tpr is post-processing of the supra run, not a separate one.
-        assert by_name["supra_tpr"].run_dir == by_name["supra"].run_dir
-        assert by_name["full"].run_dir == by_name["supra_shrink"].run_dir
+    def test_every_factorial_configuration_is_a_separate_pipeline_run(self):
+        run_dirs = [r.run_dir for r in ab.LADDER]
+        assert len(run_dirs) == len(set(run_dirs))
+
+    def test_component_edges_change_exactly_one_stage(self):
+        stages = {
+            "supra": frozenset(),
+            "supra_input": frozenset({"input"}),
+            "supra_relative": frozenset({"relative"}),
+            "supra_output": frozenset({"output"}),
+            "supra_input_relative": frozenset({"input", "relative"}),
+            "supra_input_output": frozenset({"input", "output"}),
+            "supra_relative_output": frozenset({"relative", "output"}),
+            "full": frozenset({"input", "relative", "output"}),
+        }
+        for method_a, method_b in ab.COMPONENT_EDGES[1:]:
+            assert len(stages[method_a] ^ stages[method_b]) == 1
 
 
 class TestSelectionStageCounts:

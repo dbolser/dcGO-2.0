@@ -11,12 +11,9 @@ no_knowledge_with_domains	CC	-	572	-	-	the scored cohort before any IC floor
 cohort_at_ic_floor	BP	0	324	0	100.0	proteins whose truth is non-empty at this IC floor
 cohort_at_ic_floor	BP	2	324	0	100.0	proteins whose truth is non-empty at this IC floor
 cohort_at_ic_floor	BP	4	318	6	98.1	proteins whose truth is non-empty at this IC floor
-cohort_at_ic_floor	BP	6	289	35	89.2	proteins whose truth is non-empty at this IC floor
 cohort_at_ic_floor	MF	0	418	0	100.0	proteins whose truth is non-empty at this IC floor
 cohort_at_ic_floor	MF	2	170	248	40.7	proteins whose truth is non-empty at this IC floor
 cohort_at_ic_floor	MF	4	162	256	38.8	proteins whose truth is non-empty at this IC floor
-cohort_at_ic_floor	MF	6	145	273	34.7	proteins whose truth is non-empty at this IC floor
 cohort_at_ic_floor	CC	0	572	0	100.0	proteins whose truth is non-empty at this IC floor
 cohort_at_ic_floor	CC	2	405	167	70.8	proteins whose truth is non-empty at this IC floor
 cohort_at_ic_floor	CC	4	252	320	44.1	proteins whose truth is non-empty at this IC floor
-cohort_at_ic_floor	CC	6	154	418	26.9	proteins whose truth is non-empty at this IC floor

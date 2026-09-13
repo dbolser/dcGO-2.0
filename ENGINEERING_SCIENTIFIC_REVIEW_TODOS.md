@@ -74,11 +74,10 @@ yet establish robust general performance, calibration, or superiority.
   assumption, what the permutation preserves (term base rates, architectures,
   prediction coverage) and what it cannot test (the Fisher+BH stage) are stated
   in VALIDATION_PLAN §2.
-- [x] Complete the planned ablation: single domains; plus supra-domains; plus
-  shrinkage; plus True Path Rule; and the full method. **Done 2026-08-04** —
-  `validation/ablation.py`; VALIDATION_PLAN §4. **The result is negative:**
-  supra-domains 0/12 cells improved, shrinkage 0/12, True Path 12/12 *worse*.
-  The best configuration on this benchmark is single domains only.
+- [x] Run the current component ablation. **Done 2026-09-01** —
+  `validation/ablation.py`; `VALIDATION_PLAN.md` §4. Nine complete inference
+  configurations separate supra-domains, input propagation, relative inference,
+  and output propagation, with 1,000 paired bootstraps and 200 permutations.
 - [x] Establish the statistical validity of the claimed empirical-Bayes
   shrinkage, or rename it as a heuristic. **Resolved by removal (2026-08-05,
   #44)** — neither of the two options offered, because the step did not survive

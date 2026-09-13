@@ -207,22 +207,17 @@ tables); enumerating co-occurring pairs makes it 9.5M tables and 268 s.
 ## Known Limitations
 
 - No local domain scanning — only pre-computed InterPro annotations are consumed.
-- **The component ablation (§4, 2026-08-04) is negative for two of three
-  components — read `VALIDATION_PLAN.md` §4 before claiming any of them helps.**
-  Over 12 aspect × IC cells with a paired protein-level bootstrap: supra-domains
-  improve 0/12 and the True Path Rule is *significantly
-  worse* in 12/12. On the §2 benchmark the best configuration is single domains
-  only. The supra-domain machinery's demonstrated value is the emergent
-  combinations in `SURPRISE_SCORE.md`, not protein-centric F_max.
-- **`--enable-shrinkage` was removed** (2026-08-05). It geometrically
-  interpolated each supra-domain p-value toward the geometric mean of its
-  constituents', which pulled thin evidence *toward* its well-supported parts —
-  a 3-protein combination at p=0.01 became p=1e-24 — taking FDR<0.01 rejections
-  from 163,277 to 463,924 (+184%). The output was not a valid p-value under any
-  null, so BH did not control FDR on it, and the ablation found no effect on
-  prediction quality in any of 12 cells. A genuine version would shrink the
-  observed *rate* and recompute Fisher, which is a different method.
+- **Current component ablation (§4, 2026-09-01).** A from-scratch
+  nine-configuration factorial on current `main` separates input annotation
+  propagation, relative inference, and output propagation. Supra-domains have
+  little protein-centric effect; output propagation is mostly neutral-to-helpful;
+  relative inference lowers both F_max and AUPRC in eight of nine cells when
+  added directly to supra. Input propagation substantially rescues configurations
+  containing relative inference. No configuration wins every aspect and IC
+  floor, so the primary method remains a decision for an untouched final
+  evaluation. See `VALIDATION_PLAN.md` §4 and the committed ablation TSVs.
 - True Path Rule is opt-in (`--enable-true-path`), not part of the default run;
+
   it now errors out for ontologies with no hierarchy instead of silently
   skipping. **It is propagation and nothing else.** The parental-background
   filter it used to run alongside for GO is the paper's separate *relative
@@ -249,13 +244,6 @@ tables); enumerating co-occurring pairs makes it 9.5M tables and 268 s.
   `elim`-style decorrelation remains the open idea. Sweep and numbers in
   `VALIDATION_PLAN.md` next-steps item 2; metric via
   `validation/specificity_metrics.py`.
-- **The §4 ablation cannot attribute its True Path result to either stage.** It
-  was run when one flag drove both, so "the True Path Rule is significantly
-  worse in 12/12 cells" is a statement about filter-plus-propagation, measured
-  additionally with the unpropagated-background defect in place (54,951
-  rejections; fixed in #46, now 237 on the same run). Propagation only adds
-  annotations and cannot by itself lower recall. Re-run the ablation against the
-  split flags before citing that number.
 - The surprise score re-ranks associations that already passed the dcGO FDR
   filter, using the same proteins — it measures internal consistency of the
   evidence, not out-of-sample performance. It is also **not a total order**: on

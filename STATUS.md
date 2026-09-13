@@ -23,6 +23,10 @@ tests. A manuscript draft exists in `paper/` with an evidence ledger.
   when trained on experimental evidence only.
 - Supra-domain associations predict future curation at **12.5×** enrichment.
   The surprise *ranking* is no better than q-value (98% of scores tie at 0).
+- Current §4 ablation (2026-09-01): supra-domains have little protein-centric
+  effect; relative inference is the main negative component; input propagation
+  rescues relative-inference configurations; output propagation is mostly
+  neutral-to-helpful. No configuration wins every aspect and IC floor.
 - Show-and-tell emergent hits: SH3+PDZ → social behaviour, kinase+SAM →
   Eph–Ephrin, RRM+DAZ, tankyrase/PARP, srGAP.
 
@@ -42,10 +46,8 @@ tests. A manuscript draft exists in `paper/` with an evidence ledger.
    rankings are pseudo-replicated (isoform / ortholog stacks) — no claims from
    those layers until collapsed. Human layers are verified clean.
 2. **Re-run manuscript evaluations §3.2–3.7 post-#67** (regulates-edge fix) —
-   those blocks are marked PROVISIONAL.
-3. **Re-run the §4 ablation post-#67.** The "True Path worse 12/12" number
-   predates two fixes and conflates filter with propagation — don't cite it.
-4. **HPO paper-parity collapse (996 → 38)** is driven by relative inference,
+   those blocks remain provisional.
+3. **HPO paper-parity collapse (996 → 38)** is driven by relative inference,
    not the IC floor. Specificity vs over-conservatism is decidable only by the
    post-#67 temporal evaluation.
 5. **elim-style decorrelation.** Even at IC≥1, ~50% of associations still sit

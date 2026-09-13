@@ -775,15 +775,7 @@ class TestBackgroundIndexEquivalence:
 
 
 class TestBackgroundIsPropagated:
-    """The parental background counts proteins annotated *beneath* the parent.
-
-    Indexing only direct annotations gave any parent term nobody is directly
-    annotated to an empty background, so `_test_against_parent_background`
-    raised and the caller's conservative `except` discarded the child untested —
-    54,951 times on the human t0 run, leaving ~14% of associations and
-    collapsing prediction coverage to 0.22-0.50. The §4 ablation's "True Path
-    hurts in 12/12 cells" was measured with that in place.
-    """
+    """The parental background counts proteins annotated *beneath* the parent."""
 
     def test_a_parent_with_no_direct_annotation_still_has_a_background(
         self, ontology_processor

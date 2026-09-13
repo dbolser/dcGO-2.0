@@ -3,8 +3,7 @@
 `--enable-true-path` and `--enable-relative-inference` are two different steps
 of the dcGO paper — Step 3 (propagate to ancestors, only ever *adds*
 annotations) and Step 2's relative inference (a parental-background Fisher
-test, only ever *removes* associations). They shared one flag until this split,
-which is why the §4 ablation could not attribute its result to either.
+test, only ever *removes* associations). The current factorial ablation evaluates them independently.
 
 These tests pin the CLI contract and the request translation. The numerical
 behaviour of each stage is covered by `test_ontology_processor.py` (filter) and

@@ -13,7 +13,7 @@ engineering cleanup: the code runs; this is about showing the results are
 | §1 Reframe InterPro2GO comparison | ✅ done (#14, #15) — ~65% coverage at FDR<0.01 |
 | **§2 Temporal held-out benchmark (CAFA-style)** | ✅ **done (#8)** — 2021→2026 CAFA split; see results below |
 | §3 Compare to original dcGO | ✅ **done (2026-08-04)** — SSF re-keying + published-dcGO join; precision 0.54–0.63, recall uninterpretable (see §3.1) |
-| **§4 Component ablation + uncertainty** | ✅ **done (2026-08-04)** — ladder, permutation null, paired bootstrap CIs; **the result is negative for two of three components** |
+| **§4 Current component ablation + uncertainty** | ✅ **done (2026-09-01)** — nine current-code configurations, 1,000 paired bootstraps, 200 permutations |
 | **§5 Pre-paper method decisions** | 🟡 partly done (2026-08-05) — shrinkage removed, True Path background fixed, BH families split, `--min-support` added; minimum-support *policy* still open |
 | **Untouched evaluation axis** | ✅ **done (2026-08-05)** — mouse, matched 2021→2026 window; performance improves in all 9 cells. Nested human split (205→215→current) in progress |
 | §6 Reproducibility | ⬜ open (#12) |
@@ -46,9 +46,9 @@ settings, particularly for higher-information GO terms. See the AUPRC note in
 > it in every aspect × IC × metric cell at the attainable floor of the empirical
 > p-value; (b) the F_max advantage over naive is confirmed by a **paired**
 > bootstrap, but the **AUPRC** advantage is not — naive wins AUPRC at IC≥0 in all
-> three aspects and at every floor in CC; (c) **neither supra-domains nor the
-> shrinkage adds measurable protein-centric value, and the True Path stage
-> significantly subtracts it.** See §4.
+> three aspects and at every floor in CC; (c) the hierarchy stages separate cleanly: **relative inference is the main
+> negative component, output propagation is mostly neutral-to-helpful, and input
+> propagation rescues relative-inference configurations.** See §4.
 
 ### Next steps (as of 2026-07-09, after the §2 benchmark + method audit)
 
@@ -918,279 +918,87 @@ What is **not** established, and should not be claimed:
 
 ---
 
-## 4. Ablation study  *(isolates the contribution)*  — **DONE (2026-08-04)**
+## 4. Current component ablation *(2026-09-01; current main)*
 
-> **The True Path rung below is a pre-fix measurement and is superseded.** It
-> was run before the parental-background defect was corrected (#46, 2026-08-05).
-> At that time the filter built its background from the *unpropagated*
-> annotation map, so a parent nobody was directly annotated to had an empty
-> background, the test raised and the child was discarded untested — 54,951
-> times, leaving ~14% of associations and collapsing coverage to 0.22–0.50.
-> Throwing away 86% of predictions lowers F_max whatever the method does, so
-> "True Path is significantly worse in 12/12 cells" cannot distinguish the
-> filter's effect from the defect's.
->
-> After the fix the same run rejects **701** untested and retains **50.8%**
-> (82,829 / 163,153). The rung is being re-measured; until then the True Path
-> row here should not be cited. The supra-domain and shrinkage rows are
-> unaffected by that defect — though the shrinkage rung describes a step that
-> has since been removed (#44), on the strength of this ablation finding it
-> moved 0/12 cells.
->
-> **Edge-type caveat (2026-08-17, #67).** Every stored artifact produced before
-> the is_a/part_of restriction was propagated over a DAG that also traversed
-> GO's ~7,800 regulates / positively_regulates / negatively_regulates edges —
-> in the STAGE 5.5 propagated outputs and in the relative-inference backgrounds
-> alike. Mixed-era comparisons are therefore confounded, and the ablation
-> re-run must be produced wholly post-fix. Run manifests now record the policy
-> as `analysis.ontology.propagation_relations`; a manifest without that key is
-> a pre-fix artifact.
+This section reports only the ablation run made from commit `3f37558` after the
+hierarchy and relative-inference fixes in #61–#67. Earlier ablation measurements
+have been removed because they describe an implementation that no longer
+exists.
 
-The supra-domain + shrinkage machinery is the main methodological novelty. It
-had to be shown to help, not just to exist. It does not.
+### Design
 
-**Acceptance was: "each enabled stage shows a measurable, explained effect (a
-stage that doesn't help is a finding too — report it)". The honest verdict is
-that two of the three stages show no effect and the third makes things
-significantly worse.** That is the finding, and this section reports it rather
-than burying it.
+Training uses archived human GOA release 205; evaluation uses the current human
+GOA with experimental evidence only and the CAFA no-knowledge cohort. All
+inference configurations were rerun from scratch. The experiment is a factorial
+over the three independent hierarchy stages on the supra-domain model:
 
-### How it was run
-
-`validation/ablation.py`, over the same §2 split (t0 = GOA release 205,
-2021-04; t1 = GOA 2026-06), the same CAFA no-knowledge cohort and the same
-`--transfer pscore`. Three pipeline runs plus the pipeline's own STAGE 5.5
-post-processing give five rungs:
-
-| Rung | What it adds | How produced | Significant associations |
-|---|---|---|---:|
-| `single` | — | `run_dcgo_human.py --disable-supra-domains` | 43,656 |
-| `supra` | supra-domains (len ≤ 3) | default | 163,277 |
-| `supra_shrink` | hierarchical shrinkage | `--enable-shrinkage` | **463,924** |
-| `supra_tpr` | True Path Rule | STAGE 5.5 on `supra` | 22,990 direct → 101,873 annotations |
-| `full` | shrinkage + True Path | STAGE 5.5 on `supra_shrink` | 42,129 direct → 131,456 annotations |
-
-`single` is a separate run because its BH hypothesis family is genuinely smaller
-(3.1×10⁸ tests, not 1.6×10⁹) and its FDR cut therefore differs. The True Path
-rungs run `OntologyProcessor.apply_optimal_level_filter` + `propagate_annotations`
-with the pipeline's own parameters (`min_background_size=3`,
-`alpha_threshold=0.05`) — i.e. exactly what `--enable-true-path` does — factored
-out so a 90-minute Fisher+BH pass is not repeated for a post-processing step that
-cannot change the upstream numbers.
-
-Every rung is scored on `-log10(q)` so the ladder is not confounded by the score
-column (the propagated True Path output carries no `p_value`). The `-log10(p)`
-variant of the three non-True-Path rungs is in the metrics file as `*__p`; the
-two never differ by more than 0.005 F_max.
-
-Uncertainty is a **protein-level paired bootstrap**, 1,000 replicates: the
-benchmark proteins are resampled *once per replicate* and every rung is
-recomputed on that same resample, so a difference between two rungs is a paired
-difference. (Two independent intervals over the same cohort are not a test of a
-difference — the lesson `SURPRISE_SCORE.md` paid for.)
-
-Artefacts: `validation/ablation_metrics.tsv`,
-`validation/ablation_paired_bootstrap.tsv`,
-`validation/ablation_permutation_null.tsv`,
-`validation/ablation_selection_counts.tsv`, `validation/ablation_provenance.tsv`.
-
-### F_max per rung (95% bootstrap CI)
-
-| Rung | BP ≥0 | BP ≥4 | MF ≥0 | MF ≥4 | CC ≥0 | CC ≥4 |
-|---|---|---|---|---|---|---|
-| single domains | 0.245 [0.217, 0.276] | 0.114 [0.091, 0.148] | **0.350** [0.315, 0.384] | **0.336** [0.271, 0.405] | 0.381 [0.356, 0.412] | **0.144** [0.107, 0.185] |
-| + supra-domains | 0.250 [0.221, 0.280] | 0.119 [0.094, 0.152] | 0.336 [0.306, 0.371] | 0.325 [0.267, 0.395] | 0.376 [0.352, 0.406] | 0.131 [0.102, 0.174] |
-| + shrinkage | **0.251** [0.223, 0.283] | **0.120** [0.097, 0.153] | 0.348 [0.313, 0.386] | 0.327 [0.266, 0.394] | **0.383** [0.359, 0.413] | 0.137 [0.106, 0.178] |
-| + True Path | 0.141 [0.112, 0.172] | 0.055 [0.031, 0.080] | 0.303 [0.274, 0.340] | 0.134 [0.089, 0.183] | 0.140 [0.114, 0.169] | 0.030 [0.008, 0.055] |
-| full (shrink+TP) | 0.143 [0.114, 0.175] | 0.055 [0.032, 0.081] | 0.311 [0.281, 0.348] | 0.135 [0.091, 0.184] | 0.140 [0.113, 0.169] | 0.030 [0.008, 0.054] |
-| naive baseline | 0.115 [0.107, 0.125] | 0.031 [0.027, 0.034] | 0.464 [0.439, 0.489] | 0.045 [0.039, 0.053] | 0.343 [0.330, 0.354] | 0.099 [0.089, 0.108] |
-
-(IC ≥2 and ≥6, and AUPRC for every cell, in `validation/ablation_metrics.tsv`.)
-
-### Did each component earn its place? — paired differences, 12 aspect × IC cells
-
-| Component | cells where it **helps** | cells where it **hurts** | typical paired ΔF_max |
-|---|---:|---:|---|
-| **supra-domains** (`supra − single`) | **0 / 12** | 1 / 12 | −0.014 … +0.006, CI spans 0 in 11/12 |
-| **shrinkage** (`supra_shrink − supra`) | **0 / 12** | **0 / 12** | −0.007 … +0.007, CI spans 0 in 12/12 |
-| **True Path Rule** (`supra_tpr − supra`) | 0 / 12 | **12 / 12** | −0.041 … −0.236 |
-| **full vs single** | 0 / 12 | **12 / 12** | −0.041 … −0.241 |
-
-**1. Supra-domains do not improve protein-centric prediction.** Not one of the
-twelve cells shows a significant gain. The largest point estimate is +0.006
-(BP IC≥4, CI [−0.002, +0.011]). The single "significant" cell is a *loss* —
-MF IC≥0, −0.014 [−0.025, −0.000], p = 0.048 — which at 12 uncorrected
-comparisons is what one expects by chance and should not be read as a real
-effect either. The honest summary is **no measurable effect in either
-direction**. Supra-domains cost a 5.3× larger feature space (19,230 → 102,206
-features) and a 5.3× larger multiple-testing family (3.1×10⁸ → 1.6×10⁹ tests)
-to buy that.
-
-This does **not** say supra-domains are worthless. It says they do not move
-*this* metric: F_max is dominated by whether a protein's terms are recovered at
-all, and a supra-domain's terms are usually a subset of its constituents'. The
-value demonstrated elsewhere in this repository is different in kind — the
-*emergent* combinations that predict a term no constituent does, which
-`SURPRISE_SCORE.md` §"held-out validation" shows anticipate later curation
-(2,181 predictions confirmed against ~175 expected). A protein-centric F_max
-averaged over a 324–572 protein cohort cannot see a few thousand emergent
-associations. **Both facts should be stated in the paper; neither cancels the
-other.**
-
-**2. Shrinkage does nothing to predictions, and nearly triples the number of
-"significant" associations.** Zero of twelve cells move (all CIs span zero;
-largest |Δ| = 0.007). But the same step takes the significant-association count
-from **163,277 to 463,924 (+184%)** at FDR < 0.01, moving the BH p-value cut from
-9.95×10⁻⁷ to 2.83×10⁻⁶.
-
-The mechanism is visible in the run log: of the 1.33×10⁹ supra-domain tests,
-only **43.6%** had their p-value *increased*; **56.4% were decreased**. That is
-not shrinkage. The step geometrically interpolates each supra-domain's observed
-p-value toward the geometric mean of its constituents' p-values with weight
-`α = 0.5·exp(−n/3)`, and when the constituents are individually stronger than the
-combination — the common case — the interpolation makes the supra-domain p-value
-*smaller*, i.e. manufactures significance.
-
-This is direct empirical support for the review's objection that the procedure
-is "not presently a fitted empirical-Bayes model" and that "the transformed
-quantities have not been shown to be valid p-values": **a genuine shrinkage
-toward a null prior cannot increase the count of rejections, and this one nearly
-triples it. BH applied to these values does not control FDR at the nominal
-level, and 300,647 of the 463,924 associations in the `--enable-shrinkage`
-output exist only because of a transformation with no error-rate guarantee.**
-Recommended action: rename the option to what it is (a heuristic re-weighting),
-or replace it with a fitted hierarchical model, before any claim about the
-`--enable-shrinkage` output is published. It is off by default, which is the
-right default.
-
-**3. The True Path Rule stage makes protein-centric prediction significantly
-worse in every cell** — by 0.04 to 0.24 F_max, and by more on AUPRC. Two
-mechanisms, both measured:
-
-- *It is almost all filter, and the propagation half is redundant here.* The
-  parental-background filter keeps only **22,990 of 163,277** associations
-  (14%). The propagation half adds nothing on this benchmark because the CAFA
-  transfer step already propagates every predicted term to its ancestors — so
-  what the rung actually measures is the filter alone.
-- *Most of the filtering is untested rejection.* **54,951 parent tests could not
-  be evaluated at all** and their associations were rejected by the code's
-  conservative `except` branch. The reason is a genuine defect: the parental
-  background is built from the **unpropagated** t0 annotation map, so a parent
-  term that no protein is *directly* annotated to has an empty background, the
-  test raises, and every child of that parent is discarded untested. Under the
-  True Path Rule a protein annotated to a child *is* annotated to the parent, so
-  the background should be computed on the propagated map. Until that is fixed,
-  `--enable-true-path` should not be described as an optional refinement — on
-  this benchmark it is a substantial regression. (`src/ontology_processor.py`
-  now reports the count in one line instead of 110k warnings, so the problem is
-  visible in any future run.)
-- Coverage tells the same story: the True Path rungs make a prediction for only
-  **22–50%** of the cohort, against 52–71% for the other rungs.
-
-**4. The "full method" is the worst rung of the ladder.** `full − single` is
-significantly negative in all twelve cells. On this benchmark the best
-configuration is the simplest one: **single domains, no shrinkage, no True Path**
-— statistically indistinguishable from `+supra` and `+shrinkage`, and
-significantly better than anything with True Path in it.
-
-### Prediction coverage next to F_max (P1)
-
-CAFA precision is averaged only over proteins that have a prediction at the
-threshold, while recall is averaged over the whole cohort — so an F_max earned on
-half the cohort is not comparable to one earned on all of it. Fraction of the
-cohort with any prediction (`coverage_any` in the metrics file):
-
-| Aspect | single / supra / shrink | True Path rungs | naive |
-|---|---|---|---|
-| BP | 0.54–0.55 | 0.34 | 1.00 |
-| MF | 0.63–0.71 | 0.39–0.51 | 1.00 |
-| CC | 0.42–0.52 | 0.12–0.22 | 1.00 |
-
-**dcGO's F_max is computed with roughly half of the benchmark cohort receiving
-no prediction at all**, which its recall term already pays for but which every
-reported F_max should be read against. This has not been reported before.
-
-### Selection-stage counts, and the IC-floor cohort change (P1)
-
-`validation/ablation_selection_counts.tsv` records every filter:
-
-| Stage | BP | MF | CC |
+| rung | input annotations propagated | relative inference | inferred associations propagated |
 |---|---:|---:|---:|
-| t0 proteins with ≥1 non-IEA GO annotation | 18,735 | — | — |
-| t1 proteins with ≥1 experimental annotation | 16,362 | — | — |
-| Proteins with ≥1 InterPro domain | 18,908 | — | — |
-| No-knowledge candidates | 336 | 430 | 590 |
-| …and with ≥1 domain (the scored cohort) | **324** | **418** | **572** |
-| Cohort at IC ≥2 | 324 (100%) | **170 (41%)** | 405 (71%) |
-| Cohort at IC ≥4 | 318 (98%) | 162 (39%) | 252 (44%) |
-| Cohort at IC ≥6 | 289 (89%) | 145 (35%) | 154 (27%) |
+| `supra` | no | no | no |
+| `supra_input` | yes | no | no |
+| `supra_relative` | no | yes | no |
+| `supra_output` | no | no | yes |
+| `supra_input_relative` | yes | yes | no |
+| `supra_input_output` | yes | no | yes |
+| `supra_relative_output` | no | yes | yes |
+| `full` | yes | yes | yes |
 
-The review's concern is confirmed and quantified: **an IC floor is not only a
-term filter, it is a cohort filter.** MF loses 59% of its proteins between IC≥0
-and IC≥2, CC loses 73% by IC≥6. Comparisons *across* IC floors are therefore not
-paired and must not be read as "the same proteins, harder terms". Every paired
-test in this section is within a single (aspect, IC) cell, where the cohort is
-fixed and identical for all methods.
+A separate `single` rung measures the effect of adding supra-domains. Every
+hierarchy combination is a complete pipeline run; no post-hoc legacy rung is
+constructed. Scores are `-log10(q)` for every primary comparison. Results cover
+BP, MF and CC at IC floors 0, 2 and 4, with 1,000 paired protein bootstraps.
+The supra rung also uses 200 seeded domain-label permutations.
 
-### Open ablation item
+The scored cohorts contain 324 BP, 418 MF and 572 CC proteins before IC
+filtering. Run manifests are in `validation/ablation_manifests/`; machine-readable
+results are:
 
-- [ ] Quantify **how many supra-domains produce associations not obtainable from
-      their constituents** at the association level (the surprise score's
-      candidate pool is 22,376 combinations, of which 10,136 make ≥1 standing
-      prediction — see `SURPRISE_SCORE.md`), and check whether low-count
-      supra-domains dominate the top predictions under `--enable-shrinkage`.
-      Given finding 2 above, the second half is now a *bug hunt*, not a
-      validation.
+- `validation/ablation_metrics.tsv`
+- `validation/ablation_paired_bootstrap.tsv`
+- `validation/ablation_permutation_null.tsv`
+- `validation/ablation_selection_counts.tsv`
+- `validation/ablation_provenance.tsv`
 
-### Where these results contradict what the repository previously said
+### Results
 
-Flagged explicitly rather than left for a reader to discover.
+The domain signal is real: the supra model beats all 200 shuffled mappings for
+both F_max and AUPRC in all nine aspect × IC cells (18/18 empirical
+`p = 1/201`).
 
-1. **"The supra-domain + shrinkage machinery is the main methodological
-   novelty. It must be shown to help."** (this section's own opening, and
-   `CLAUDE.md`.) On the §2 protein-centric benchmark **neither helps**, and the
-   True Path stage hurts. The defensible claim is now: *the domain→GO
-   associations carry signal; the supra-domain, shrinkage and True Path stages
-   on top of them are not shown to add protein-centric predictive value on this
-   split, and the True Path stage as implemented subtracts it.*
+Supra-domains themselves have little protein-centric effect. Relative to single
+domains, their F_max change is not significant in any of nine cells; AUPRC
+improves significantly in one cell.
 
-2. **`RESULTS.md`: "the p-score … lifts F_max/AUPRC across the board".** True of
-   F_max; **not true of AUPRC**. Paired against the naive baseline at IC≥0, dcGO
-   is *significantly worse* on AUPRC in all three aspects (BP −0.178
-   [−0.207, −0.150]; MF −0.144 [−0.182, −0.104]; CC −0.280 [−0.307, −0.252]),
-   because naive predicts every term for every protein and so sweeps the
-   high-recall end of the curve that dcGO's ~50% coverage cannot reach. dcGO
-   wins AUPRC at BP ≥4/≥6 and MF ≥2/≥4/≥6; at CC it does **not** beat naive on
-   AUPRC at any floor (significantly worse at ≥0 and ≥2, indistinguishable at ≥4
-   and ≥6). **`RESULTS.md`'s "beats it in every aspect once uninformative terms
-   are excluded" holds for F_max only and should say so.**
+The three hierarchy stages do not behave as one component:
 
-3. **`RESULTS.md`'s "dcGO ÷ random" column** is a ratio against one shuffle. Two
-   of its cells are materially off: MF IC≥2 (reported 4.2×, correct 7.5× against
-   the null mean) and MF IC≥4 (reported 4.7×, correct 9.0×). See the §2
-   permutation-null section above; that table supersedes the ratios.
+- **Input propagation is context-dependent but important.** Added directly to
+  supra it changes F_max significantly in five of nine cells (six positive,
+  three negative). Added to relative inference plus output propagation, it
+  improves both F_max and AUPRC in all nine cells, significantly in eight.
+- **Relative inference is the main negative component on this benchmark.**
+  Added directly to supra, it lowers F_max and AUPRC in all nine cells,
+  significantly in eight. Added to input plus output propagation, it lowers
+  F_max in seven of nine cells (six significant) and AUPRC in eight of nine
+  (seven significant).
+- **Output True Path propagation is not uniformly harmful.** Added directly to
+  supra, F_max rises in seven of nine cells and is significant in one; AUPRC is
+  mixed. Added after input propagation and relative inference, it raises F_max
+  and AUPRC in six of nine cells, significantly in three and four respectively.
 
-4. **`validation/BENCHMARK_ARTIFACTS.md` inferred that `bench_primary` read
-   `domain_go_associations_relative.tsv`.** It did not — the §2 metrics reproduce
-   *exactly* from the plain `domain_go_associations_significant.tsv`. That file
-   has been corrected.
+There is no single winning configuration across all cells. The full
+paper-parity pipeline is best only for MF at IC 0. Input propagation without
+relative inference is best in several informative-term cells; input plus output
+propagation is best for BP at IC 0/2 and CC at IC 0. Single domains remain best
+for CC F_max at IC 2/4.
 
-5. **The archived t0 association table is no longer reproducible from current
-   `main`.** Re-running the documented t0 command today yields **163,277**
-   significant associations, not the archived **164,549**. The cause is
-   identified: `restrict_to_universe` (added with the multi-ontology seam, #22)
-   now narrows the Fisher protein universe from all 18,735 non-IEA-annotated
-   proteins to the 18,382 that also have domains, which shifts every `d` cell
-   and hence every p-value slightly. The current behaviour is the *correct* one —
-   a protein with no domain assignment is missing data, not evidence of absence —
-   but it means `results_t0_2021/` and `validation/temporal_benchmark_metrics.tsv`
-   are artefacts of an earlier pipeline version. The ablation above is internally
-   consistent (all five rungs from current `main`); its `supra` rung is the
-   current-code equivalent of the §2 headline and lands at F_max 0.250 BP /
-   0.336 MF / 0.376 CC against the archived 0.248 / 0.360 / 0.380. This is
-   exactly the P1 run-manifest gap.
+### Decision
 
----
+Do not describe “True Path” as beneficial or harmful as a unit. Input
+propagation, relative inference and output propagation are separate operations
+with different effects. On this temporal benchmark, relative inference requires
+the strongest justification and should not be enabled by default merely for
+paper parity. The primary configuration must be pre-specified against an
+untouched final evaluation rather than selected from these cells.
 
 ## 5. Decisions to settle before writing the paper
 

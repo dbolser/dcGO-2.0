@@ -113,22 +113,16 @@ purely by reproducing each term's marginal frequency.
 >    domain-annotated proteins (18,735 → 18,382). The current behaviour is the
 >    correct one; the table is an artefact of the earlier version.
 
-## What each pipeline component contributes (ablation, 2026-08-04)
+## What current pipeline components contribute (ablation, 2026-09-01)
 
-Paired protein-level bootstrap, 1,000 replicates, 12 aspect × IC-floor cells.
-Full detail and the mechanisms in `VALIDATION_PLAN.md` §4.
-
-| Component | Cells where it helps | Cells where it hurts | Verdict |
-|---|---:|---:|---|
-| Supra-domains | **0 / 12** | 1 / 12 | No measurable effect, at 5.3× the feature space |
-| Hierarchical shrinkage | **0 / 12** | **0 / 12** | No effect on prediction — but it takes the "significant" association count from 163,277 to **463,924** by *decreasing* 56% of supra p-values. Not a shrinkage; BH on its output does not control FDR. |
-| True Path Rule | 0 / 12 | **12 / 12** | Significantly **worse** (−0.04 to −0.24 F_max). Its parental-background filter keeps 14% of associations, and 54,951 parent tests are rejected *untested* because the background uses the unpropagated annotation map. |
-
-**On this benchmark the best configuration is the simplest one: single domains,
-no shrinkage, no True Path.** `full − single` is significantly negative in all
-twelve cells. The supra-domain machinery's demonstrated value is elsewhere — the
-*emergent* combinations validated in `SURPRISE_SCORE.md` — not in
-protein-centric F_max.
+The current nine-configuration factorial separates input propagation, relative
+inference and output propagation. Supra-domains have little protein-centric
+effect. Relative inference lowers F_max and AUPRC in eight of nine cells when
+added directly to supra; input propagation rescues relative-inference
+configurations; output propagation is mostly neutral-to-helpful. No
+configuration wins every aspect and IC floor. Full results and 1,000-replicate
+paired confidence intervals are in `VALIDATION_PLAN.md` §4 and
+`validation/ablation_*.tsv`.
 
 ## Held-out evaluation on an untouched species (2026-08-05)
 

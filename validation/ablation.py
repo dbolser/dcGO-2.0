@@ -12,9 +12,10 @@ temporal split, its no-knowledge cohort, and its propagated truth):
     ==================  =====================================================
     ``single``          single InterPro domains only
     ``supra``           + supra-domains (contiguous combinations, len <= 3)
-    ``supra_shrink``    + hierarchical shrinkage of supra-domain p-values
-    ``supra_tpr``       + True Path Rule (parental-background filter, no shrinkage)
-    ``full``            + shrinkage + True Path Rule
+    ``supra_input``     + True Path propagation of input annotations
+    ``supra_relative``  + relative inference
+    ``supra_output``    + True Path propagation of inferred associations
+    ``full``            + all three hierarchy stages
     ==================  =====================================================
 
 **(b) A permutation null**, not one shuffle: ``--n-permutations`` seeded
@@ -37,15 +38,12 @@ without sharing statistics:
 * ``single`` is its own pipeline run (``--disable-supra-domains``) because its BH
   hypothesis family is genuinely smaller — 3.1e8 tests, not 1.6e9 — and the FDR
   cut therefore differs.
-* ``supra`` and ``supra_shrink`` are pipeline runs.
-* ``supra_tpr`` and ``full`` apply the pipeline's **own** STAGE 5.5 code
-  (``OntologyProcessor.apply_optimal_level_filter`` then
-  ``propagate_annotations``, same parameters: ``min_background_size=3``,
-  ``alpha_threshold=0.05``) to the ``supra`` / ``supra_shrink`` outputs. That is
-  exactly what ``run_dcgo_human.py --enable-true-path`` does, and it writes the
-  same ``domain_go_annotations_propagated.tsv``; factoring it out avoids
-  repeating a 90-minute Fisher+BH pass for a post-processing step that cannot
-  change the upstream numbers.
+* Every hierarchy-stage combination is a complete pipeline run. This is
+  essential because input propagation changes the test universe and relative
+  inference is combined before BH correction.
+* Output propagation rungs are read from the pipeline's
+  ``domain_go_annotations_propagated.tsv``; all other rungs use the significant
+  association table.
 
 Honest caveat, stated once here and again in ``VALIDATION_PLAN.md``: the True
 Path rungs are scored on ``q_value`` because the propagated output carries no
@@ -105,29 +103,80 @@ LADDER: tuple[Rung, ...] = (
         "supra", "+ supra-domains", "supra-domains", "supra", "associations", "single"
     ),
     Rung(
-        "supra_shrink",
-        "+ shrinkage",
-        "hierarchical shrinkage",
-        "supra_shrink",
+        "supra_input",
+        "+ input propagation",
+        "input propagation",
+        "supra_input",
         "associations",
         "supra",
     ),
     Rung(
-        "supra_tpr",
-        "+ True Path Rule",
-        "parental-background filter + propagation",
+        "supra_relative",
+        "+ relative inference",
+        "relative inference",
+        "supra_relative",
+        "associations",
         "supra",
+    ),
+    Rung(
+        "supra_output",
+        "+ output propagation",
+        "output propagation",
+        "supra_output",
         "propagated",
         "supra",
     ),
     Rung(
-        "full",
-        "full method",
-        "shrinkage + True Path Rule",
-        "supra_shrink",
-        "propagated",
-        "supra_shrink",
+        "supra_input_relative",
+        "input + relative",
+        "input propagation + relative inference",
+        "supra_input_relative",
+        "associations",
+        "supra_input",
     ),
+    Rung(
+        "supra_input_output",
+        "input + output",
+        "input + output propagation",
+        "supra_input_output",
+        "propagated",
+        "supra_input",
+    ),
+    Rung(
+        "supra_relative_output",
+        "relative + output",
+        "relative inference + output propagation",
+        "supra_relative_output",
+        "propagated",
+        "supra_relative",
+    ),
+    Rung(
+        "full",
+        "full current method",
+        "input propagation + relative inference + output propagation",
+        "full",
+        "propagated",
+        "supra_input_relative",
+    ),
+)
+
+# Every one-component edge in the 2^3 hierarchy-stage factorial, plus supra
+# versus single domains. These paired contrasts replace the old ambiguous
+# filter-plus-propagation rung.
+COMPONENT_EDGES: tuple[tuple[str, str], ...] = (
+    ("supra", "single"),
+    ("supra_input", "supra"),
+    ("supra_relative", "supra"),
+    ("supra_output", "supra"),
+    ("supra_input_relative", "supra_input"),
+    ("supra_input_relative", "supra_relative"),
+    ("supra_input_output", "supra_input"),
+    ("supra_input_output", "supra_output"),
+    ("supra_relative_output", "supra_relative"),
+    ("supra_relative_output", "supra_output"),
+    ("full", "supra_input_relative"),
+    ("full", "supra_input_output"),
+    ("full", "supra_relative_output"),
 )
 
 
@@ -267,7 +316,6 @@ def main() -> int:  # pragma: no cover - I/O wiring
     if str(_ROOT) not in sys.path:
         sys.path.insert(0, str(_ROOT))
 
-    from src.annotation_source import restrict_to_universe
     from src.domain_annotation_parser import DomainAnnotationParser
     from src.goa_parser import EXPERIMENTAL_EVIDENCE, GOAParser, parse_goa
     from src.ontology_processor import OntologyProcessor
@@ -282,7 +330,7 @@ def main() -> int:  # pragma: no cover - I/O wiring
         "--run-dir",
         type=Path,
         default=Path("results/ablation"),
-        help="Root holding one sub-directory per pipeline run (single/, supra/, supra_shrink/)",
+        help="Root holding one sub-directory per current-code factorial run",
     )
     parser.add_argument(
         "--interpro", type=Path, default=Path("data/interim/protein2ipr_human.dat.gz")
@@ -391,75 +439,6 @@ def main() -> int:  # pragma: no cover - I/O wiring
     counts_file = args.output_dir / "ablation_selection_counts.tsv"
     pd.DataFrame(counts).to_csv(counts_file, sep="\t", index=False)
     logger.info(f"✓ Selection-stage counts: {counts_file}")
-
-    # ------------------------------------------- True Path rungs (STAGE 5.5) --
-    # Same code, same parameters as run_dcgo_human.py --enable-true-path.
-    proteins_with_both = set(t0_map) & set(architectures)
-    tpr_go_map = restrict_to_universe(t0_map, proteins_with_both)
-    tpr_domain_map = {
-        p: protein_domains[p] for p in proteins_with_both if p in protein_domains
-    }
-    # The ic column of the propagated file, matching the runner's convention
-    # exactly: annotation-frequency IC over the run's own analysable universe
-    # (the domain∩annotation intersection), propagated. Keeps this producer's
-    # domain_go_annotations_propagated.tsv on the same schema as
-    # run_dcgo_human.py's, so consumers reading ic by name never KeyError.
-    export_ic = tb.information_content(tpr_go_map, get_ancestors)
-
-    @dataclass
-    class _Assoc:
-        domain: str
-        go_term: str
-        q_value: float
-        hyper_score: float
-
-    for rung in LADDER:
-        if rung.kind != "propagated":
-            continue
-        out_path = rung_prediction_file(args.run_dir, rung)
-        if out_path.exists():
-            logger.info(f"[{rung.name}] reusing existing {out_path}")
-            continue
-        source = args.run_dir / rung.run_dir / "domain_go_associations_significant.tsv"
-        if not source.exists():
-            logger.error(f"[{rung.name}] missing upstream table: {source}")
-            return 1
-        logger.info(f"[{rung.name}] applying True Path Rule to {source}...")
-        df = pd.read_csv(source, sep="\t")
-        assocs = [
-            _Assoc(d, g, float(q), float(h))
-            for d, g, q, h in zip(
-                df["domain"], df["go_term"], df["adj_p_value"], df["hyper_score"]
-            )
-        ]
-        filtered = processor.apply_optimal_level_filter(
-            assocs,
-            tpr_domain_map,
-            tpr_go_map,
-            min_background_size=3,
-            alpha_threshold=0.05,
-        )
-        logger.info(
-            f"[{rung.name}] optimal-level filter retained {len(filtered):,} / "
-            f"{len(assocs):,} associations"
-        )
-        annotations = processor.propagate_annotations(filtered)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        with out_path.open("w") as handle:
-            handle.write(
-                "domain\tgo_term\tq_value\tassociation_score\tannotation_type\t"
-                "direct_source_term\tic\n"
-            )
-            for ann in annotations:
-                handle.write(
-                    f"{ann.domain}\t{ann.go_term}\t{ann.q_value:.6e}\t"
-                    f"{ann.association_score:.2f}\t{ann.annotation_type}\t"
-                    f"{ann.direct_source_term}\t"
-                    f"{export_ic.get(ann.go_term, 0.0):.10g}\n"
-                )
-        logger.info(
-            f"[{rung.name}] wrote {len(annotations):,} annotations -> {out_path}"
-        )
 
     # ----------------------------------------------------- transfer per rung --
     transfer = (
@@ -594,7 +573,7 @@ def main() -> int:  # pragma: no cover - I/O wiring
 
             # Paired comparisons that matter: each rung against the component it
             # adds to, and each rung against the naive baseline.
-            comparisons = [(r.name, r.parent) for r in LADDER if r.parent]
+            comparisons = list(COMPONENT_EDGES)
             comparisons += [(r.name, "naive") for r in LADDER]
             comparisons += [("full", "single")]
             for a_name, b_name in comparisons:
