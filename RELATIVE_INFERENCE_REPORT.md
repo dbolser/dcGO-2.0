@@ -19,10 +19,24 @@ human-only run of that reimplementation:
 - **Ontology:** GO, `go-basic.obo` release 2026-06-15, `is_a`/`part_of`
   edges. Input annotations are true-path propagated before testing, as the
   original did.
-- **Universe:** the 18,908 human proteins with at least one domain and at
-  least one annotation.
+- **Universe:** the 18,382 human proteins with at least one domain and at
+  least one annotation (18,735 annotated ∩ 18,908 domain-annotated).
 - **Statistics:** one-sided Fisher tests, Benjamini-Hochberg at FDR < 0.01,
   single-domain and supra-domain hypotheses corrected as separate families.
+
+**The data at a glance** (the same inputs feed all four configurations;
+per-protein figures are over the 18,382-protein universe):
+
+| | total (unique ids) | per protein, mean (median) |
+|---|---:|---:|
+| InterPro domain entries | 19,230 | 4.7 distinct entries (4); 12.5 domain instances |
+| supra-domain combinations (2–3 contiguous entries) | 82,976 | 22.1 |
+| GO annotations, direct (2021, manual evidence) | 14,650 terms; 205,278 protein–term pairs | 11.2 terms (8) |
+| GO annotations after true-path propagation | 18,308 terms; 1,230,325 pairs | 66.9 terms (52) |
+
+Direct terms by aspect: 9,494 BP / 3,640 MF / 1,516 CC. A further 9,197
+pairs to 1,342 terms absent from the 2026 GO release were dropped before
+testing.
 
 Four configurations were run, identical except for two switches — whether
 the **relative (parental-background) test** is on, and whether the
@@ -143,7 +157,7 @@ is recorded in a machine-readable manifest per run).
 For every (domain D, term T) pair that co-occurs in at least one protein:
 
 1. **Overall test** — one-sided Fisher (enrichment), background = the
-   18,908-protein universe.
+   18,382-protein universe.
 2. **Relative test** — let B = the **union** of the (propagated) protein sets
    of T's *direct* parents.
    - no parents → `relative_p = 0` (the pair passes on the overall test alone);
