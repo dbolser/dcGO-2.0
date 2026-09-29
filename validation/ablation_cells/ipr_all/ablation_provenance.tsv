@@ -1,0 +1,16 @@
+rung	label	adds	predictions_file	n_rows	n_domains	score
+single	single domains	-	/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_all/single/domain_go_associations_significant.tsv	52392	6635	-log10(q)
+single__p	single domains (p-ranked)	sensitivity: score column only	/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_all/single/domain_go_associations_significant.tsv	52392	6635	-log10(p)
+supra	+ supra-domains	supra-domains	/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_all/supra/domain_go_associations_significant.tsv	196157	28743	-log10(q)
+supra__p	+ supra-domains (p-ranked)	sensitivity: score column only	/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_all/supra/domain_go_associations_significant.tsv	196157	28743	-log10(p)
+supra_input	+ input propagation	input propagation	/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_all/supra_input/domain_go_associations_significant.tsv	577558	29099	-log10(q)
+supra_input__p	+ input propagation (p-ranked)	sensitivity: score column only	/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_all/supra_input/domain_go_associations_significant.tsv	577558	29099	-log10(p)
+supra_relative	+ relative inference	relative inference	/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_all/supra_relative/domain_go_associations_significant.tsv	40929	12472	-log10(q)
+supra_relative__p	+ relative inference (p-ranked)	sensitivity: score column only	/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_all/supra_relative/domain_go_associations_significant.tsv	40929	12472	-log10(p)
+supra_output	+ output propagation	output propagation	/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_all/supra_output/domain_go_annotations_propagated.tsv	1293352	28743	-log10(q)
+supra_input_relative	input + relative	input propagation + relative inference	/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_all/supra_input_relative/domain_go_associations_significant.tsv	115716	12969	-log10(q)
+supra_input_relative__p	input + relative (p-ranked)	sensitivity: score column only	/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_all/supra_input_relative/domain_go_associations_significant.tsv	115716	12969	-log10(p)
+supra_input_output	input + output	input + output propagation	/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_all/supra_input_output/domain_go_annotations_propagated.tsv	1411968	29099	-log10(q)
+supra_relative_output	relative + output	relative inference + output propagation	/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_all/supra_relative_output/domain_go_annotations_propagated.tsv	209153	12472	-log10(q)
+full	full current method	input propagation + relative inference + output propagation	/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_all/full/domain_go_annotations_propagated.tsv	342213	12969	-log10(q)
+naive	CAFA naive baseline	-	-	19721	0	propagated t0 term frequency

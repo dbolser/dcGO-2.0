@@ -16,14 +16,14 @@
         "is_a",
         "part_of"
       ],
-      "relative_inference_enabled": true,
+      "relative_inference_enabled": false,
       "supports_true_path": true,
       "term_prefix": "GO:",
       "true_path_enabled": true
     },
     "thresholds": {
       "enable_supra_domains": true,
-      "evidence_filter": "manual",
+      "evidence_filter": "all",
       "fdr_families": [
         "single",
         "supra"
@@ -32,13 +32,13 @@
       "fdr_threshold": 0.01,
       "fisher_alternative": "greater",
       "ic_source": "propagated",
-      "input_annotations_propagated": true,
+      "input_annotations_propagated": false,
       "max_supra_domain_length": 3,
       "min_domain_length": 10,
       "min_ic": null,
       "min_proteins_per_association": null,
       "parental_background_min_size": 3,
-      "relative_inference_combination": "max_overall_relative_then_bh"
+      "relative_inference_combination": null
     }
   },
   "command": [
@@ -47,12 +47,12 @@
     "--num-cores",
     "8",
     "--output-dir",
-    "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_manual/full",
-    "--propagate-annotations",
-    "--enable-relative-inference",
+    "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_all/supra_output",
+    "--evidence-filter",
+    "all",
     "--enable-true-path"
   ],
-  "completed_at": "2026-09-29T15:40:27.757426+00:00",
+  "completed_at": "2026-09-29T15:31:16.112972+00:00",
   "git": {
     "available": false
   },
@@ -94,25 +94,25 @@
   ],
   "outputs": [
     {
-      "modified_at": "2026-09-29T15:40:27.212613+00:00",
-      "path": "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_manual/full/domain_go_associations_significant.tsv",
+      "modified_at": "2026-09-29T15:31:13.930001+00:00",
+      "path": "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_all/supra_output/domain_go_associations_significant.tsv",
       "role": "significant_associations",
-      "sha256": "edc3ed3e1a097d325d6e58ee634b96ddd39c4aac8299f309fa1987390c003065",
-      "size_bytes": 13456116
+      "sha256": "d24b202be4b08c22031972ffea4aa805af46959bc46be7c41804068c584adcab",
+      "size_bytes": 28843454
     },
     {
-      "modified_at": "2026-09-29T15:40:27.254615+00:00",
-      "path": "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_manual/full/domain_go_associations_top100.tsv",
+      "modified_at": "2026-09-29T15:31:13.961003+00:00",
+      "path": "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_all/supra_output/domain_go_associations_top100.tsv",
       "role": "top100",
-      "sha256": "742445431b2bf0a143d73b8529cdb010a84d81b10ecbfbdbf11d839636c90229",
-      "size_bytes": 11730
+      "sha256": "262f7343e32ea2aa72fbc432fb575215edb799c20a0dfa7c0f718ef045a411cd",
+      "size_bytes": 12155
     },
     {
-      "modified_at": "2026-09-29T15:40:27.659631+00:00",
-      "path": "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_manual/full/domain_go_annotations_propagated.tsv",
+      "modified_at": "2026-09-29T15:31:15.775074+00:00",
+      "path": "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_all/supra_output/domain_go_annotations_propagated.tsv",
       "role": "propagated_annotations",
-      "sha256": "6463be7272da5613bce0b1a9c0cf5f18dca8ab563cefe043a601a5cbf70016ed",
-      "size_bytes": 23495733
+      "sha256": "97769a41e73eb4ce6568a3c2ccd2bd747d57c93d88d72db69e8f4f9f27d54707",
+      "size_bytes": 109940075
     }
   ],
   "parameters": {
@@ -122,11 +122,11 @@
     "doid_obo": "data/raw/disease_ontology/doid.obo",
     "domain_key": "interpro",
     "efo_obo": "data/raw/efo/efo.obo",
-    "enable_relative_inference": true,
+    "enable_relative_inference": false,
     "enable_supra_domains": true,
     "enable_true_path": true,
     "enzyme_dat": "data/raw/enzyme/enzyme.dat",
-    "evidence_filter": "manual",
+    "evidence_filter": "all",
     "fb_genotype_phenotype": "data/raw/flybase/genotype_phenotype_data_fb_2026_02.tsv.gz",
     "fbal_to_fbgn": "data/raw/flybase/fbal_to_fbgn_fb_2026_02.tsv.gz",
     "fbbt_obo": "data/raw/flybase_ontology/fbbt.obo",
@@ -149,9 +149,9 @@
     "num_cores": 8,
     "oncotree_json": "data/raw/oncotree/oncotree_tumortypes.json",
     "ontology": "go",
-    "output_dir": "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_manual/full",
+    "output_dir": "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_all/supra_output",
     "permute_annotations": null,
-    "propagate_annotations": true,
+    "propagate_annotations": false,
     "reactome_relations": "data/raw/reactome_relations/ReactomePathwaysRelation.txt",
     "species": "human",
     "subcell": "data/raw/uniprot_subcell/subcell.txt",
@@ -181,26 +181,22 @@
     "python_implementation": "CPython",
     "python_version": "3.12.3"
   },
-  "started_at": "2026-09-29T15:37:48.377223+00:00",
+  "started_at": "2026-09-29T15:29:23.793121+00:00",
   "status": "completed",
   "summary": {
     "bh_threshold_pvalue": {
-      "single": 8.306791639653283e-07,
-      "supra": 4.1285938181964444e-07
+      "single": 1.4646022161490525e-06,
+      "supra": 9.311895199980616e-07
     },
-    "domains": 102206,
-    "input_alt_ids_remapped": 74,
-    "input_pairs_dropped": 4700,
-    "input_replaced_by_remapped": 417,
-    "input_terms_not_in_hierarchy": 925,
+    "domains": 102825,
     "ontology": "go",
-    "propagated_annotations": 280973,
-    "proteins": 18382,
-    "runtime_seconds": 23.37,
-    "significant_associations": 92327,
-    "terms": 18368,
-    "tests": 1877319808,
-    "tests_evaluated": 13562639
+    "propagated_annotations": 1293352,
+    "proteins": 18730,
+    "runtime_seconds": 7.35,
+    "significant_associations": 196157,
+    "terms": 18477,
+    "tests": 1899897525,
+    "tests_evaluated": 4040334
   },
   "working_directory": "/tmp/claude-1005/-home-danbolser-Build-dcGO-2-0/0435071c-7f59-46ba-9fc3-b48a994c3a94/scratchpad/abl2021"
 }

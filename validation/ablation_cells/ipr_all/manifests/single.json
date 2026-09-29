@@ -4,9 +4,7 @@
       "annotation_inputs": [
         "gaf"
       ],
-      "hierarchy_inputs": [
-        "go_obo"
-      ],
+      "hierarchy_inputs": [],
       "key": "go",
       "label": "go",
       "name": "Gene Ontology",
@@ -16,14 +14,14 @@
         "is_a",
         "part_of"
       ],
-      "relative_inference_enabled": true,
+      "relative_inference_enabled": false,
       "supports_true_path": true,
       "term_prefix": "GO:",
-      "true_path_enabled": true
+      "true_path_enabled": false
     },
     "thresholds": {
-      "enable_supra_domains": true,
-      "evidence_filter": "manual",
+      "enable_supra_domains": false,
+      "evidence_filter": "all",
       "fdr_families": [
         "single",
         "supra"
@@ -31,14 +29,14 @@
       "fdr_method": "benjamini_hochberg",
       "fdr_threshold": 0.01,
       "fisher_alternative": "greater",
-      "ic_source": "propagated",
-      "input_annotations_propagated": true,
+      "ic_source": "direct",
+      "input_annotations_propagated": false,
       "max_supra_domain_length": 3,
       "min_domain_length": 10,
       "min_ic": null,
       "min_proteins_per_association": null,
       "parental_background_min_size": 3,
-      "relative_inference_combination": "max_overall_relative_then_bh"
+      "relative_inference_combination": null
     }
   },
   "command": [
@@ -47,12 +45,12 @@
     "--num-cores",
     "8",
     "--output-dir",
-    "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_manual/full",
-    "--propagate-annotations",
-    "--enable-relative-inference",
-    "--enable-true-path"
+    "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_all/single",
+    "--evidence-filter",
+    "all",
+    "--disable-supra-domains"
   ],
-  "completed_at": "2026-09-29T15:40:27.757426+00:00",
+  "completed_at": "2026-09-29T15:24:28.495637+00:00",
   "git": {
     "available": false
   },
@@ -78,41 +76,22 @@
       "sha256": "69ae7d90743400c6519a6bfe3a1b1578476585f151de39323bfd890cbae13d86",
       "size_bytes": 8577421,
       "source_url": "https://ftp.ebi.ac.uk/pub/databases/GO/goa/HUMAN/goa_human.gaf.gz"
-    },
-    {
-      "modified_at": "2026-07-07T19:03:02.551052+00:00",
-      "path": "data/raw/go_ontology/go-basic.obo",
-      "release_metadata": {
-        "data_version": "releases/2026-06-15",
-        "format_version": "1.2"
-      },
-      "role": "go_obo",
-      "sha256": "c72fc198a86983d55e43aac585d1ffdbeb6e3601475b3f18b6045acdc0a0734c",
-      "size_bytes": 32215811,
-      "source_url": "https://current.geneontology.org/ontology/go-basic.obo"
     }
   ],
   "outputs": [
     {
-      "modified_at": "2026-09-29T15:40:27.212613+00:00",
-      "path": "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_manual/full/domain_go_associations_significant.tsv",
+      "modified_at": "2026-09-29T15:24:28.452159+00:00",
+      "path": "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_all/single/domain_go_associations_significant.tsv",
       "role": "significant_associations",
-      "sha256": "edc3ed3e1a097d325d6e58ee634b96ddd39c4aac8299f309fa1987390c003065",
-      "size_bytes": 13456116
+      "sha256": "8f86dedc56af64e316998a61e24dfd36f64d24758a0f051baaa10e883471602e",
+      "size_bytes": 6103102
     },
     {
-      "modified_at": "2026-09-29T15:40:27.254615+00:00",
-      "path": "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_manual/full/domain_go_associations_top100.tsv",
+      "modified_at": "2026-09-29T15:24:28.477160+00:00",
+      "path": "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_all/single/domain_go_associations_top100.tsv",
       "role": "top100",
-      "sha256": "742445431b2bf0a143d73b8529cdb010a84d81b10ecbfbdbf11d839636c90229",
-      "size_bytes": 11730
-    },
-    {
-      "modified_at": "2026-09-29T15:40:27.659631+00:00",
-      "path": "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_manual/full/domain_go_annotations_propagated.tsv",
-      "role": "propagated_annotations",
-      "sha256": "6463be7272da5613bce0b1a9c0cf5f18dca8ab563cefe043a601a5cbf70016ed",
-      "size_bytes": 23495733
+      "sha256": "eb71f386be7c47e04b878edb11b8a49352392ea83dc2e5906b77600f5a75f9b8",
+      "size_bytes": 9230
     }
   ],
   "parameters": {
@@ -122,11 +101,11 @@
     "doid_obo": "data/raw/disease_ontology/doid.obo",
     "domain_key": "interpro",
     "efo_obo": "data/raw/efo/efo.obo",
-    "enable_relative_inference": true,
-    "enable_supra_domains": true,
-    "enable_true_path": true,
+    "enable_relative_inference": false,
+    "enable_supra_domains": false,
+    "enable_true_path": false,
     "enzyme_dat": "data/raw/enzyme/enzyme.dat",
-    "evidence_filter": "manual",
+    "evidence_filter": "all",
     "fb_genotype_phenotype": "data/raw/flybase/genotype_phenotype_data_fb_2026_02.tsv.gz",
     "fbal_to_fbgn": "data/raw/flybase/fbal_to_fbgn_fb_2026_02.tsv.gz",
     "fbbt_obo": "data/raw/flybase_ontology/fbbt.obo",
@@ -149,9 +128,9 @@
     "num_cores": 8,
     "oncotree_json": "data/raw/oncotree/oncotree_tumortypes.json",
     "ontology": "go",
-    "output_dir": "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_manual/full",
+    "output_dir": "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_all/single",
     "permute_annotations": null,
-    "propagate_annotations": true,
+    "propagate_annotations": false,
     "reactome_relations": "data/raw/reactome_relations/ReactomePathwaysRelation.txt",
     "species": "human",
     "subcell": "data/raw/uniprot_subcell/subcell.txt",
@@ -181,26 +160,21 @@
     "python_implementation": "CPython",
     "python_version": "3.12.3"
   },
-  "started_at": "2026-09-29T15:37:48.377223+00:00",
+  "started_at": "2026-09-29T15:24:10.427038+00:00",
   "status": "completed",
   "summary": {
     "bh_threshold_pvalue": {
-      "single": 8.306791639653283e-07,
-      "supra": 4.1285938181964444e-07
+      "single": 1.4646022161490525e-06
     },
-    "domains": 102206,
-    "input_alt_ids_remapped": 74,
-    "input_pairs_dropped": 4700,
-    "input_replaced_by_remapped": 417,
-    "input_terms_not_in_hierarchy": 925,
+    "domains": 19359,
     "ontology": "go",
-    "propagated_annotations": 280973,
-    "proteins": 18382,
-    "runtime_seconds": 23.37,
-    "significant_associations": 92327,
-    "terms": 18368,
-    "tests": 1877319808,
-    "tests_evaluated": 13562639
+    "propagated_annotations": 0,
+    "proteins": 18730,
+    "runtime_seconds": 2.19,
+    "significant_associations": 52392,
+    "terms": 18477,
+    "tests": 357696243,
+    "tests_evaluated": 871157
   },
   "working_directory": "/tmp/claude-1005/-home-danbolser-Build-dcGO-2-0/0435071c-7f59-46ba-9fc3-b48a994c3a94/scratchpad/abl2021"
 }
