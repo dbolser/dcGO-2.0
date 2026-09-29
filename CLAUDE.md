@@ -64,6 +64,9 @@ Key `src/` modules:
 - `sparse_fisher.py` - Sparse contingency-table construction for domain × GO.
 - `vectorized_fisher.py` - Vectorized Fisher's exact tests (Cython `fisher`) + Benjamini–Hochberg FDR.
 - `ontology_processor.py` - True Path Rule / GO DAG propagation (opt-in).
+  Also owns the GO id-cleanup maps used on input annotations: `alt_id_map`
+  (merged ids) and `replaced_by_map` (obsoleted ids with an official live
+  successor; `consider:` suggestions are never followed).
 
 ## Development Commands
 
@@ -207,15 +210,17 @@ tables); enumerating co-occurring pairs makes it 9.5M tables and 268 s.
 ## Known Limitations
 
 - No local domain scanning — only pre-computed InterPro annotations are consumed.
-- **Current component ablation (§4, 2026-09-01).** A from-scratch
+- **Current component ablation (§4, 2026-09-29).** A from-scratch
   nine-configuration factorial on current `main` separates input annotation
   propagation, relative inference, and output propagation. Supra-domains have
   little protein-centric effect; output propagation is mostly neutral-to-helpful;
-  relative inference lowers both F_max and AUPRC in eight of nine cells when
+  relative inference lowers both F_max and AUPRC in most cells when
   added directly to supra. Input propagation substantially rescues configurations
   containing relative inference. No configuration wins every aspect and IC
   floor, so the primary method remains a decision for an untouched final
-  evaluation. See `VALIDATION_PLAN.md` §4 and the committed ablation TSVs.
+  evaluation. The pattern is unchanged under SCOP-superfamily domain keys and
+  IEA-inclusive training (`validation/ablation_cells/`). See
+  `VALIDATION_PLAN.md` §4 and the committed ablation TSVs.
 - True Path Rule is opt-in (`--enable-true-path`), not part of the default run;
 
   it now errors out for ontologies with no hierarchy instead of silently

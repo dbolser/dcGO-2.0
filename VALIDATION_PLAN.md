@@ -13,7 +13,7 @@ engineering cleanup: the code runs; this is about showing the results are
 | §1 Reframe InterPro2GO comparison | ✅ done (#14, #15) — ~65% coverage at FDR<0.01 |
 | **§2 Temporal held-out benchmark (CAFA-style)** | ✅ **done (#8)** — 2021→2026 CAFA split; see results below |
 | §3 Compare to original dcGO | ✅ **done (2026-08-04)** — SSF re-keying + published-dcGO join; precision 0.54–0.63, recall uninterpretable (see §3.1) |
-| **§4 Current component ablation + uncertainty** | ✅ **done (2026-09-01)** — nine current-code configurations, 1,000 paired bootstraps, 200 permutations |
+| **§4 Current component ablation + uncertainty** | ✅ **done (2026-09-29)** — nine current-code configurations, 1,000 paired bootstraps, 200 permutations; rerun with the `replaced_by` input remap + SSF/IEA robustness cells |
 | **§5 Pre-paper method decisions** | 🟡 partly done (2026-08-05) — shrinkage removed, True Path background fixed, BH families split, `--min-support` added; minimum-support *policy* still open |
 | **Untouched evaluation axis** | ✅ **done (2026-08-05)** — mouse, matched 2021→2026 window; performance improves in all 9 cells. Nested human split (205→215→current) in progress |
 | §6 Reproducibility | ⬜ open (#12) |
@@ -918,12 +918,18 @@ What is **not** established, and should not be claimed:
 
 ---
 
-## 4. Current component ablation *(2026-09-01; current main)*
+## 4. Current component ablation *(2026-09-29; current main)*
 
-This section reports only the ablation run made from commit `3f37558` after the
-hierarchy and relative-inference fixes in #61–#67. Earlier ablation measurements
-have been removed because they describe an implementation that no longer
-exists.
+This section reports the ablation rerun of 2026-09-29, made after the input
+cleanup gained the `replaced_by` remap (obsoleted GO ids with an official
+successor are now remapped instead of dropped: 417 terms, 4,497 training
+pairs rescued; held-out AUPRC improved in 36/36 rung × cell comparisons and
+no conclusion changed). It supersedes the 2026-09-01 run from commit
+`3f37558`, which itself replaced earlier measurements of an implementation
+that no longer exists. The committed `validation/ablation_*.tsv` and
+`validation/ablation_manifests/` reflect the current run; the same ladder
+rerun under `--domain-key ssf` and/or `--evidence-filter all` lives in
+`validation/ablation_cells/` (see `RELATIVE_INFERENCE_REPORT.md` §4.2).
 
 ### Design
 

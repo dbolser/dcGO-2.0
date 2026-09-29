@@ -255,9 +255,11 @@ them separate.
 protein → term map over the hierarchy before any counting, which the original
 paper states as part of its design. Terms the hierarchy does not contain are
 handled explicitly rather than silently: GO `alt_id`s are remapped to their
-primary identifiers, and terms still unknown after the remap are dropped from
-the tested universe, with every case counted and recorded in the run manifest
-`[K11]`.
+primary identifiers, obsoleted terms carrying an official `replaced_by`
+pointer are remapped to their live successor (soft `consider:` suggestions
+are not followed), and terms still unknown after both remaps are dropped
+from the tested universe, with every case counted and recorded in the run
+manifest `[K11]`.
 
 **Output-side propagation** (`--enable-true-path`) adds ancestor associations
 to the significant set. It applies to every registered vocabulary that has a
