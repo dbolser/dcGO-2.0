@@ -42,22 +42,18 @@
     }
   },
   "command": [
-    "/tmp/dcgo-ablation-current/.venv/bin/python3",
-    "run_dcgo_human.py",
+    "/home/danbolser/Build/dcGO-2.0/.venv/bin/python3",
+    "/home/danbolser/Build/dcGO-2.0/run_dcgo_human.py",
     "--num-cores",
     "8",
     "--output-dir",
-    "results/ablation-current/supra_input_relative",
+    "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_manual/supra_input_relative",
     "--propagate-annotations",
     "--enable-relative-inference"
   ],
-  "completed_at": "2026-09-01T12:22:07.624122+00:00",
+  "completed_at": "2026-09-29T15:32:34.871890+00:00",
   "git": {
-    "available": true,
-    "branch": null,
-    "commit": "3f3755891a343ae1e9c0b722645390c4cbeebace",
-    "dirty": false,
-    "untracked_files": 7
+    "available": false
   },
   "inputs": [
     {
@@ -97,25 +93,25 @@
   ],
   "outputs": [
     {
-      "modified_at": "2026-09-01T12:22:07.388574+00:00",
-      "path": "results/ablation-current/supra_input_relative/domain_go_associations_significant.tsv",
+      "modified_at": "2026-09-29T15:32:34.617153+00:00",
+      "path": "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_manual/supra_input_relative/domain_go_associations_significant.tsv",
       "role": "significant_associations",
-      "sha256": "77a6362792b8eedcb16d427a8bd460cb1acb9760a542be53e6746faf25101744",
-      "size_bytes": 13297913
+      "sha256": "edc3ed3e1a097d325d6e58ee634b96ddd39c4aac8299f309fa1987390c003065",
+      "size_bytes": 13456116
     },
     {
-      "modified_at": "2026-09-01T12:22:07.429576+00:00",
-      "path": "results/ablation-current/supra_input_relative/domain_go_associations_top100.tsv",
+      "modified_at": "2026-09-29T15:32:34.660155+00:00",
+      "path": "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_manual/supra_input_relative/domain_go_associations_top100.tsv",
       "role": "top100",
-      "sha256": "d0a2026db66733976e34ba229cd133bbc3b0c5b6007ab8219086f80ba6a8c8dd",
-      "size_bytes": 11752
+      "sha256": "742445431b2bf0a143d73b8529cdb010a84d81b10ecbfbdbf11d839636c90229",
+      "size_bytes": 11730
     },
     {
-      "modified_at": "2026-09-01T12:22:07.569582+00:00",
-      "path": "results/ablation-current/supra_input_relative/domain_go_annotations_propagated.tsv",
+      "modified_at": "2026-09-29T15:32:34.813161+00:00",
+      "path": "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_manual/supra_input_relative/domain_go_annotations_propagated.tsv",
       "role": "propagated_annotations",
-      "sha256": "8e670778fa1444c264948e8837e77f18a66f990a70f45992f1c8afe82e03d999",
-      "size_bytes": 7331522
+      "sha256": "3d4414859f888f0318ed3852940a1bfe91cdf6aa1a95fac6040a39ff62cf8521",
+      "size_bytes": 7419991
     }
   ],
   "parameters": {
@@ -152,7 +148,7 @@
     "num_cores": 8,
     "oncotree_json": "data/raw/oncotree/oncotree_tumortypes.json",
     "ontology": "go",
-    "output_dir": "results/ablation-current/supra_input_relative",
+    "output_dir": "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_manual/supra_input_relative",
     "permute_annotations": null,
     "propagate_annotations": true,
     "reactome_relations": "data/raw/reactome_relations/ReactomePathwaysRelation.txt",
@@ -176,35 +172,34 @@
   "software": {
     "dcgo_pipeline_version": "0.1.0",
     "dependency_lock": {
-      "available": true,
-      "path": "uv.lock",
-      "sha256": "57e605b4882c7d51b2cd9000afa999c1c7ab56177e5c11a50d8d36b32bfedc9c",
-      "size_bytes": 386547
+      "available": false,
+      "path": "uv.lock"
     },
-    "executable": "/tmp/dcgo-ablation-current/.venv/bin/python3",
+    "executable": "/home/danbolser/Build/dcGO-2.0/.venv/bin/python3",
     "platform": "Linux-6.8.0-100-generic-x86_64-with-glibc2.39",
     "python_implementation": "CPython",
     "python_version": "3.12.3"
   },
-  "started_at": "2026-09-01T12:19:37.624065+00:00",
+  "started_at": "2026-09-29T15:30:00.184050+00:00",
   "status": "completed",
   "summary": {
     "bh_threshold_pvalue": {
-      "single": 8.205624703065755e-07,
-      "supra": 4.100418080982299e-07
+      "single": 8.306791639653283e-07,
+      "supra": 4.1285938181964444e-07
     },
     "domains": 102206,
     "input_alt_ids_remapped": 74,
-    "input_pairs_dropped": 9197,
-    "input_terms_not_in_hierarchy": 1342,
+    "input_pairs_dropped": 4700,
+    "input_replaced_by_remapped": 417,
+    "input_terms_not_in_hierarchy": 925,
     "ontology": "go",
-    "propagated_annotations": 91190,
+    "propagated_annotations": 92327,
     "proteins": 18382,
-    "runtime_seconds": 22.98,
-    "significant_associations": 91190,
-    "terms": 18308,
-    "tests": 1871187448,
-    "tests_evaluated": 13454248
+    "runtime_seconds": 23.32,
+    "significant_associations": 92327,
+    "terms": 18368,
+    "tests": 1877319808,
+    "tests_evaluated": 13562639
   },
-  "working_directory": "/tmp/dcgo-ablation-current"
+  "working_directory": "/tmp/claude-1005/-home-danbolser-Build-dcGO-2-0/0435071c-7f59-46ba-9fc3-b48a994c3a94/scratchpad/abl2021"
 }
