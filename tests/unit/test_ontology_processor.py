@@ -917,3 +917,90 @@ class TestPropagationEdgeTypes:
         annotations = processor.propagate_annotations(associations)
         terms = {ann.go_term for ann in annotations}
         assert terms == {"GO:0000004", "GO:0000001"}
+
+
+# Every way a GO term can die: outright replacement (replaced_by), a chain of
+# replacements, soft consider-only suggestions, an ambiguous double
+# replacement, and a dead-end replacement pointing at another obsolete term
+# with no successor of its own.
+OBSOLETE_OBO_CONTENT = """
+format-version: 1.2
+data-version: test-obsolete
+
+[Term]
+id: GO:0000001
+name: live term
+
+[Term]
+id: GO:0000010
+name: obsolete replaced term
+is_obsolete: true
+replaced_by: GO:0000001
+
+[Term]
+id: GO:0000011
+name: obsolete chained term
+is_obsolete: true
+replaced_by: GO:0000010
+
+[Term]
+id: GO:0000012
+name: obsolete considered term
+is_obsolete: true
+consider: GO:0000001
+
+[Term]
+id: GO:0000013
+name: obsolete ambiguous term
+is_obsolete: true
+replaced_by: GO:0000001
+replaced_by: GO:0000010
+
+[Term]
+id: GO:0000014
+name: obsolete dead-end term
+is_obsolete: true
+replaced_by: GO:0000015
+
+[Term]
+id: GO:0000015
+name: obsolete successorless term
+is_obsolete: true
+"""
+
+
+@pytest.fixture
+def obsolete_obo_file():
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".obo", delete=False) as f:
+        f.write(OBSOLETE_OBO_CONTENT)
+        temp_path = Path(f.name)
+    yield temp_path
+    temp_path.unlink()
+
+
+class TestReplacedByMap:
+    """Obsolete terms with an official successor are remappable, not dead."""
+
+    def test_replaced_by_points_at_the_live_successor(self, obsolete_obo_file):
+        processor = OntologyProcessor(obsolete_obo_file)
+        assert processor.replaced_by_map["GO:0000010"] == "GO:0000001"
+
+    def test_chains_resolve_to_the_final_live_term(self, obsolete_obo_file):
+        """A successor can itself be obsolete; the map lands on the live end."""
+        processor = OntologyProcessor(obsolete_obo_file)
+        assert processor.replaced_by_map["GO:0000011"] == "GO:0000001"
+
+    def test_soft_and_unresolvable_pointers_are_not_followed(self, obsolete_obo_file):
+        """consider is a hint, a double replaced_by is ambiguous, and a
+        dead-end chain has no live term to land on — none may remap."""
+        processor = OntologyProcessor(obsolete_obo_file)
+        assert set(processor.replaced_by_map) == {"GO:0000010", "GO:0000011"}
+
+    def test_obsolete_terms_are_still_removed_from_the_graph(self, obsolete_obo_file):
+        processor = OntologyProcessor(obsolete_obo_file)
+        assert set(processor.go_graph) == {"GO:0000001"}
+
+    def test_regulates_fixture_has_no_replacements(self, regulates_obo_file):
+        """An ontology without obsolete stanzas yields an empty map."""
+        processor = OntologyProcessor(regulates_obo_file)
+        assert processor.replaced_by_map == {}

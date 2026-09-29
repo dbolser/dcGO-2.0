@@ -77,6 +77,18 @@ class TestLadder:
             == "domain_go_associations_significant.tsv"
         )
 
+    def test_non_default_domain_key_is_baked_into_the_stem(self, tmp_path):
+        """SSF runs write domain_ssf_go_* files, mirroring run_dcgo_human."""
+        by_name = {r.name: r for r in ab.LADDER}
+        assert (
+            ab.rung_prediction_file(tmp_path, by_name["supra"], "ssf").name
+            == "domain_ssf_go_associations_significant.tsv"
+        )
+        assert (
+            ab.rung_prediction_file(tmp_path, by_name["supra_output"], "ssf").name
+            == "domain_ssf_go_annotations_propagated.tsv"
+        )
+
     def test_every_factorial_configuration_is_a_separate_pipeline_run(self):
         run_dirs = [r.run_dir for r in ab.LADDER]
         assert len(run_dirs) == len(set(run_dirs))

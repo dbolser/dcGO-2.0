@@ -1125,6 +1125,7 @@ def main(argv: list[str] | None = None) -> int:
     input_coverage = None
     input_processor = None
     input_alt_ids_remapped = None
+    input_replaced_by_remapped = None
     if args.propagate_annotations:
         if ontology_entry.build_ancestors is None:
             input_processor = OntologyProcessor(args.go_ontology)
@@ -1135,29 +1136,47 @@ def main(argv: list[str] | None = None) -> int:
             # parse time, e.g. the DOID/Mondo replaced_by resolution).
             known_term_fn = input_processor.go_graph.__contains__
 
-            # Merged ids first: an annotation to an alt_id has an exact live
-            # replacement, so it is remapped rather than dropped.
+            # Ids with an exact live replacement first, so they are remapped
+            # rather than dropped: alt_ids (GO merged the term into a
+            # survivor) and replaced_by successors (GO obsoleted the term but
+            # names its official replacement). Soft `consider:` suggestions
+            # are not followed — see OntologyProcessor.replaced_by_map.
             alt_map = input_processor.alt_id_map
+            replaced_map = input_processor.replaced_by_map
             remapped_terms: set = set()
+            replaced_terms: set = set()
             remapped_pairs = 0
+            replaced_pairs = 0
             remapped: dict = {}
             for protein, terms in protein_go_map.items():
                 mapped = set()
                 for term in terms:
                     primary = alt_map.get(term)
+                    successor = replaced_map.get(term)
                     if primary is not None:
                         remapped_terms.add(term)
                         remapped_pairs += 1
                         mapped.add(primary)
+                    elif successor is not None:
+                        replaced_terms.add(term)
+                        replaced_pairs += 1
+                        mapped.add(successor)
                     else:
                         mapped.add(term)
                 remapped[protein] = mapped
             protein_go_map = remapped
             input_alt_ids_remapped = len(remapped_terms)
+            input_replaced_by_remapped = len(replaced_terms)
             if remapped_terms:
                 logger.info(
                     f"  Remapped {len(remapped_terms):,} alt_id terms to their "
                     f"primary ids ({remapped_pairs:,} (protein, term) pairs)"
+                )
+            if replaced_terms:
+                logger.info(
+                    f"  Remapped {len(replaced_terms):,} obsolete terms to "
+                    f"their replaced_by successors ({replaced_pairs:,} "
+                    f"(protein, term) pairs)"
                 )
         else:
             input_ancestors = ontology_entry.build_ancestors(ontology_paths)
@@ -1192,9 +1211,10 @@ def main(argv: list[str] | None = None) -> int:
         if input_coverage.unknown_terms:
             logger.info(
                 f"  {input_coverage.unknown_terms:,} annotated terms are not in "
-                f"the hierarchy even after alt_id remapping (obsolete or "
-                f"malformed ids); their {input_coverage.unknown_pairs:,} "
-                f"(protein, term) pairs were dropped from the tested universe"
+                f"the hierarchy even after alt_id and replaced_by remapping "
+                f"(obsolete without a successor, or malformed ids); their "
+                f"{input_coverage.unknown_pairs:,} (protein, term) pairs were "
+                f"dropped from the tested universe"
             )
 
     # Calibration control. Comparing two ontology layers by their significant
@@ -1229,7 +1249,8 @@ def main(argv: list[str] | None = None) -> int:
         # per-protein closure → counter, so the full propagated copy (a
         # multi-GB transient at allspecies scale) is never materialised. The
         # input cleaning matches --propagate-annotations exactly — alt_id
-        # annotations remapped to their live primary ids, terms the hierarchy
+        # annotations remapped to their live primary ids, obsolete terms
+        # with a replaced_by successor remapped to it, terms the hierarchy
         # does not contain dropped — so ic_source="propagated" names a single
         # estimate regardless of which flag engaged the hierarchy.
         if ontology_entry.build_ancestors is None:
@@ -1238,10 +1259,14 @@ def main(argv: list[str] | None = None) -> int:
                 # Kept in input_processor so Stage 4.5 reuses this parse.
                 input_processor = OntologyProcessor(args.go_ontology)
             alt_map = input_processor.alt_id_map
+            replaced_map = input_processor.replaced_by_map
             term_ic = information_content_from_term_sets(
                 iter_propagated_term_sets(
                     (
-                        {alt_map.get(term, term) for term in terms}
+                        {
+                            alt_map.get(term, replaced_map.get(term, term))
+                            for term in terms
+                        }
                         for terms in protein_go_map.values()
                     ),
                     input_processor.get_ancestors,
@@ -1950,10 +1975,13 @@ def main(argv: list[str] | None = None) -> int:
         "runtime_seconds": round(total_time, 2),
     }
     if input_coverage is not None and input_coverage.unknown_terms is not None:
-        # Input handling under --propagate-annotations: alt_id annotations are
-        # remapped to their primary ids; terms still unknown after that
-        # (obsolete or malformed ids) are dropped from the tested universe.
+        # Input handling under --propagate-annotations: alt_id annotations
+        # are remapped to their primary ids and obsolete terms with a
+        # replaced_by successor to that successor; terms still unknown after
+        # both (obsolete without a replacement, or malformed ids) are dropped
+        # from the tested universe.
         summary["input_alt_ids_remapped"] = input_alt_ids_remapped
+        summary["input_replaced_by_remapped"] = input_replaced_by_remapped
         summary["input_terms_not_in_hierarchy"] = input_coverage.unknown_terms
         summary["input_pairs_dropped"] = input_coverage.unknown_pairs
     manifest.complete(

@@ -114,12 +114,16 @@ class OntologyProcessor:
         logger.info(f"Loading GO ontology from {self.obo_file}")
 
         try:
-            # Handle gzipped files
+            # Handle gzipped files. Obsolete stanzas are read (not obonet's
+            # default) because their replaced_by pointers feed
+            # replaced_by_map; _prepare_graph still removes the nodes.
             if self.obo_file.suffix == ".gz":
                 with gzip.open(self.obo_file, "rt") as f:
-                    self.go_graph = obonet.read_obo(f)
+                    self.go_graph = obonet.read_obo(f, ignore_obsolete=False)
             else:
-                self.go_graph = obonet.read_obo(str(self.obo_file))
+                self.go_graph = obonet.read_obo(
+                    str(self.obo_file), ignore_obsolete=False
+                )
         except Exception as e:
             # obonet exposes several parser/IO exception types. Translate this
             # external-library boundary while retaining the original cause.
@@ -137,16 +141,47 @@ class OntologyProcessor:
         """
         logger.info("Preparing GO graph for processing")
 
-        # Remove obsolete terms
+        # Remove obsolete terms — but first harvest their replaced_by
+        # pointers. When GO obsoletes a term outright (no merge), the dead
+        # stanza may carry a single-valued replaced_by naming its official
+        # successor; annotation files lag the ontology and still cite the
+        # dead id, and dropping those annotations when GO itself names an
+        # exact live replacement loses signal (in the 2021 human GAF vs
+        # go-basic 2026, ~half the droppable pairs). Soft `consider:`
+        # suggestions are NOT followed: they are curator hints, not
+        # replacements.
         obsolete_terms = [
             term
             for term, data in self.go_graph.nodes(data=True)
             if data.get("is_obsolete", False)
         ]
 
+        raw_replaced_by: Dict[str, str] = {}
+        for term in obsolete_terms:
+            targets = self.go_graph.nodes[term].get("replaced_by", ())
+            if len(targets) == 1:
+                raw_replaced_by[term] = targets[0]
+
         if obsolete_terms:
             self.go_graph.remove_nodes_from(obsolete_terms)
             logger.info(f"Removed {len(obsolete_terms)} obsolete GO terms")
+
+        # Resolve replaced_by chains (a successor can itself be obsolete with
+        # its own replaced_by) and keep only entries whose final target is a
+        # live term; a dead end or a cycle drops the entry.
+        self.replaced_by_map: Dict[str, str] = {}
+        for term, target in raw_replaced_by.items():
+            seen = {term}
+            while target in raw_replaced_by and target not in seen:
+                seen.add(target)
+                target = raw_replaced_by[target]
+            if target in self.go_graph:
+                self.replaced_by_map[term] = target
+        if self.replaced_by_map:
+            logger.info(
+                f"Indexed {len(self.replaced_by_map):,} obsolete terms with a "
+                f"live replaced_by successor"
+            )
 
         # GO's annotation-propagation rules license is_a and part_of edges only.
         # obonet stores the relationship type as the MultiDiGraph edge key, and
