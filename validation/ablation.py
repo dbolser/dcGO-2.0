@@ -283,12 +283,19 @@ def selection_stage_counts(
 # --------------------------------------------------------------------------- #
 # Score-table helpers                                                          #
 # --------------------------------------------------------------------------- #
-def rung_prediction_file(run_root: Path, rung: Rung) -> Path:
-    """Where a rung's domain->term table lives."""
+def rung_prediction_file(
+    run_root: Path, rung: Rung, domain_key: str = "interpro"
+) -> Path:
+    """Where a rung's domain->term table lives.
+
+    The pipeline bakes a non-default domain key into the file stem
+    (``domain_ssf_go_...``), mirroring run_dcgo_human's naming.
+    """
+    prefix = "domain_go" if domain_key == "interpro" else f"domain_{domain_key}_go"
     stem = (
-        "domain_go_associations_significant.tsv"
+        f"{prefix}_associations_significant.tsv"
         if rung.kind == "associations"
-        else "domain_go_annotations_propagated.tsv"
+        else f"{prefix}_annotations_propagated.tsv"
     )
     return run_root / rung.run_dir / stem
 
@@ -334,6 +341,14 @@ def main() -> int:  # pragma: no cover - I/O wiring
     )
     parser.add_argument(
         "--interpro", type=Path, default=Path("data/interim/protein2ipr_human.dat.gz")
+    )
+    parser.add_argument(
+        "--domain-key",
+        choices=["interpro", "ssf"],
+        default="interpro",
+        help="Which protein2ipr column defines a domain — must match the "
+        "--domain-key the pipeline runs under --run-dir were made with "
+        "(default: interpro)",
     )
     parser.add_argument(
         "--go-ontology", type=Path, default=Path("data/raw/go_ontology/go-basic.obo")
@@ -394,7 +409,11 @@ def main() -> int:  # pragma: no cover - I/O wiring
     ).parse_gaf_file(args.t1_gaf)
 
     logger.info("Parsing domain architectures...")
-    dom_parser = DomainAnnotationParser(max_supra_domain_length=3, min_domain_length=10)
+    dom_parser = DomainAnnotationParser(
+        max_supra_domain_length=3,
+        min_domain_length=10,
+        domain_key=args.domain_key,
+    )
     architectures = dom_parser.parse_protein2ipr_file(args.interpro)
     protein_domains: dict[str, list[str]] = {}
     for protein, arch in architectures.items():
@@ -452,7 +471,7 @@ def main() -> int:  # pragma: no cover - I/O wiring
     provenance: list[dict] = []
     rung_scores: dict[str, dict] = {}
     for rung in LADDER:
-        path = rung_prediction_file(args.run_dir, rung)
+        path = rung_prediction_file(args.run_dir, rung, args.domain_key)
         if not path.exists():
             logger.error(f"[{rung.name}] missing predictions: {path}")
             return 1

@@ -33,6 +33,9 @@ OTHER = "GO:0051179"
 #: line in the OBO. Unused by the base fixture; TestIcEstimateConsistency
 #: annotates through it.
 ALT_OF_SPECIFIC = "GO:0000811"
+#: An obsolete id whose stanza names SPECIFIC as its replaced_by successor.
+#: Unused by the base fixture; TestIcEstimateConsistency annotates through it.
+REPLACED_BY_SPECIFIC = "GO:0000812"
 #: An id the ontology does not contain at all (obsolete/malformed).
 UNKNOWN = "GO:0099999"
 
@@ -56,6 +59,13 @@ id: GO:0051179
 name: localization
 namespace: biological_process
 is_a: GO:0008150 ! biological_process
+
+[Term]
+id: GO:0000812
+name: obsolete cation transport variant
+namespace: biological_process
+is_obsolete: true
+replaced_by: GO:0006811
 """
 
 
@@ -177,15 +187,18 @@ class TestIcEstimateConsistency:
 
     @pytest.fixture
     def dirty_pipeline_dir(self, pipeline_dir: Path) -> Path:
-        """The base fixture plus annotations through a merged id and a dead id.
+        """The base fixture plus annotations through a merged id, a
+        replaced_by id, and a dead id.
 
-        P0020–P0039 gain SPECIFIC via its alt_id, so after remapping SPECIFIC
+        P0020–P0039 gain SPECIFIC via its alt_id and again via an obsolete
+        id whose replaced_by names SPECIFIC, so after remapping SPECIFIC
         covers all 40 proteins (IC 0); P0000–P0019 gain UNKNOWN, which the
         hierarchy does not contain and the estimate must drop.
         """
         gaf = pipeline_dir / "data/raw/goa_annotations/goa_ictest.gaf.gz"
         lines = gzip.decompress(gaf.read_bytes()).decode().splitlines()
-        lines += [gaf_line(f"P{i:05d}", ALT_OF_SPECIFIC) for i in range(20, 40)]
+        lines += [gaf_line(f"P{i:05d}", ALT_OF_SPECIFIC) for i in range(20, 30)]
+        lines += [gaf_line(f"P{i:05d}", REPLACED_BY_SPECIFIC) for i in range(30, 40)]
         lines += [gaf_line(f"P{i:05d}", UNKNOWN) for i in range(20)]
         gaf.write_bytes(gzip.compress(("\n".join(lines) + "\n").encode()))
         return pipeline_dir
@@ -201,12 +214,35 @@ class TestIcEstimateConsistency:
         assert manifest["analysis"]["thresholds"]["ic_source"] == "propagated"
 
         by_pair = {(r["domain"], r["go_term"]): r for r in rows}
-        # After the alt_id remap SPECIFIC covers 40/40 proteins → IC 0.0.
-        # Without the remap the estimate would be 20/40 → 1.0.
+        # After the alt_id and replaced_by remaps SPECIFIC covers 40/40
+        # proteins → IC 0.0. Without them the estimate would be 20/40 → 1.0.
         assert float(by_pair[("IPR000001", SPECIFIC)]["ic"]) == 0.0
         # The dead id is dropped from the frequency estimate, so its rows read
         # 0.0 ("no frequency information"), not -log2(20/40) = 1.0.
         assert float(by_pair[("IPR000001", UNKNOWN)]["ic"]) == 0.0
+
+    def test_propagate_annotations_remaps_replaced_by_ids(
+        self, dirty_pipeline_dir: Path
+    ):
+        """The tested map itself gets the same cleaning, and the manifest
+        counts the two remap families separately."""
+        rows, manifest = run_pipeline(
+            dirty_pipeline_dir, "results_dirty_prop", "--propagate-annotations"
+        )
+
+        summary = manifest["summary"]
+        assert summary["input_alt_ids_remapped"] == 1
+        assert summary["input_replaced_by_remapped"] == 1
+        # Only UNKNOWN survives both remaps unresolved.
+        assert summary["input_terms_not_in_hierarchy"] == 1
+        assert summary["input_pairs_dropped"] == 20
+
+        # Both remaps put SPECIFIC on all 40 proteins, so it can no longer be
+        # enriched anywhere (p = 1, like the root): only OTHER survives.
+        # Without the replaced_by remap SPECIFIC would cover 30/40 and stay
+        # significantly associated with IPR000001 — the set discriminates.
+        pairs = {(r["domain"], r["go_term"]) for r in rows}
+        assert pairs == {("IPR000002", OTHER)}
 
 
 class TestMinIcFloor:
