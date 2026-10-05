@@ -210,7 +210,7 @@ tables); enumerating co-occurring pairs makes it 9.5M tables and 268 s.
 ## Known Limitations
 
 - No local domain scanning — only pre-computed InterPro annotations are consumed.
-- **Current component ablation (§4, 2026-09-29).** A from-scratch
+- **Current component ablation (§4, 2026-10-05).** A from-scratch
   nine-configuration factorial on current `main` separates input annotation
   propagation, relative inference, and output propagation. Supra-domains have
   little protein-centric effect; output propagation is mostly neutral-to-helpful;

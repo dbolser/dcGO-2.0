@@ -40,19 +40,23 @@
     }
   },
   "command": [
-    "/home/danbolser/Build/dcGO-2.0/.venv/bin/python3",
-    "/home/danbolser/Build/dcGO-2.0/run_dcgo_human.py",
+    "/tmp/claude-1005/-home-danbolser-Build-dcGO-2-0/0435071c-7f59-46ba-9fc3-b48a994c3a94/scratchpad/dcgo-clean/.venv/bin/python",
+    "run_dcgo_human.py",
     "--num-cores",
     "8",
     "--output-dir",
-    "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_all/single",
+    "results/ablation-replacedby/ipr_all/single",
     "--evidence-filter",
     "all",
     "--disable-supra-domains"
   ],
-  "completed_at": "2026-09-29T15:24:28.495637+00:00",
+  "completed_at": "2026-10-05T17:11:57.293283+00:00",
   "git": {
-    "available": false
+    "available": true,
+    "branch": "replaced-by-remap",
+    "commit": "78494f2b1fdf6c3324a3ebdd022f8b2ef21adee9",
+    "dirty": false,
+    "untracked_files": 4
   },
   "inputs": [
     {
@@ -80,15 +84,15 @@
   ],
   "outputs": [
     {
-      "modified_at": "2026-09-29T15:24:28.452159+00:00",
-      "path": "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_all/single/domain_go_associations_significant.tsv",
+      "modified_at": "2026-10-05T17:11:57.250051+00:00",
+      "path": "results/ablation-replacedby/ipr_all/single/domain_go_associations_significant.tsv",
       "role": "significant_associations",
       "sha256": "8f86dedc56af64e316998a61e24dfd36f64d24758a0f051baaa10e883471602e",
       "size_bytes": 6103102
     },
     {
-      "modified_at": "2026-09-29T15:24:28.477160+00:00",
-      "path": "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_all/single/domain_go_associations_top100.tsv",
+      "modified_at": "2026-10-05T17:11:57.274052+00:00",
+      "path": "results/ablation-replacedby/ipr_all/single/domain_go_associations_top100.tsv",
       "role": "top100",
       "sha256": "eb71f386be7c47e04b878edb11b8a49352392ea83dc2e5906b77600f5a75f9b8",
       "size_bytes": 9230
@@ -128,7 +132,7 @@
     "num_cores": 8,
     "oncotree_json": "data/raw/oncotree/oncotree_tumortypes.json",
     "ontology": "go",
-    "output_dir": "/home/danbolser/Build/dcGO-2.0/results/ablation-replacedby/ipr_all/single",
+    "output_dir": "results/ablation-replacedby/ipr_all/single",
     "permute_annotations": null,
     "propagate_annotations": false,
     "reactome_relations": "data/raw/reactome_relations/ReactomePathwaysRelation.txt",
@@ -152,15 +156,17 @@
   "software": {
     "dcgo_pipeline_version": "0.1.0",
     "dependency_lock": {
-      "available": false,
-      "path": "uv.lock"
+      "available": true,
+      "path": "uv.lock",
+      "sha256": "57e605b4882c7d51b2cd9000afa999c1c7ab56177e5c11a50d8d36b32bfedc9c",
+      "size_bytes": 386547
     },
-    "executable": "/home/danbolser/Build/dcGO-2.0/.venv/bin/python3",
+    "executable": "/tmp/claude-1005/-home-danbolser-Build-dcGO-2-0/0435071c-7f59-46ba-9fc3-b48a994c3a94/scratchpad/dcgo-clean/.venv/bin/python",
     "platform": "Linux-6.8.0-100-generic-x86_64-with-glibc2.39",
     "python_implementation": "CPython",
     "python_version": "3.12.3"
   },
-  "started_at": "2026-09-29T15:24:10.427038+00:00",
+  "started_at": "2026-10-05T17:11:39.244845+00:00",
   "status": "completed",
   "summary": {
     "bh_threshold_pvalue": {
@@ -176,5 +182,5 @@
     "tests": 357696243,
     "tests_evaluated": 871157
   },
-  "working_directory": "/tmp/claude-1005/-home-danbolser-Build-dcGO-2-0/0435071c-7f59-46ba-9fc3-b48a994c3a94/scratchpad/abl2021"
+  "working_directory": "/tmp/claude-1005/-home-danbolser-Build-dcGO-2-0/0435071c-7f59-46ba-9fc3-b48a994c3a94/scratchpad/dcgo-clean"
 }

@@ -1,6 +1,6 @@
 # The relative inference in dcGO-2.0: what we ran, what we expected, what we measured
 
-*Pre-publication report, revised 2026-09-29. Prepared for discussion with the
+*Pre-publication report, revised 2026-10-05. Prepared for discussion with the
 original dcGO authors before any of this is written up for submission.*
 
 ---
@@ -527,7 +527,7 @@ test with its measured cost rather than as a default.
   output) and `full` (Full) of `validation/ablation.py`; metrics and paired
   bootstraps in `validation/ablation_metrics.tsv` and
   `ablation_paired_bootstrap.tsv`, per-run manifests in
-  `validation/ablation_manifests/`. These runs (2026-09-29) supersede the
+  `validation/ablation_manifests/`. These runs (2026-10-05) supersede the
   `0088362` set: the input cleanup now also remaps obsoleted GO ids to their
   official `replaced_by` successor (417 terms, 4,497 pairs rescued —
   `input_replaced_by_remapped` in each manifest), which improved held-out
@@ -538,6 +538,11 @@ test with its measured cost rather than as a default.
   `current_release` snapshot of 2026-07-22), `go-basic.obo` sha256
   `c72fc198…` (release 2026-06-15). Design and prose: `VALIDATION_PLAN.md`
   §4.
+- **Regeneration check**: the committed manifests come from a clean
+  checkout of the branch (`78494f2`; `git.dirty: false` in
+  every manifest), and an independent earlier run of the same 36 pipeline
+  configurations from a working tree reproduced every association table
+  **byte-for-byte** (96/96 output TSVs).
 - **Robustness cells** (§4.2): the same nine-rung ladder rerun with
   `--domain-key ssf` and/or `--evidence-filter all`; eval tables and
   per-run manifests in `validation/ablation_cells/{ipr_all,ssf_manual,ssf_all}/`.
