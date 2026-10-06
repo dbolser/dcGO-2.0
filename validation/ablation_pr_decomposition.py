@@ -176,6 +176,12 @@ def main() -> int:  # pragma: no cover - I/O wiring
     t1_exp_map = GOAParser(
         evidence_codes=EXPERIMENTAL_EVIDENCE, aspects={"P", "F", "C"}
     ).parse_gaf_file(args.t1_gaf)
+    t0_map = tb.remap_retired_ids(
+        t0_map, processor.alt_id_map, processor.replaced_by_map
+    )
+    t1_exp_map = tb.remap_retired_ids(
+        t1_exp_map, processor.alt_id_map, processor.replaced_by_map
+    )
 
     logger.info("Parsing domain architectures...")
     dom_parser = DomainAnnotationParser(max_supra_domain_length=3, min_domain_length=10)

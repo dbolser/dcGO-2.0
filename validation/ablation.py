@@ -55,6 +55,7 @@ alongside as a sensitivity check (``score`` column of the metrics TSV).
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -214,7 +215,8 @@ def selection_stage_counts(
             "n_proteins": len(t0_map),
             "n_dropped_vs_ic0": "-",
             "pct_of_ic0": "-",
-            "note": "proteins with >=1 non-IEA GO annotation at t0 (the training universe)",
+            "note": "proteins with >=1 GO annotation at t0 under the training "
+            "evidence filter (the training universe)",
         },
         {
             "stage": "t1_experimental_proteins",
@@ -300,6 +302,28 @@ def rung_prediction_file(
     return run_root / rung.run_dir / stem
 
 
+def run_setting_mismatches(
+    run_root: Path, rungs: Iterable[Rung], expected: Mapping[str, str]
+) -> list[str]:
+    """Rungs whose run manifest disagrees with the evaluator's settings.
+
+    The no-knowledge cohort and IC are built from what training saw, so the
+    evaluator's ``domain_key``/``evidence_filter`` must be the ones each run
+    used. Rungs without a manifest are not checked.
+    """
+    problems = []
+    for rung in rungs:
+        manifest = run_root / rung.run_dir / "run_manifest_go.json"
+        if not manifest.exists():
+            continue
+        params = json.loads(manifest.read_text()).get("parameters", {})
+        for key, want in expected.items():
+            got = params.get(key)
+            if got is not None and got != want:
+                problems.append(f"{rung.name}: run {key}={got}, evaluator {want}")
+    return problems
+
+
 def association_count(path: Path) -> int:
     """Rows in a TSV, excluding the header (cheap; the files are large)."""
     with path.open() as handle:
@@ -351,6 +375,14 @@ def main() -> int:  # pragma: no cover - I/O wiring
         "(default: interpro)",
     )
     parser.add_argument(
+        "--evidence-filter",
+        choices=["all", "manual", "experimental"],
+        default="manual",
+        help="t0 evidence filter — must match the --evidence-filter the pipeline "
+        "runs were trained with, since the no-knowledge cohort and IC are built "
+        "from what training saw (default: manual)",
+    )
+    parser.add_argument(
         "--go-ontology", type=Path, default=Path("data/raw/go_ontology/go-basic.obo")
     )
     parser.add_argument("--output-dir", type=Path, default=Path("validation"))
@@ -393,6 +425,15 @@ def main() -> int:  # pragma: no cover - I/O wiring
         if not path.exists():
             logger.error(f"Missing required input: {path}")
             return 1
+    mismatches = run_setting_mismatches(
+        args.run_dir,
+        LADDER,
+        {"domain_key": args.domain_key, "evidence_filter": args.evidence_filter},
+    )
+    if mismatches:
+        for problem in mismatches:
+            logger.error(f"Settings mismatch — {problem}")
+        return 1
 
     # ---------------------------------------------------------------- inputs --
     logger.info("Loading GO ontology...")
@@ -400,13 +441,19 @@ def main() -> int:  # pragma: no cover - I/O wiring
     get_ancestors = processor.get_ancestors
     term_aspect = tb.build_term_aspect(processor)
 
-    logger.info("Parsing t0 (training) GOA — all non-IEA evidence...")
-    t0_map = parse_goa(args.t0_gaf, evidence_filter="manual")
+    logger.info(f"Parsing t0 (training) GOA — {args.evidence_filter} evidence...")
+    t0_map = parse_goa(args.t0_gaf, evidence_filter=args.evidence_filter)
 
     logger.info("Parsing t1 (test) GOA — experimental evidence only...")
     t1_exp_map = GOAParser(
         evidence_codes=EXPERIMENTAL_EVIDENCE, aspects={"P", "F", "C"}
     ).parse_gaf_file(args.t1_gaf)
+    t0_map = tb.remap_retired_ids(
+        t0_map, processor.alt_id_map, processor.replaced_by_map
+    )
+    t1_exp_map = tb.remap_retired_ids(
+        t1_exp_map, processor.alt_id_map, processor.replaced_by_map
+    )
 
     logger.info("Parsing domain architectures...")
     dom_parser = DomainAnnotationParser(

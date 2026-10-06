@@ -918,7 +918,7 @@ What is **not** established, and should not be claimed:
 
 ---
 
-## 4. Current component ablation *(2026-10-05; current main)*
+## 4. Current component ablation *(2026-10-05 runs, 2026-10-06 evaluation)*
 
 This section reports the ablation rerun of 2026-10-05, made after the input
 cleanup gained the `replaced_by` remap (obsoleted GO ids with an official
@@ -930,6 +930,12 @@ that no longer exists. The committed `validation/ablation_*.tsv` and
 `validation/ablation_manifests/` reflect the current run; the same ladder
 rerun under `--domain-key ssf` and/or `--evidence-filter all` lives in
 `validation/ablation_cells/` (see `RELATIVE_INFERENCE_REPORT.md` §4.2).
+The evaluation was regenerated on 2026-10-06: `validation/ablation.py` now
+applies the training's retired-id cleanup (`alt_id`, `replaced_by`) to both
+GAFs, and takes `--evidence-filter` so the no-knowledge cohort and IC are
+built from the evidence each cell trained on (it refuses to run if a rung's
+manifest disagrees). Both gaps had let proteins with 2021 knowledge into the
+cohort.
 
 ### Design
 
@@ -955,7 +961,7 @@ constructed. Scores are `-log10(q)` for every primary comparison. Results cover
 BP, MF and CC at IC floors 0, 2 and 4, with 1,000 paired protein bootstraps.
 The supra rung also uses 200 seeded domain-label permutations.
 
-The scored cohorts contain 324 BP, 418 MF and 572 CC proteins before IC
+The scored cohorts contain 298 BP, 406 MF and 436 CC proteins before IC
 filtering. Run manifests are in `validation/ablation_manifests/`; machine-readable
 results are:
 
@@ -972,30 +978,32 @@ both F_max and AUPRC in all nine aspect × IC cells (18/18 empirical
 `p = 1/201`).
 
 Supra-domains themselves have little protein-centric effect. Relative to single
-domains, their F_max change is not significant in any of nine cells; AUPRC
-improves significantly in one cell.
+domains, their F_max change is significant in one of nine cells (a loss); AUPRC
+improves significantly in two.
 
 The three hierarchy stages do not behave as one component:
 
-- **Input propagation is context-dependent but important.** Added directly to
-  supra it changes F_max significantly in five of nine cells (six positive,
-  three negative). Added to relative inference plus output propagation, it
-  improves both F_max and AUPRC in all nine cells, significantly in eight.
+- **Input propagation is context-dependent.** Added directly to supra it is
+  mixed: F_max rises in six of nine cells (two significant), AUPRC falls in
+  six (none significant). Added to relative inference plus output
+  propagation, it improves F_max in all nine cells (all significant) and
+  AUPRC in all nine (eight significant).
 - **Relative inference is the main negative component on this benchmark.**
   Added directly to supra, it lowers F_max and AUPRC in all nine cells,
   significantly in eight. Added to input plus output propagation, it lowers
-  F_max in seven of nine cells (six significant) and AUPRC in eight of nine
-  (seven significant).
+  F_max in eight of nine cells (five significant) and AUPRC in eight of nine
+  (all eight significant).
 - **Output True Path propagation is not uniformly harmful.** Added directly to
-  supra, F_max rises in seven of nine cells and is significant in one; AUPRC is
-  mixed. Added after input propagation and relative inference, it raises F_max
-  and AUPRC in six of nine cells, significantly in three and four respectively.
+  supra, F_max rises in six of nine cells and is significant in three; AUPRC is
+  mixed (four up, five down, one significant each way). Added after input
+  propagation and relative inference, it raises F_max and AUPRC in six of nine
+  cells, significantly in two and three respectively.
 
 There is no single winning configuration across all cells. The full
-paper-parity pipeline is best only for MF at IC 0. Input propagation without
-relative inference is best in several informative-term cells; input plus output
-propagation is best for BP at IC 0/2 and CC at IC 0. Single domains remain best
-for CC F_max at IC 2/4.
+paper-parity pipeline is best only for MF at IC 0. Input plus output
+propagation is best for BP and CC at IC 0 on both metrics, and on AUPRC in six
+of nine cells; input propagation alone has the best F_max for BP at IC 2/4 and
+MF at IC 4. Single domains remain best for CC at IC 4 on both metrics.
 
 ### Decision
 

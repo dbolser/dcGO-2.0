@@ -1,19 +1,19 @@
 stage	aspect	min_ic	n_proteins	n_dropped_vs_ic0	pct_of_ic0	note
-t0_annotated_proteins	-	-	18735	-	-	proteins with >=1 non-IEA GO annotation at t0 (the training universe)
+t0_annotated_proteins	-	-	19597	-	-	proteins with >=1 GO annotation at t0 under the training evidence filter (the training universe)
 t1_experimental_proteins	-	-	16362	-	-	proteins with >=1 experimental GO annotation at t1 (the gold standard)
 proteins_with_domains	-	-	12316	-	-	proteins with >=1 InterPro domain (predictable at all by a domain method)
-no_knowledge_candidates	BP	-	336	-	-	no t0 knowledge in this aspect, gained t1 experimental terms
-no_knowledge_with_domains	BP	-	156	-	-	the scored cohort before any IC floor
-no_knowledge_candidates	MF	-	430	-	-	no t0 knowledge in this aspect, gained t1 experimental terms
-no_knowledge_with_domains	MF	-	230	-	-	the scored cohort before any IC floor
-no_knowledge_candidates	CC	-	590	-	-	no t0 knowledge in this aspect, gained t1 experimental terms
-no_knowledge_with_domains	CC	-	265	-	-	the scored cohort before any IC floor
-cohort_at_ic_floor	BP	0	156	0	100.0	proteins whose truth is non-empty at this IC floor
-cohort_at_ic_floor	BP	2	156	0	100.0	proteins whose truth is non-empty at this IC floor
-cohort_at_ic_floor	BP	4	153	3	98.1	proteins whose truth is non-empty at this IC floor
-cohort_at_ic_floor	MF	0	230	0	100.0	proteins whose truth is non-empty at this IC floor
-cohort_at_ic_floor	MF	2	100	130	43.5	proteins whose truth is non-empty at this IC floor
-cohort_at_ic_floor	MF	4	93	137	40.4	proteins whose truth is non-empty at this IC floor
-cohort_at_ic_floor	CC	0	265	0	100.0	proteins whose truth is non-empty at this IC floor
-cohort_at_ic_floor	CC	2	191	74	72.1	proteins whose truth is non-empty at this IC floor
-cohort_at_ic_floor	CC	4	112	153	42.3	proteins whose truth is non-empty at this IC floor
+no_knowledge_candidates	BP	-	198	-	-	no t0 knowledge in this aspect, gained t1 experimental terms
+no_knowledge_with_domains	BP	-	72	-	-	the scored cohort before any IC floor
+no_knowledge_candidates	MF	-	253	-	-	no t0 knowledge in this aspect, gained t1 experimental terms
+no_knowledge_with_domains	MF	-	104	-	-	the scored cohort before any IC floor
+no_knowledge_candidates	CC	-	171	-	-	no t0 knowledge in this aspect, gained t1 experimental terms
+no_knowledge_with_domains	CC	-	51	-	-	the scored cohort before any IC floor
+cohort_at_ic_floor	BP	0	72	0	100.0	proteins whose truth is non-empty at this IC floor
+cohort_at_ic_floor	BP	2	72	0	100.0	proteins whose truth is non-empty at this IC floor
+cohort_at_ic_floor	BP	4	69	3	95.8	proteins whose truth is non-empty at this IC floor
+cohort_at_ic_floor	MF	0	104	0	100.0	proteins whose truth is non-empty at this IC floor
+cohort_at_ic_floor	MF	2	32	72	30.8	proteins whose truth is non-empty at this IC floor
+cohort_at_ic_floor	MF	4	27	77	26.0	proteins whose truth is non-empty at this IC floor
+cohort_at_ic_floor	CC	0	51	0	100.0	proteins whose truth is non-empty at this IC floor
+cohort_at_ic_floor	CC	2	35	16	68.6	proteins whose truth is non-empty at this IC floor
+cohort_at_ic_floor	CC	4	26	25	51.0	proteins whose truth is non-empty at this IC floor

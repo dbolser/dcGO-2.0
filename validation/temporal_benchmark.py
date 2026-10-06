@@ -88,6 +88,27 @@ def propagate_terms(terms: Iterable[str], get_ancestors: GetAncestors) -> set[st
     return out
 
 
+def remap_retired_ids(
+    annotation_map: Mapping[str, set[str]],
+    alt_id_map: Mapping[str, str],
+    replaced_by_map: Mapping[str, str],
+) -> dict[str, set[str]]:
+    """Map retired GO ids onto their live successor, as the pipeline's input
+    cleanup does: ``alt_id`` (merged) first, then ``replaced_by`` (obsoleted
+    with an official successor). Anything else passes through unchanged.
+
+    The evaluator must apply this to its GAF maps so scoring uses the same
+    vocabulary training did: a t0 annotation the pipeline rescued onto its
+    successor has to count towards that successor's IC and towards the
+    protein's t0 knowledge, or the protein can leak into the no-knowledge
+    cohort.
+    """
+    return {
+        protein: {alt_id_map.get(t) or replaced_by_map.get(t) or t for t in terms}
+        for protein, terms in annotation_map.items()
+    }
+
+
 def build_nk_benchmark_by_aspect(
     t0_known_map: Mapping[str, set[str]],
     t1_exp_map: Mapping[str, set[str]],

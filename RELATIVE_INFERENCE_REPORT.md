@@ -1,6 +1,6 @@
 # The relative inference in dcGO-2.0: what we ran, what we expected, what we measured
 
-*Pre-publication report, revised 2026-10-05. Prepared for discussion with the
+*Pre-publication report, revised 2026-10-06. Prepared for discussion with the
 original dcGO authors before any of this is written up for submission.*
 
 ---
@@ -92,17 +92,18 @@ they are defined where used.
    domains with at least one association 27,390 → 11,758.
 2. **Held-out, it makes protein-level prediction worse in most cells.** Base
    → Base + relative: F_max lower in 8 of 9 aspect × IC cells (5
-   significantly), AUPRC lower in 6 of 9 (5 significantly); one significant
+   significantly), AUPRC lower in 7 of 9 (5 significantly); one significant
    gain (MF at IC ≥ 0, AUPRC). The same pattern holds with output
    propagation on (Base + output → Full), and — run as a robustness check —
    under SCOP-superfamily domain keys and with IEA annotations included in
    training (§4.2).
 3. **It is not simply trading sensitivity for specificity.** Decomposing
-   each configuration's operating point: sensitivity (recall) falls in 17 of
+   each configuration's operating point: sensitivity (recall) falls in 16 of
    18 contrast cells, but PPV (precision, the stand-in for specificity here)
    rises in only 7 of 18. The trade the test is meant to make does appear —
    in cellular component at IC ≥ 2 and at MF IC 0 — but in biological
-   process the test loses on *both* axes in all 6 cells.
+   process the test loses on *both* axes in 4 of 6 cells, and never gains
+   more than +0.003 on either.
 4. **The published description is ambiguous at the exact point our
    implementation had to choose.** The 2013 Methods text defines the
    relative background as proteins annotated to **all** direct parents;
@@ -249,8 +250,12 @@ aspect (BP, MF or CC) if, in that aspect, it had **no annotation at all in
 the 2021 training GAF** but had gained **experimental** annotations by
 June 2026 — CAFA calls these *no-knowledge* targets. It must also carry at
 least one domain, or no configuration could say anything about it. That
-gives **324 BP / 418 MF / 572 CC proteins**. Everything scored on these
+gives **298 BP / 406 MF / 436 CC proteins**. Everything scored on these
 proteins is a genuine prediction: training never saw them annotated.
+
+Both GAFs pass through the same retired-id cleanup as training (footnote
+above) before this test, so a protein whose 2021 knowledge sits on a
+since-replaced id counts as known, not as a new target.
 
 **Step 2 — what counts as the right answer.** The protein's experimental
 2026 annotations in that aspect, true-path propagated (a term implies all
@@ -317,18 +322,18 @@ point; \* marks a paired-bootstrap difference significant at 5%.
 
 | cell | F_max: Base → +relative | Δ | AUPRC: Base → +relative | Δ |
 |---|---:|---:|---:|---:|
-| BP 0 | 0.260 → 0.217 | −0.043\* | 0.133 → 0.094 | −0.039\* |
-| BP 2 | 0.210 → 0.165 | −0.045\* | 0.081 → 0.055 | −0.026\* |
-| BP 4 | 0.152 → 0.100 | −0.052\* | 0.038 → 0.016 | −0.022\* |
-| MF 0 | 0.366 → 0.359 | −0.008 | 0.183 → 0.201 | +0.018\* |
-| MF 2 | 0.371 → 0.325 | −0.046\* | 0.235 → 0.175 | −0.061\* |
-| MF 4 | 0.351 → 0.297 | −0.054\* | 0.216 → 0.139 | −0.077\* |
-| CC 0 | 0.397 → 0.388 | −0.009 | 0.234 → 0.236 | +0.002 |
-| CC 2 | 0.227 → 0.252 | +0.025 | 0.087 → 0.092 | +0.005 |
-| CC 4 | 0.141 → 0.133 | −0.008 | 0.039 → 0.033 | −0.006 |
+| BP 0 | 0.243 → 0.212 | −0.031\* | 0.120 → 0.091 | −0.029\* |
+| BP 2 | 0.193 → 0.159 | −0.033\* | 0.071 → 0.055 | −0.016\* |
+| BP 4 | 0.135 → 0.093 | −0.042\* | 0.030 → 0.014 | −0.017\* |
+| MF 0 | 0.362 → 0.354 | −0.008 | 0.174 → 0.197 | +0.023\* |
+| MF 2 | 0.353 → 0.310 | −0.043\* | 0.220 → 0.160 | −0.060\* |
+| MF 4 | 0.335 → 0.284 | −0.051\* | 0.198 → 0.127 | −0.071\* |
+| CC 0 | 0.371 → 0.367 | −0.004 | 0.207 → 0.202 | −0.005 |
+| CC 2 | 0.194 → 0.205 | +0.011 | 0.051 → 0.051 | +0.000 |
+| CC 4 | 0.128 → 0.126 | −0.001 | 0.031 → 0.027 | −0.004 |
 
 F_max lower in 8 of 9 cells (5 significantly), higher in 1 (not
-significantly); AUPRC lower in 6 of 9 (5 significantly), higher in 3 (1
+significantly); AUPRC lower in 7 of 9 (5 significantly), higher in 2 (1
 significantly — MF at IC 0). Every biological-process cell is
 significantly worse on both metrics.
 
@@ -336,18 +341,18 @@ significantly worse on both metrics.
 
 | cell | F_max: Base+output → Full | Δ | AUPRC: Base+output → Full | Δ |
 |---|---:|---:|---:|---:|
-| BP 0 | 0.265 → 0.228 | −0.037\* | 0.141 → 0.102 | −0.039\* |
-| BP 2 | 0.210 → 0.168 | −0.042\* | 0.090 → 0.057 | −0.033\* |
-| BP 4 | 0.148 → 0.101 | −0.046\* | 0.032 → 0.016 | −0.017\* |
-| MF 0 | 0.371 → 0.388 | +0.017 | 0.203 → 0.221 | +0.018\* |
-| MF 2 | 0.365 → 0.330 | −0.035\* | 0.239 → 0.181 | −0.058\* |
-| MF 4 | 0.341 → 0.305 | −0.036\* | 0.219 → 0.147 | −0.071\* |
-| CC 0 | 0.407 → 0.394 | −0.013\* | 0.271 → 0.254 | −0.017\* |
-| CC 2 | 0.242 → 0.249 | +0.007 | 0.087 → 0.076 | −0.010 |
-| CC 4 | 0.141 → 0.134 | −0.007 | 0.033 → 0.024 | −0.009 |
+| BP 0 | 0.248 → 0.220 | −0.028\* | 0.130 → 0.098 | −0.032\* |
+| BP 2 | 0.191 → 0.159 | −0.032\* | 0.083 → 0.057 | −0.027\* |
+| BP 4 | 0.132 → 0.091 | −0.041\* | 0.026 → 0.013 | −0.012\* |
+| MF 0 | 0.368 → 0.384 | +0.016 | 0.194 → 0.216 | +0.022\* |
+| MF 2 | 0.351 → 0.318 | −0.033\* | 0.224 → 0.171 | −0.053\* |
+| MF 4 | 0.330 → 0.291 | −0.039\* | 0.199 → 0.136 | −0.064\* |
+| CC 0 | 0.386 → 0.374 | −0.013 | 0.248 → 0.229 | −0.019\* |
+| CC 2 | 0.218 → 0.210 | −0.008 | 0.056 → 0.048 | −0.008\* |
+| CC 4 | 0.127 → 0.125 | −0.002 | 0.029 → 0.022 | −0.008\* |
 
-F_max lower in 7 of 9 (6 significantly), higher in 2 (not significantly);
-AUPRC lower in 8 of 9 (6 significantly), higher in 1 (significantly).
+F_max lower in 8 of 9 (5 significantly), higher in 1 (not significantly);
+AUPRC lower in 8 of 9 (8 significantly), higher in 1 (significantly).
 Output propagation does not change the picture: the relative test costs
 the same cells either way.
 
@@ -357,20 +362,24 @@ published dcGO's domain universe) and with IEA annotations included in
 training — four cells in all. The Base → Base + relative contrast, paired
 bootstrap per cell:
 
-| cell | F_max: relative worse | AUPRC: relative worse |
-|---|---|---|
-| InterPro, manual | 8/9 (5 sig; 0 sig better) | 6/9 (5 sig; 1 sig better) |
-| InterPro, + IEA | 7/9 (5 sig; 0 sig better) | 8/9 (5 sig; 1 sig better) |
-| SCOP SSF, manual | 6/9 (6 sig; 2 sig better) | 6/9 (6 sig; 1 sig better) |
-| SCOP SSF, + IEA | 6/9 (5 sig; 1 sig better) | 8/9 (8 sig; 0 sig better) |
+| cell | cohort BP / MF / CC | F_max: relative worse | AUPRC: relative worse |
+|---|---|---|---|
+| InterPro, manual | 298 / 406 / 436 | 8/9 (5 sig; 0 sig better) | 7/9 (5 sig; 1 sig better) |
+| InterPro, + IEA | 187 / 242 / 161 | 8/9 (4 sig; 0 sig better) | 8/9 (6 sig; 1 sig better) |
+| SCOP SSF, manual | 140 / 221 / 195 | 7/9 (6 sig; 2 sig better) | 7/9 (6 sig; 1 sig better) |
+| SCOP SSF, + IEA | 72 / 104 / 51 | 8/9 (1 sig; 1 sig better) | 8/9 (5 sig; 1 sig better) |
 
-The picture is the same in every cell: the relative test is significantly
-worse in 5–8 of 9 aspect × IC cells on both metrics, with at most two
-significant gains (still concentrated in CC). Neither the InterPro domain
-key nor the exclusion of IEA explains the result. (The SSF cells score a
-smaller cohort — only proteins carrying SSF domains — so their absolute
-numbers are not comparable to the InterPro cells; the within-cell
-contrasts are.)
+The direction is the same in every cell: the relative test is worse in 7–8
+of 9 aspect × IC cells on both metrics, with at most two significant gains.
+Significance follows cohort size. AUPRC is significantly worse in 5–6 of 9
+cells everywhere; F_max in 4–6 of 9 except in the smallest cell (SSF + IEA,
+51–104 proteins per aspect), where only 1 of its 8 losses is significant.
+Neither the InterPro domain key nor the exclusion of IEA explains the
+result. (The + IEA cells score a smaller cohort because a protein with an
+IEA annotation in 2021 counts as already known in that aspect — the cohort
+is always built from exactly the evidence training saw. The SSF cells keep
+only proteins carrying SSF domains. So absolute numbers are not comparable
+across cells; the within-cell contrasts are.)
 
 ### 4.3 Sensitivity / PPV decomposition at the operating point
 
@@ -388,39 +397,42 @@ every §4.2 cell to < 10⁻¹⁶; full table in
 
 | contrast | cell | ΔPPV | Δsensitivity | ΔF_max |
 |---|---|---:|---:|---:|
-| Base → Base + relative | BP 0 | −0.089 | −0.005 | −0.043 |
-| | BP 2 | −0.048 | −0.042 | −0.045 |
-| | BP 4 | −0.041 | −0.067 | −0.052 |
-| | MF 0 | +0.064 | −0.055 | −0.008 |
-| | MF 2 | −0.016 | −0.052 | −0.046 |
-| | MF 4 | +0.005 | −0.070 | −0.054 |
-| | CC 0 | −0.042 | +0.015 | −0.009 |
-| | CC 2 | +0.073 | −0.053 | +0.025 |
-| | CC 4 | +0.034 | −0.040 | −0.008 |
-| Base + output → Full | BP 0 | −0.022 | −0.044 | −0.037 |
-| | BP 2 | −0.042 | −0.042 | −0.042 |
-| | BP 4 | −0.016 | −0.109 | −0.046 |
-| | MF 0 | +0.100 | −0.034 | +0.017 |
-| | MF 2 | −0.009 | −0.044 | −0.035 |
-| | MF 4 | −0.051 | −0.028 | −0.036 |
-| | CC 0 | −0.004 | −0.017 | −0.013 |
-| | CC 2 | +0.052 | −0.044 | +0.007 |
-| | CC 4 | +0.036 | −0.042 | −0.007 |
+| Base → Base + relative | BP 0 | −0.072 | +0.003 | −0.031 |
+| | BP 2 | −0.034 | −0.032 | −0.033 |
+| | BP 4 | −0.031 | −0.059 | −0.042 |
+| | MF 0 | +0.054 | −0.052 | −0.008 |
+| | MF 2 | −0.020 | −0.047 | −0.043 |
+| | MF 4 | −0.048 | −0.046 | −0.051 |
+| | CC 0 | −0.050 | +0.022 | −0.004 |
+| | CC 2 | +0.059 | −0.062 | +0.011 |
+| | CC 4 | +0.038 | −0.036 | −0.001 |
+| Base + output → Full | BP 0 | +0.001 | −0.038 | −0.028 |
+| | BP 2 | −0.014 | −0.047 | −0.032 |
+| | BP 4 | −0.037 | −0.045 | −0.041 |
+| | MF 0 | +0.099 | −0.038 | +0.016 |
+| | MF 2 | −0.006 | −0.042 | −0.033 |
+| | MF 4 | −0.038 | −0.035 | −0.039 |
+| | CC 0 | −0.023 | −0.006 | −0.013 |
+| | CC 2 | +0.036 | −0.050 | −0.008 |
+| | CC 4 | +0.045 | −0.044 | −0.002 |
 
 The pattern:
 
-- **Sensitivity always falls** — 17 of 18 cells (the one exception, +0.015,
-  is noise-level). The cost side of the trade is universal.
+- **Sensitivity almost always falls** — 16 of 18 cells (the two
+  exceptions, +0.003 and +0.022, are both at IC 0 and each comes with a
+  larger PPV loss). The cost side of the trade is near-universal.
 - **PPV rises in only 7 of 18 cells.** Where it does, the classic trade is
   real: cellular component at IC ≥ 2 in both contrasts, MF at IC 0 in both —
-  the largest single gain is MF 0 in the Full configuration (PPV +0.100 for
-  sensitivity −0.034, F_max +0.017).
-- **In biological process the test loses on both axes** in all 6 cells (and
-  in MF at IC ≥ 2 in 3 of 4). There the relative test removes true signal
+  the largest single gain is MF 0 in the Full configuration (PPV +0.099 for
+  sensitivity −0.038, F_max +0.016).
+- **In biological process the test loses on both axes** in 4 of 6 cells,
+  and in the other two gains only a noise-level +0.003 sensitivity or
+  +0.001 PPV against a larger loss on the other axis; in MF at IC ≥ 2 it
+  loses on both axes in all 4. There the relative test removes true signal
   without making the remainder more trustworthy — behaviour a level selector
   should not be able to produce.
 - Coverage (the share of cohort proteins with any prediction at the
-  operating point) falls in 12 of 18 cells, by up to 7.5 points.
+  operating point) falls in 13 of 18 cells, by up to 6.5 points.
 
 ### 4.4 The extreme case: human phenotype annotations (HPO)
 
@@ -461,7 +473,7 @@ Two readings fit the data so far:
   their parents (the NAR paper's "only associate the parent term"), its
   output would keep the branch covered where ours leaves a hole. Output
   propagation partially compensates — but Full is still behind Base + output
-  in 7 of 9 F_max cells, so it does not compensate enough.
+  in 8 of 9 F_max cells, so it does not compensate enough.
 - **(b) Our background is not the original's.** If the original used the
   intersection ("all") background — smaller, hence more conservative
   per-pair p-values but in a *different pattern* — or a per-parent rule, or
@@ -471,7 +483,7 @@ Two readings fit the data so far:
 The decomposition (§4.3) discriminates partially. Where the test behaves as
 a PPV filter (cellular component, MF at IC 0) it is doing roughly what the
 papers describe, at a price in sensitivity that usually exceeds the gain.
-Where it loses on both axes (biological process throughout, MF at IC ≥ 2),
+Where it loses on both axes (most of biological process, MF at IC ≥ 2),
 it is doing something the papers do not describe — which points at (a)'s
 deletion-without-replacement mechanism, at (b), or both. Biological process
 is where multi-parent terms are most common — 65% of BP terms have more
@@ -532,7 +544,14 @@ test with its measured cost rather than as a default.
   official `replaced_by` successor (417 terms, 4,497 pairs rescued —
   `input_replaced_by_remapped` in each manifest), which improved held-out
   AUPRC in 36 of 36 rung × cell comparisons against the previous runs
-  without changing any conclusion. Inputs are unchanged: training GAF
+  without changing any conclusion. On 2026-10-06 the evaluation (not the
+  training runs) was regenerated after review found two scoring-side
+  gaps: the evaluator now applies the same retired-id cleanup to both GAFs
+  as training does, and builds the no-knowledge cohort under the cell's own
+  training evidence filter (it had used the non-IEA filter for the + IEA
+  cells too). Both had let proteins with 2021 knowledge into the cohort —
+  CC fell from 572 to 436 proteins, the + IEA cells by more. No conclusion
+  changed; the numbers in §4 are the regenerated ones. Inputs are unchanged: training GAF
   sha256 `69ae7d90…` (= archived GOA release 205),
   `data/interim/protein2ipr_human.dat.gz` sha256 `a932a515…` (InterPro
   `current_release` snapshot of 2026-07-22), `go-basic.obo` sha256

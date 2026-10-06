@@ -56,6 +56,24 @@ TERM_ASPECT = {
 }
 
 
+class TestRemapRetiredIds:
+    def test_alt_id_then_replaced_by_then_passthrough(self):
+        out = tb.remap_retired_ids(
+            {"P1": {"GO:merged", "GO:obsolete", "GO:live"}},
+            alt_id_map={"GO:merged": "GO:survivor"},
+            replaced_by_map={"GO:obsolete": "GO:successor"},
+        )
+        assert out == {"P1": {"GO:survivor", "GO:successor", "GO:live"}}
+
+    def test_alt_id_wins_over_replaced_by(self):
+        out = tb.remap_retired_ids(
+            {"P1": {"GO:x"}},
+            alt_id_map={"GO:x": "GO:alt"},
+            replaced_by_map={"GO:x": "GO:rep"},
+        )
+        assert out == {"P1": {"GO:alt"}}
+
+
 class TestBuildNKBenchmark:
     def test_truth_is_full_t1_not_delta(self):
         # t0 experimental has nothing in BP; t1 adds leaf. Truth is the FULL
