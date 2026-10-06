@@ -7,6 +7,7 @@ that IC thresholds silently change the evaluation cohort.
 """
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -174,3 +175,34 @@ class TestAssociationCount:
         path = tmp_path / "assoc.tsv"
         path.write_text("")
         assert ab.association_count(path) == 0
+
+
+class TestRunSettingMismatches:
+    def _write(self, root, rung, **params):
+        (root / rung.run_dir).mkdir(parents=True, exist_ok=True)
+        (root / rung.run_dir / "run_manifest_go.json").write_text(
+            json.dumps({"parameters": params})
+        )
+
+    def test_matching_runs_pass(self, tmp_path):
+        for rung in ab.LADDER:
+            self._write(tmp_path, rung, evidence_filter="all", domain_key="ssf")
+        expected = {"evidence_filter": "all", "domain_key": "ssf"}
+        assert ab.run_setting_mismatches(tmp_path, ab.LADDER, expected) == []
+
+    def test_evidence_filter_mismatch_is_reported(self, tmp_path):
+        # The bug this guards: an IEA-trained cell scored with a non-IEA cohort.
+        rung = ab.LADDER[0]
+        self._write(tmp_path, rung, evidence_filter="all", domain_key="interpro")
+        problems = ab.run_setting_mismatches(
+            tmp_path, [rung], {"evidence_filter": "manual"}
+        )
+        assert problems == [f"{rung.name}: run evidence_filter=all, evaluator manual"]
+
+    def test_runs_without_a_manifest_are_skipped(self, tmp_path):
+        assert (
+            ab.run_setting_mismatches(
+                tmp_path, ab.LADDER, {"evidence_filter": "manual"}
+            )
+            == []
+        )
