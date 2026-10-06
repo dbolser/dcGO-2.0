@@ -64,3 +64,37 @@ def test_run_request_is_immutable() -> None:
 
     with pytest.raises(FrozenInstanceError):
         request.species = "mouse"  # type: ignore[misc]
+
+
+def test_gaf_and_interpro_default_to_the_species_files() -> None:
+    resolved = resolve_inputs(parse_run_request(["--species", "mouse"]))
+
+    assert resolved.ontology_paths["gaf"] == Path(
+        "data/raw/goa_annotations/goa_mouse.gaf.gz"
+    )
+    assert resolved.interpro_file == Path("data/interim/protein2ipr_mouse.dat.gz")
+
+
+def test_gaf_and_interpro_overrides_replace_the_species_files(tmp_path: Path) -> None:
+    """The temporal benchmark trains on archived files, not the species' current ones."""
+    gaf = tmp_path / "goa_human.gaf.205.gz"
+    gaf.write_text("!gaf-version: 2.2\n")
+    interpro = tmp_path / "protein2ipr_human_t0.dat.gz"
+
+    resolved = resolve_inputs(
+        parse_run_request(["--gaf", str(gaf), "--interpro", str(interpro)])
+    )
+
+    assert resolved.ontology_paths["gaf"] == gaf
+    assert resolved.interpro_file == interpro
+    assert resolved.missing_inputs == ()
+
+
+def test_a_missing_gaf_override_is_caught_by_the_early_input_check(
+    tmp_path: Path,
+) -> None:
+    resolved = resolve_inputs(
+        parse_run_request(["--gaf", str(tmp_path / "absent.gaf.gz")])
+    )
+
+    assert any("absent.gaf.gz" in missing for missing in resolved.missing_inputs)

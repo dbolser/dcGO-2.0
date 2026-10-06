@@ -202,25 +202,20 @@ Assumes the human InterPro subset is already extracted
 # 1. Fetch the 2021 t0 GOA snapshot
 uv run python scripts/download_data.py --goa-archive 205
 
-# 2. Stage t0 inputs under the --species name run_dcgo_human.py expects.
-#    Domains are fixed in time (only GOA moves), so symlink the current subset.
-ln -sf "$PWD/data/raw/goa_archive/goa_human.gaf.205.gz" \
-       data/raw/goa_annotations/goa_human_t0_2021.gaf.gz
-ln -sf "$PWD/data/interim/protein2ipr_human.dat.gz" \
-       data/interim/protein2ipr_human_t0_2021.dat.gz
+# 2. Train domain→GO associations on t0. Only GOA moves: the domains are the
+#    current subset (the --interpro default). VALIDATION_PLAN §4 has the rerun
+#    on InterPro 85.0 (t0) architectures.
+uv run python run_dcgo_human.py --gaf data/raw/goa_archive/goa_human.gaf.205.gz \
+    --num-cores 32 --output-dir results_t0_2021
 
-# 3. Train domain→GO associations on t0
-uv run python run_dcgo_human.py --species human_t0_2021 --num-cores 32 \
-    --output-dir results_t0_2021
-
-# 4. Protein-centric temporal benchmark (t1 = current GOA)
+# 3. Protein-centric temporal benchmark (t1 = current GOA)
 uv run python validation/temporal_benchmark.py \
     --t0-gaf data/raw/goa_archive/goa_human.gaf.205.gz \
     --t1-gaf data/raw/goa_annotations/goa_human.gaf.gz \
     --predictions results_t0_2021/domain_go_associations_significant.tsv \
     --min-ic 0 --min-ic 2 --min-ic 4 --min-ic 6
 
-# 5. Domain-centric eval — build the relative-filtered set, then compare both
+# 4. Domain-centric eval — build the relative-filtered set, then compare both
 uv run python validation/apply_relative_inference.py \
     --predictions results_t0_2021/domain_go_associations_significant.tsv \
     --t0-gaf data/raw/goa_archive/goa_human.gaf.205.gz \

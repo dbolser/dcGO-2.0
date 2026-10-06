@@ -52,6 +52,11 @@ Hashing is intentionally part of the run. For large inputs it adds sequential
 I/O, but prevents a mutable filename from silently referring to different data.
 The species-specific InterPro file is a derived input: its own hash identifies
 what was analyzed, while `derived_from` records the upstream mapping source.
+Inputs passed with `--gaf`/`--interpro` (archived snapshots for the temporal
+benchmark) are hashed and header-read the same way but carry no
+`source_url`/`derived_from`: the species' current-release URL would name
+different bytes. A subset's own `.provenance.json` sidecar names the archive it
+was cut from.
 
 The inputs recorded are exactly those the selected ontology declares in
 `src/ontology_registry.py` (`needs`, plus `hierarchy_needs` when

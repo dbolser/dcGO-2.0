@@ -30,6 +30,9 @@ class RunRequest:
     propagate_annotations: bool
     enable_supra_domains: bool
     xref_db: str | None
+    #: ``--gaf`` / ``--interpro``; ``None`` means the species' default file.
+    gaf: Path | None
+    interpro: Path | None
     go_ontology: Path
     enzyme_dat: Path
     uniprot_dat: Path
@@ -101,6 +104,8 @@ class RunRequest:
             propagate_annotations=getattr(args, "propagate_annotations", False),
             enable_supra_domains=args.enable_supra_domains,
             xref_db=getattr(args, "xref_db", None),
+            gaf=getattr(args, "gaf", None),
+            interpro=getattr(args, "interpro", None),
             go_ontology=args.go_ontology,
             enzyme_dat=args.enzyme_dat,
             uniprot_dat=args.uniprot_dat,
@@ -137,10 +142,16 @@ class RunRequest:
             fbcv_obo=args.fbcv_obo,
         )
 
+    @property
+    def interpro_file(self) -> Path:
+        """The protein2ipr file that defines the domain architectures."""
+        return self.interpro or Path(f"data/interim/protein2ipr_{self.species}.dat.gz")
+
     def ontology_paths(self) -> dict[str, Path]:
         """Return every registry-addressable ontology input path."""
         return {
-            "gaf": Path(f"data/raw/goa_annotations/goa_{self.species}.gaf.gz"),
+            "gaf": self.gaf
+            or Path(f"data/raw/goa_annotations/goa_{self.species}.gaf.gz"),
             "go_obo": self.go_ontology,
             "enzyme_dat": self.enzyme_dat,
             "uniprot_dat": self.uniprot_dat,
@@ -185,6 +196,7 @@ class InputResolution:
     ontology_entry: OntologyEntry
     ontology_label: str
     ontology_paths: dict[str, Path]
+    interpro_file: Path
     true_path_unsupported: bool
     missing_inputs: tuple[str, ...]
 
@@ -201,6 +213,7 @@ def resolve_inputs(request: RunRequest) -> InputResolution:
             else request.ontology
         ),
         ontology_paths=paths,
+        interpro_file=request.interpro_file,
         true_path_unsupported=(
             request.enable_true_path and not entry.supports_true_path
         ),

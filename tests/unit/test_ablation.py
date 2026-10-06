@@ -178,11 +178,18 @@ class TestAssociationCount:
 
 
 class TestRunSettingMismatches:
-    def _write(self, root, rung, **params):
+    def _write(self, root, rung, inputs=(), **params):
         (root / rung.run_dir).mkdir(parents=True, exist_ok=True)
         (root / rung.run_dir / "run_manifest_go.json").write_text(
-            json.dumps({"parameters": params})
+            json.dumps({"parameters": params, "inputs": list(inputs)})
         )
+
+    @staticmethod
+    def _domains(sha256):
+        return [
+            {"role": "domain_annotations", "sha256": sha256},
+            {"role": "gaf", "sha256": "f" * 64},
+        ]
 
     def test_matching_runs_pass(self, tmp_path):
         for rung in ab.LADDER:
@@ -204,5 +211,38 @@ class TestRunSettingMismatches:
             ab.run_setting_mismatches(
                 tmp_path, ab.LADDER, {"evidence_filter": "manual"}
             )
+            == []
+        )
+
+    def test_protein2ipr_mismatch_is_reported(self, tmp_path):
+        # The bug this guards: t0-trained associations transferred through
+        # today's architectures (or the reverse).
+        rung = ab.LADDER[0]
+        self._write(tmp_path, rung, inputs=self._domains("a" * 64))
+        problems = ab.run_setting_mismatches(
+            tmp_path, [rung], {}, interpro_sha256="b" * 64
+        )
+        assert problems == [
+            f"{rung.name}: run protein2ipr sha256={'a' * 64}, evaluator {'b' * 64}"
+        ]
+
+    def test_matching_protein2ipr_passes(self, tmp_path):
+        for rung in ab.LADDER:
+            self._write(tmp_path, rung, inputs=self._domains("a" * 64))
+        assert (
+            ab.run_setting_mismatches(tmp_path, ab.LADDER, {}, interpro_sha256="a" * 64)
+            == []
+        )
+
+    def test_protein2ipr_is_checked_only_when_given(self, tmp_path):
+        rung = ab.LADDER[0]
+        self._write(tmp_path, rung, inputs=self._domains("a" * 64))
+        assert ab.run_setting_mismatches(tmp_path, [rung], {}) == []
+
+    def test_a_manifest_without_domain_annotations_is_not_checked(self, tmp_path):
+        rung = ab.LADDER[0]
+        self._write(tmp_path, rung)
+        assert (
+            ab.run_setting_mismatches(tmp_path, [rung], {}, interpro_sha256="b" * 64)
             == []
         )

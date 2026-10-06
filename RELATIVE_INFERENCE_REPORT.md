@@ -598,7 +598,10 @@ test with its measured cost rather than as a default.
   checkout of the branch (`78494f2`; `git.dirty: false` in
   every manifest), and an independent earlier run of the same 36 pipeline
   configurations from a working tree reproduced every association table
-  **byte-for-byte** (96/96 output TSVs).
+  **byte-for-byte** (96/96 output TSVs). Those runs read the 2021 GAF through
+  a link at the default GAF path; to regenerate, run each manifest's recorded
+  command with `--gaf data/raw/goa_archive/goa_human.gaf.205.gz` added
+  (`VALIDATION_PLAN.md` §4, "Regenerating a cell").
 - **Robustness cells** (§4.2): the same nine-rung ladder rerun with
   `--domain-key ssf` and/or `--evidence-filter all`; eval tables and
   per-run manifests in `validation/ablation_cells/{ipr_all,ssf_manual,ssf_all}/`.

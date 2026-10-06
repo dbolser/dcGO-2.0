@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import gzip
+import hashlib
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -226,3 +228,160 @@ def test_validate_results_direct_script_uses_its_own_checkout(tmp_path: Path) ->
     assert result.returncode == 1
     assert "Missing required inputs" in result.stderr
     assert "ModuleNotFoundError" not in result.stderr
+
+
+@pytest.fixture
+def t0_benchmark(tmp_path: Path) -> dict[str, Path]:
+    """A two-protein 2021→2026 split: P0 annotated at t0, P1 only at t1 (the
+    held-out cohort), both carrying IPR_A in the protein2ipr subset."""
+    t0 = tmp_path / "t0.gaf.gz"
+    with gzip.open(t0, "wt") as handle:
+        handle.write("!gaf-version: 2.2\n" + _gaf_row("P0", CHILD) + "\n")
+    t1 = tmp_path / "t1.gaf.gz"
+    with gzip.open(t1, "wt") as handle:
+        handle.write("!gaf-version: 2.2\n")
+        for protein in ("P0", "P1"):
+            handle.write(_gaf_row(protein, CHILD) + "\n")
+    interpro = tmp_path / "protein2ipr_t0.dat.gz"
+    with gzip.open(interpro, "wt") as handle:
+        for protein in ("P0", "P1"):
+            handle.write(f"{protein}\tIPR_A\tA\tPF00001\t10\t100\n")
+    return {"t0": t0, "t1": t1, "interpro": interpro}
+
+
+def _write_run(directory: Path, interpro_sha256: str) -> None:
+    """A rung's association tables and the manifest naming its protein2ipr."""
+    directory.mkdir(parents=True, exist_ok=True)
+    table = pd.DataFrame(
+        [("IPR_A", CHILD, 0.001, 0.01, 0.01)],
+        columns=["domain", "go_term", "p_value", "adj_p_value", "q_value"],
+    )
+    for name in ("associations_significant", "annotations_propagated"):
+        table.to_csv(directory / f"domain_go_{name}.tsv", sep="\t", index=False)
+    (directory / "run_manifest_go.json").write_text(
+        json.dumps(
+            {
+                "parameters": {"domain_key": "interpro", "evidence_filter": "manual"},
+                "inputs": [{"role": "domain_annotations", "sha256": interpro_sha256}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def test_temporal_benchmark_scores_through_the_architectures_training_used(
+    tmp_path: Path, go_obo: Path, t0_benchmark: dict[str, Path]
+) -> None:
+    run = tmp_path / "run"
+    _write_run(run, _sha256(t0_benchmark["interpro"]))
+
+    result = _run(
+        "temporal_benchmark.py",
+        "--t0-gaf",
+        t0_benchmark["t0"],
+        "--t1-gaf",
+        t0_benchmark["t1"],
+        "--predictions",
+        run / "domain_go_associations_significant.tsv",
+        "--interpro",
+        t0_benchmark["interpro"],
+        "--go-ontology",
+        go_obo,
+        "--n-permutations",
+        1,
+        "--min-ic",
+        0,
+        "--output-dir",
+        tmp_path / "metrics",
+    )
+
+    assert result.returncode == 0, result.stderr
+    metrics = pd.read_csv(
+        tmp_path / "metrics" / "temporal_benchmark_metrics.tsv", sep="\t"
+    )
+    dcgo = metrics[metrics["method"] == "dcGO"].iloc[0]
+    assert dcgo["n_eval_proteins"] == 1  # P1, transferred through IPR_A
+    assert dcgo["f_max"] == pytest.approx(1.0)
+
+
+def test_temporal_benchmark_refuses_other_architectures(
+    tmp_path: Path, go_obo: Path, t0_benchmark: dict[str, Path]
+) -> None:
+    run = tmp_path / "run"
+    _write_run(run, "0" * 64)  # trained on some other protein2ipr
+
+    result = _run(
+        "temporal_benchmark.py",
+        "--t0-gaf",
+        t0_benchmark["t0"],
+        "--t1-gaf",
+        t0_benchmark["t1"],
+        "--predictions",
+        run / "domain_go_associations_significant.tsv",
+        "--interpro",
+        t0_benchmark["interpro"],
+        "--go-ontology",
+        go_obo,
+        "--output-dir",
+        tmp_path / "metrics",
+    )
+
+    assert result.returncode == 1
+    assert "protein2ipr sha256" in result.stderr
+    assert not (tmp_path / "metrics").exists()
+
+
+@pytest.mark.parametrize("matching", [True, False])
+def test_ablation_scores_only_runs_trained_on_its_protein2ipr(
+    tmp_path: Path, go_obo: Path, t0_benchmark: dict[str, Path], matching: bool
+) -> None:
+    sha256 = _sha256(t0_benchmark["interpro"])
+    for rung in (
+        "single",
+        "supra",
+        "supra_input",
+        "supra_relative",
+        "supra_output",
+        "supra_input_relative",
+        "supra_input_output",
+        "supra_relative_output",
+        "full",
+    ):
+        recorded = sha256 if matching or rung != "full" else "0" * 64
+        _write_run(tmp_path / "runs" / rung, recorded)
+
+    result = _run(
+        "ablation.py",
+        "--t0-gaf",
+        t0_benchmark["t0"],
+        "--t1-gaf",
+        t0_benchmark["t1"],
+        "--run-dir",
+        tmp_path / "runs",
+        "--interpro",
+        t0_benchmark["interpro"],
+        "--go-ontology",
+        go_obo,
+        "--min-ic",
+        0,
+        "--n-bootstrap",
+        2,
+        "--n-permutations",
+        0,
+        "--output-dir",
+        tmp_path / "eval",
+    )
+
+    if not matching:
+        assert result.returncode == 1
+        assert "full: run protein2ipr sha256=" in result.stderr
+        assert not (tmp_path / "eval" / "ablation_provenance.tsv").exists()
+        return
+    assert result.returncode == 0, result.stderr
+    provenance = pd.read_csv(tmp_path / "eval" / "ablation_provenance.tsv", sep="\t")
+    assert set(provenance["interpro_file"]) == {str(t0_benchmark["interpro"])}
+    assert set(provenance["interpro_sha256"]) == {sha256}

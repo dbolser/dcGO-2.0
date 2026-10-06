@@ -20,9 +20,12 @@ not provide. The idea, following CAFA:
     experimental MF annotations) tests whether the naive baseline's F_max lead is
     just base-rate recovery of generic terms.
 
-Because the domain architectures come from ``protein2ipr`` and are not
-time-varying in our data, only the GOA annotations move in time — the split is
-purely on the annotation side.
+The domain architectures come from ``--interpro``. By default that is the
+current ``protein2ipr`` subset, so only the GOA annotations move in time and the
+split is purely on the annotation side. Passing a subset of an archived
+InterPro release (``extract_human_interpro.py --source``) moves the
+architectures to t0 too; it must be the file the predictions were trained on,
+which is checked against the run manifest beside ``--predictions``.
 
 The metric maths lives in small pure functions (unit-tested in
 ``tests/unit/test_temporal_benchmark.py``); the ``main`` at the bottom wires them
@@ -40,6 +43,7 @@ Notes / deliberate simplifications (documented so they are not oversold):
 
 from __future__ import annotations
 
+import json
 import math
 import sys
 from collections import defaultdict
@@ -643,6 +647,23 @@ def _load_resampling():  # pragma: no cover - import plumbing
     return module
 
 
+def recorded_interpro_sha256(manifest_path: Path) -> str | None:
+    """SHA-256 of the protein2ipr file a run manifest says training read.
+
+    ``None`` when the manifest records no ``domain_annotations`` input. The
+    evaluator must transfer through the same architectures training learned
+    from: a different file is a different domain vocabulary (supra-domain ids
+    are built from it) and, for a temporal benchmark, a different date. The
+    digest is of the file's bytes, so a re-compressed copy of identical rows
+    also counts as different — pass the file the runs were made with.
+    """
+    data = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+    for record in data.get("inputs", []):
+        if record.get("role") == "domain_annotations":
+            return record.get("sha256")
+    return None
+
+
 def build_term_aspect(processor) -> dict[str, str]:
     """Map each GO term to BP/MF/CC using the ontology namespace."""
     term_aspect: dict[str, str] = {}
@@ -671,6 +692,7 @@ def main() -> int:
     from src.domain_annotation_parser import DomainAnnotationParser
     from src.goa_parser import EXPERIMENTAL_EVIDENCE, GOAParser, parse_goa_human
     from src.ontology_processor import OntologyProcessor
+    from src.run_manifest import sha256_file
 
     parser = argparse.ArgumentParser(
         description="Temporal held-out CAFA-style benchmark for dcGO (VALIDATION_PLAN §2)."
@@ -691,7 +713,8 @@ def main() -> int:
         "--interpro",
         type=Path,
         default=Path("data/interim/protein2ipr_human.dat.gz"),
-        help="protein2ipr human subset (domain architectures)",
+        help="protein2ipr human subset (domain architectures) — must be the "
+        "file the predictions were trained on",
     )
     parser.add_argument(
         "--go-ontology",
@@ -762,6 +785,19 @@ def main() -> int:
     ):
         if not p.exists():
             logger.error(f"Missing required input: {p}")
+            return 1
+
+    # Transfer through the architectures training learned from (see
+    # recorded_interpro_sha256). Predictions without a manifest are not checked.
+    manifest = args.predictions.parent / "run_manifest_go.json"
+    if manifest.exists():
+        trained_on = recorded_interpro_sha256(manifest)
+        given = sha256_file(args.interpro)
+        if trained_on is not None and trained_on != given:
+            logger.error(
+                f"Settings mismatch — {manifest} records protein2ipr sha256 "
+                f"{trained_on}, --interpro {args.interpro} is {given}"
+            )
             return 1
 
     args.output_dir.mkdir(parents=True, exist_ok=True)

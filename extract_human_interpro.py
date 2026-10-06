@@ -8,6 +8,17 @@ via ``--species`` (default: human), mirroring ``run_dcgo_human.py``.
 
     uv run python extract_human_interpro.py                 # human (default)
     uv run python extract_human_interpro.py --species mouse # any organism
+
+A subset for a temporal benchmark is cut from an archived protein2ipr and
+selected by the union of several GAFs — the training snapshot *and* the later
+one whose newly annotated proteins are scored, so both have architectures:
+
+    uv run python extract_human_interpro.py \
+        --source data/raw/interpro_archive/85.0/protein2ipr.dat.gz \
+        --gaf data/raw/goa_archive/goa_human.gaf.205.gz \
+        --gaf data/raw/goa_annotations/goa_human.gaf.gz \
+        --evidence-filter all \
+        --output data/interim/protein2ipr_human_t0_ipr85.dat.gz
 """
 
 import argparse
@@ -89,6 +100,27 @@ def main():
         help="Evidence filter used to select the protein set (default: manual)",
     )
     parser.add_argument(
+        "--gaf",
+        type=Path,
+        action="append",
+        help="GAF whose proteins select the subset; repeat to take the union "
+        "(default: data/raw/goa_annotations/goa_<species>.gaf.gz)",
+    )
+    parser.add_argument(
+        "--source",
+        type=Path,
+        default=Path("data/raw/interpro_mappings/protein2ipr.dat.gz"),
+        help="protein2ipr file to filter, e.g. an archived release "
+        "(default: data/raw/interpro_mappings/protein2ipr.dat.gz)",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Output path (default: data/interim/protein2ipr_<species>.dat.gz). "
+        "The selecting accession list is written beside it",
+    )
+    parser.add_argument(
         "--force",
         action="store_true",
         help="Overwrite an existing extract even if its provenance marker "
@@ -106,26 +138,41 @@ def main():
     )
 
     logger.info(f"Step 1: Parsing GOA to get {args.species} protein IDs...")
-    goa_file = Path(f"data/raw/goa_annotations/goa_{args.species}.gaf.gz")
-    if not goa_file.exists():
-        logger.error(f"GOA file not found: {goa_file}")
-        logger.error(
-            f"Download it first, e.g. "
-            f"uv run python scripts/download_data.py --species {args.species}"
+    goa_files = args.gaf or [
+        Path(f"data/raw/goa_annotations/goa_{args.species}.gaf.gz")
+    ]
+    for goa_file in goa_files:
+        if not goa_file.exists():
+            logger.error(f"GOA file not found: {goa_file}")
+            logger.error(
+                f"Download it first, e.g. "
+                f"uv run python scripts/download_data.py --species {args.species}"
+            )
+            return 1
+
+    protein_ids: set[str] = set()
+    for goa_file in goa_files:
+        protein_ids.update(
+            parse_goa(
+                goa_file, evidence_filter=args.evidence_filter, aspects={"P", "F", "C"}
+            )
         )
-        return 1
 
-    protein_go_map = parse_goa(
-        goa_file, evidence_filter=args.evidence_filter, aspects={"P", "F", "C"}
+    output_file = args.output or Path(f"data/interim/protein2ipr_{args.species}.dat.gz")
+    # Beside a custom --output, so a second subset never overwrites the
+    # species' own list.
+    protein_list_file = (
+        output_file.with_name(
+            output_file.name.removesuffix(".dat.gz") + "_proteins.txt"
+        )
+        if args.output
+        else Path(f"data/interim/{args.species}_proteins.txt")
     )
-
-    # Write protein IDs to temp file
-    protein_list_file = Path(f"data/interim/{args.species}_proteins.txt")
     protein_list_file.parent.mkdir(parents=True, exist_ok=True)
 
-    logger.info(f"Writing {len(protein_go_map):,} protein IDs to {protein_list_file}")
+    logger.info(f"Writing {len(protein_ids):,} protein IDs to {protein_list_file}")
     with open(protein_list_file, "w") as f:
-        for protein_id in sorted(protein_go_map.keys()):
+        for protein_id in sorted(protein_ids):
             f.write(f"{protein_id}\n")
 
     # Extract species annotations
@@ -133,7 +180,7 @@ def main():
     logger.info(
         f"Step 2: Extracting {args.species} protein annotations from InterPro..."
     )
-    interpro_file = Path("data/raw/interpro_mappings/protein2ipr.dat.gz")
+    interpro_file = args.source
     if not interpro_file.exists():
         logger.error(f"InterPro mappings file not found: {interpro_file}")
         logger.error(
@@ -141,7 +188,6 @@ def main():
             "--datasets interpro_mappings"
         )
         return 1
-    output_file = Path(f"data/interim/protein2ipr_{args.species}.dat.gz")
 
     # An extract selected by a different rule (idmapping / accession list, via
     # scripts/extract_species_interpro.py) must not be silently clobbered.
@@ -157,7 +203,7 @@ def main():
     write_marker(
         output_file,
         selection_rule="goa",
-        selection_sources=[goa_file],
+        selection_sources=goa_files,
         interpro_source=interpro_file,
         n_accessions=n_accessions,
         n_matched_lines=n_matched,
@@ -170,7 +216,7 @@ def main():
     logger.info("=" * 60)
     logger.info(f"You can now use: {output_file}")
     logger.info(
-        f"This file contains only the {len(protein_go_map):,} "
+        f"This file contains only the {len(protein_ids):,} "
         f"{args.species} proteins from GOA"
     )
     return 0
