@@ -723,6 +723,42 @@ class Config:
                 description="Manually curated InterPro2GO mappings (validation reference)",
                 required=False,
             ),
+            # ---- InterPro 85.0 (8 April 2021) --------------------------------
+            # The last InterPro release before GOA release 205 (2021-04-21),
+            # the temporal benchmark's t0, so training and transfer can use
+            # domain architectures of the same date as the annotations
+            # (VALIDATION_PLAN §4, scripts/run_t0_interpro_ablation.sh).
+            # Opt-in: scripts/download_data.py --group interpro-85.
+            "interpro_85_protein2ipr": DataSource(
+                name="interpro_85_protein2ipr",
+                url="https://ftp.ebi.ac.uk/pub/databases/interpro/releases/85.0/protein2ipr.dat.gz",
+                description="InterPro 85.0 (2021-04-08) protein2ipr: t0 domain architectures (~15 GB)",
+                required=False,
+                # The release's own published protein2ipr.dat.gz.md5.
+                checksum="md5:ad41fd5c4a8dc83303683a19a34ec0f1",
+                size_bytes=15272180301,
+                subdir="interpro_archive/85.0",
+            ),
+            "interpro_85_interpro2go": DataSource(
+                name="interpro_85_interpro2go",
+                url="https://ftp.ebi.ac.uk/pub/databases/interpro/releases/85.0/interpro2go",
+                description="InterPro 85.0 InterPro2GO mapping (dated 2021-04-03)",
+                required=False,
+                # No published digest for the uncompressed files; these are the
+                # SHA-256s of the bytes served on 2026-10-06.
+                checksum="sha256:0757a8a2a12bf75ec34f881668ba445a41d64fcf67349f656e211d627ab93ab4",
+                size_bytes=3497883,
+                subdir="interpro_archive/85.0",
+            ),
+            "interpro_85_entry_list": DataSource(
+                name="interpro_85_entry_list",
+                url="https://ftp.ebi.ac.uk/pub/databases/interpro/releases/85.0/entry.list",
+                description="InterPro 85.0 entry list (accession, type, name)",
+                required=False,
+                checksum="sha256:b606ad13f8ea5a766cfe749ed38f4bfdbfe1a0bcd39bb9cd954f5dc4e72bd450",
+                size_bytes=2085328,
+                subdir="interpro_archive/85.0",
+            ),
             # ---- Published dcGO (Fang & Gough 2013) reference tables --------
             # The comparator for VALIDATION_PLAN §3. Still served by SUPERFAMILY
             # at supfam.org; the /SUPERFAMILY/ path prefix is required (the

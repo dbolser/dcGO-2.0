@@ -45,6 +45,14 @@ without sharing statistics:
   ``domain_go_annotations_propagated.tsv``; all other rungs use the significant
   association table.
 
+Each rung is one ``run_dcgo_human.py --gaf <t0 GAF> --output-dir <run-dir>/<rung>``
+plus its stage flags (``validation/ablation_manifests/*.json`` record the exact
+commands). ``scripts/run_t0_interpro_ablation.sh`` runs a whole cell — the nine
+rungs and this evaluation — with ``--interpro`` set to t0 domain architectures.
+``--interpro`` here must be the protein2ipr file the rungs were trained on, and
+``--domain-key``/``--evidence-filter`` their settings: the driver refuses to
+score a run whose manifest says otherwise.
+
 Honest caveat, stated once here and again in ``VALIDATION_PLAN.md``: the True
 Path rungs are scored on ``q_value`` because the propagated output carries no
 ``p_value`` column. To keep the ladder comparable, **every** rung's primary score
@@ -304,13 +312,19 @@ def rung_prediction_file(
 
 
 def run_setting_mismatches(
-    run_root: Path, rungs: Iterable[Rung], expected: Mapping[str, str]
+    run_root: Path,
+    rungs: Iterable[Rung],
+    expected: Mapping[str, str],
+    interpro_sha256: str | None = None,
 ) -> list[str]:
     """Rungs whose run manifest disagrees with the evaluator's settings.
 
     The no-knowledge cohort and IC are built from what training saw, so the
     evaluator's ``domain_key``/``evidence_filter`` must be the ones each run
-    used. Rungs without a manifest are not checked.
+    used. Likewise the transfer step must read the domain architectures the
+    run was trained on: ``interpro_sha256``, if given, is compared with the
+    run's recorded protein2ipr (see ``tb.recorded_interpro_sha256``). Rungs
+    without a manifest are not checked.
     """
     problems = []
     for rung in rungs:
@@ -322,6 +336,13 @@ def run_setting_mismatches(
             got = params.get(key)
             if got is not None and got != want:
                 problems.append(f"{rung.name}: run {key}={got}, evaluator {want}")
+        if interpro_sha256 is not None:
+            trained_on = tb.recorded_interpro_sha256(manifest)
+            if trained_on is not None and trained_on != interpro_sha256:
+                problems.append(
+                    f"{rung.name}: run protein2ipr sha256={trained_on}, "
+                    f"evaluator {interpro_sha256}"
+                )
     return problems
 
 
@@ -584,6 +605,10 @@ def main() -> int:  # pragma: no cover - I/O wiring
     logger.remove()
     logger.add(sys.stderr, level="INFO")
 
+    if str(_ROOT) not in sys.path:
+        sys.path.insert(0, str(_ROOT))
+    from src.run_manifest import sha256_file
+
     parser = argparse.ArgumentParser(
         description="dcGO component ablation with bootstrap CIs and a permutation null "
         "(VALIDATION_PLAN §4)."
@@ -597,7 +622,12 @@ def main() -> int:  # pragma: no cover - I/O wiring
         help="Root holding one sub-directory per current-code factorial run",
     )
     parser.add_argument(
-        "--interpro", type=Path, default=Path("data/interim/protein2ipr_human.dat.gz")
+        "--interpro",
+        type=Path,
+        default=Path("data/interim/protein2ipr_human.dat.gz"),
+        help="protein2ipr file for the transfer step and the cohort — must be "
+        "the one the runs under --run-dir were trained on "
+        "(default: data/interim/protein2ipr_human.dat.gz)",
     )
     parser.add_argument(
         "--domain-key",
@@ -658,10 +688,12 @@ def main() -> int:  # pragma: no cover - I/O wiring
         if not path.exists():
             logger.error(f"Missing required input: {path}")
             return 1
+    interpro_sha256 = sha256_file(args.interpro)
     mismatches = run_setting_mismatches(
         args.run_dir,
         LADDER,
         {"domain_key": args.domain_key, "evidence_filter": args.evidence_filter},
+        interpro_sha256=interpro_sha256,
     )
     if mismatches:
         for problem in mismatches:
@@ -703,6 +735,12 @@ def main() -> int:  # pragma: no cover - I/O wiring
     except FileNotFoundError as missing:
         logger.error(str(missing))
         return 1
+    # Every method is scored on the cohort and architectures of this file.
+    architectures_used = {
+        "interpro_file": str(args.interpro),
+        "interpro_sha256": interpro_sha256,
+    }
+    provenance = [{**row, **architectures_used} for row in provenance]
     pd.DataFrame(provenance).to_csv(
         args.output_dir / "ablation_provenance.tsv", sep="\t", index=False
     )

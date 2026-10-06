@@ -39,8 +39,9 @@ Notes
 * Existing complete files are skipped. Use --force to re-download.
 * ``interpro_mappings`` (protein2ipr.dat.gz) is ~20 GB — this can take a while.
 * Sources pinned to an immutable release URL carry a ``checksum`` (and
-  sometimes a ``size_bytes``) in settings.py — ``disease_ontology``, and the
-  frozen published-dcGO and SCOP 1.75 archives. These are verified every time,
+  sometimes a ``size_bytes``) in settings.py — ``disease_ontology``, the
+  frozen published-dcGO and SCOP 1.75 archives, and the InterPro 85.0 release
+  (``--group interpro-85``). These are verified every time,
   including when an existing file is skipped, so a corrupted, truncated or
   swapped input fails the download step instead of quietly changing a run's
   results.
@@ -137,6 +138,14 @@ DATASET_GROUPS: dict[str, list[str]] = {
         "zfin_uniprot",
         "zfa_ontology",
         "zebrafish_idmapping",
+    ],
+    # InterPro 85.0 (2021-04-08), the t0 domain architectures of the temporal
+    # benchmark (scripts/run_t0_interpro_ablation.sh). ~15 GB; the protein2ipr
+    # is checked against the release's published md5.
+    "interpro-85": [
+        "interpro_85_protein2ipr",
+        "interpro_85_interpro2go",
+        "interpro_85_entry_list",
     ],
     # fbcv and fbbt share the same three FlyBase tables; only the OBO differs.
     "flybase-phenotype": [

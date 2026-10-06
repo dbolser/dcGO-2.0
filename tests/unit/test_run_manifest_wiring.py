@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+import run_dcgo_human
 from run_dcgo_human import build_ontology_paths, start_run_manifest
 from src.ontology_registry import ONTOLOGIES, get_ontology
 
@@ -272,3 +273,41 @@ def test_hierarchy_stage_flags_make_the_ic_source_propagated(tmp_path, fake_inpu
     )
     assert data["analysis"]["thresholds"]["ic_source"] == "propagated"
     assert data["analysis"]["thresholds"]["min_ic"] is None
+
+
+UPSTREAM = {
+    "gaf": "https://example.org/goa_human.gaf.gz",
+    "interpro_mappings": "https://example.org/protein2ipr.dat.gz",
+}
+
+
+def test_default_inputs_are_labelled_with_their_upstream_source(
+    tmp_path, fake_inputs, monkeypatch
+):
+    monkeypatch.setattr(run_dcgo_human, "input_source_urls", lambda _: dict(UPSTREAM))
+    _, data = run_manifest_json(tmp_path, fake_inputs)
+
+    by_role = {record["role"]: record for record in data["inputs"]}
+    assert by_role["gaf"]["source_url"] == UPSTREAM["gaf"]
+    assert (
+        by_role["domain_annotations"]["derived_from"] == UPSTREAM["interpro_mappings"]
+    )
+
+
+def test_overridden_inputs_are_hashed_without_the_species_url(
+    tmp_path, fake_inputs, monkeypatch
+):
+    """An archived GAF is not the file at the current-release URL; say nothing
+    rather than the wrong thing. The hash still identifies the bytes."""
+    monkeypatch.setattr(run_dcgo_human, "input_source_urls", lambda _: dict(UPSTREAM))
+    interpro = tmp_path / "protein2ipr_t0.dat.gz"
+    _, data = run_manifest_json(
+        tmp_path, fake_inputs, gaf=fake_inputs["gaf"], interpro=interpro
+    )
+
+    by_role = {record["role"]: record for record in data["inputs"]}
+    assert "source_url" not in by_role["gaf"]
+    assert "derived_from" not in by_role["domain_annotations"]
+    assert by_role["gaf"]["sha256"] and by_role["domain_annotations"]["sha256"]
+    assert data["parameters"]["gaf"] == str(fake_inputs["gaf"])
+    assert data["parameters"]["interpro"] == str(interpro)

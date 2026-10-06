@@ -7,6 +7,7 @@ max-propagated prediction scores) are pinned exactly.
 """
 
 import importlib.util
+import json
 import math
 import sys
 from pathlib import Path
@@ -107,6 +108,27 @@ class TestRemapRetiredScores:
         )
         pred = tb.transfer_predictions_pscore({"P1": ["D1"]}, scores, anc)
         assert pred["P1"] == {"GO:leaf": 1.0, "GO:mid": 1.0, "GO:other": 0.0}
+
+
+class TestRecordedInterproSha256:
+    def test_reads_the_domain_annotations_input(self, tmp_path):
+        manifest = tmp_path / "run_manifest_go.json"
+        manifest.write_text(
+            json.dumps(
+                {
+                    "inputs": [
+                        {"role": "domain_annotations", "sha256": "a" * 64},
+                        {"role": "gaf", "sha256": "b" * 64},
+                    ]
+                }
+            )
+        )
+        assert tb.recorded_interpro_sha256(manifest) == "a" * 64
+
+    def test_none_when_the_manifest_records_no_domain_file(self, tmp_path):
+        manifest = tmp_path / "run_manifest_go.json"
+        manifest.write_text(json.dumps({"inputs": [{"role": "gaf"}]}))
+        assert tb.recorded_interpro_sha256(manifest) is None
 
 
 class TestBuildNKBenchmark:

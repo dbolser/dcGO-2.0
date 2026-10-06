@@ -16,6 +16,8 @@ Usage:
 
 Options:
     --species STR            Species to analyze: 'human', 'mouse', etc. (default: human)
+    --gaf PATH               GO annotation file (default: data/raw/goa_annotations/goa_<species>.gaf.gz)
+    --interpro PATH          protein2ipr domain file (default: data/interim/protein2ipr_<species>.dat.gz)
     --ontology STR           Ontology to associate domains with (default: go). See
                              src/ontology_registry.py, or --help, for the full list:
                              go, ec, reactome, keyword, disease, doid, orphanet,
@@ -94,6 +96,12 @@ Examples:
     # Key domains by SCOP superfamily instead of InterPro entry, to compare
     # against the published dcGO (VALIDATION_PLAN §3)
     uv run python run_dcgo_human.py --domain-key ssf
+
+    # Train on dated snapshots (temporal benchmark, VALIDATION_PLAN §2/§4):
+    # archived GOA release 205 and a subset of InterPro 85.0, both April 2021
+    uv run python run_dcgo_human.py \
+        --gaf data/raw/goa_archive/goa_human.gaf.205.gz \
+        --interpro data/interim/protein2ipr_human_t0_ipr85.dat.gz
 """
 
 import argparse
@@ -460,6 +468,14 @@ def start_run_manifest(
     "completed" one from a previous invocation.
     """
     source_urls = input_source_urls(args.species)
+    # A file passed with --gaf/--interpro is not the one the species' upstream
+    # URL names (an archived GAF, a subset of an archived protein2ipr), so it
+    # gets no URL label rather than a wrong one. Its SHA-256 and release
+    # headers are recorded exactly as for the defaults.
+    if getattr(args, "gaf", None) is not None:
+        source_urls.pop("gaf", None)
+    if getattr(args, "interpro", None) is not None:
+        source_urls.pop("interpro_mappings", None)
     input_records = [
         describe_file(
             interpro_file,
@@ -647,6 +663,24 @@ def build_argument_parser() -> argparse.ArgumentParser:
         "--species",
         default="human",
         help="Species to analyze: 'human', 'mouse', or specific GOA file name (default: human)",
+    )
+    parser.add_argument(
+        "--gaf",
+        type=Path,
+        default=None,
+        help="GO annotation file, used when --ontology go (default: "
+        "data/raw/goa_annotations/goa_<species>.gaf.gz). Point it at an archived "
+        "release (e.g. data/raw/goa_archive/goa_human.gaf.205.gz) to train on a "
+        "past snapshot",
+    )
+    parser.add_argument(
+        "--interpro",
+        type=Path,
+        default=None,
+        help="protein2ipr file defining the domain architectures (default: "
+        "data/interim/protein2ipr_<species>.dat.gz). Point it at a subset cut "
+        "from an archived InterPro release (extract_human_interpro.py --source "
+        "... --output ...) to train on past architectures",
     )
     parser.add_argument(
         "--ontology",
@@ -1041,10 +1075,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    # File paths - support different species
-    interpro_file = Path(f"data/interim/protein2ipr_{args.species}.dat.gz")
-
-    # Check domain annotations exist (shared across ontologies)
+    # Domain annotations (shared across ontologies): --interpro, else the
+    # species' extract.
+    interpro_file = inputs.interpro_file
     if not interpro_file.exists():
         logger.error(f"{args.species.title()} InterPro file not found: {interpro_file}")
         logger.error(f"Please extract {args.species} data from protein2ipr.dat.gz")

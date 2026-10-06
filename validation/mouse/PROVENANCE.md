@@ -38,10 +38,10 @@ uv run python extract_human_interpro.py --species mouse
 curl -o data/raw/goa_archive/goa_mouse.gaf.191.gz \
   https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/MOUSE/goa_mouse.gaf.191.gz
 
-# 2. Train on t0. `--species mouse_t0_2021` resolves to the symlinks
-#    goa_mouse_t0_2021.gaf.gz -> goa_mouse.gaf.191.gz and
-#    protein2ipr_mouse_t0_2021.dat.gz -> protein2ipr_mouse.dat.gz
-uv run python run_dcgo_human.py --species mouse_t0_2021 --num-cores 8 \
+# 2. Train on t0: the archived GAF, the current mouse domain subset (the
+#    --interpro default for --species mouse)
+uv run python run_dcgo_human.py --species mouse \
+    --gaf data/raw/goa_archive/goa_mouse.gaf.191.gz --num-cores 8 \
     --output-dir results_mouse_t0_2021
 
 # 3. Score against t1

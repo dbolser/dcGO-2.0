@@ -1227,6 +1227,34 @@ uv run python validation/check_metric_conventions.py \
     --run-dir results/ablation-replacedby/ipr_manual
 ```
 
+### Regenerating a cell, and the t0 InterPro rerun
+
+Each rung is the command its manifest records, with the training GAF passed
+explicitly (the committed runs read it through a link at the default GAF path,
+which is why their `gaf` input carries the current-release `source_url`; the
+SHA-256 `69ae7d90…` is the identity):
+
+```bash
+uv run python run_dcgo_human.py --num-cores 8 \
+    --output-dir results/ablation-replacedby/ipr_manual/<rung> <rung flags> \
+    --gaf data/raw/goa_archive/goa_human.gaf.205.gz
+uv run python validation/ablation.py \
+    --t0-gaf data/raw/goa_archive/goa_human.gaf.205.gz \
+    --t1-gaf data/raw/goa_annotations/goa_human.gaf.gz \
+    --run-dir results/ablation-replacedby/ipr_manual --output-dir <eval dir>
+```
+
+These cells still read **current** domain architectures
+(`protein2ipr_human.dat.gz`, InterPro of 2026-07-22) in training and in the
+transfer step — temporal look-ahead on the domain side (TODO.md P0).
+`scripts/run_t0_interpro_ablation.py` reruns the `ipr_manual` cell on InterPro
+85.0 (2021-04-08, the last release before GOA 205): it cuts a human subset of
+the archived `protein2ipr` selected by the t0 *and* t1 GAFs, runs the nine
+recorded rung commands with `--gaf`/`--interpro` added, and evaluates into
+`validation/ablation_cells/ipr_manual_t0interpro/`. `validation/ablation.py`
+refuses to score a rung whose manifest records a different `protein2ipr` than
+its `--interpro`. Results to follow.
+
 ## 5. Decisions to settle before writing the paper
 
 ### Held-out validation of the surprise score (2026-07-28) — DONE

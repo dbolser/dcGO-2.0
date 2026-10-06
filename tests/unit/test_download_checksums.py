@@ -51,3 +51,38 @@ class TestVerifyChecksum:
     def test_other_algorithms_supported(self, downloader, payload):
         digest = hashlib.md5(payload.read_bytes()).hexdigest()
         downloader.verify_checksum(payload, ("md5", digest))
+
+
+class TestInterpro85Group:
+    """The archived t0 InterPro release is opt-in, pinned, and lands where the
+    temporal benchmark's runbook reads it."""
+
+    def test_members_are_pinned_to_the_85_0_release(self, downloader):
+        from config.settings import config
+
+        for name in downloader.DATASET_GROUPS["interpro-85"]:
+            source = config.data_sources[name]
+            assert source.url.startswith(
+                "https://ftp.ebi.ac.uk/pub/databases/interpro/releases/85.0/"
+            )
+            assert source.subdir == "interpro_archive/85.0"
+            assert source.checksum_parts() is not None
+            assert source.size_bytes is not None
+            assert not source.required
+            assert name not in downloader.DEFAULT_DATASETS
+
+    def test_protein2ipr_is_checked_against_the_published_md5(self, downloader):
+        from config.settings import config
+
+        source = config.data_sources["interpro_85_protein2ipr"]
+        # The content of releases/85.0/protein2ipr.dat.gz.md5.
+        assert source.checksum_parts() == ("md5", "ad41fd5c4a8dc83303683a19a34ec0f1")
+
+    def test_files_keep_their_release_names(self, downloader):
+        from config.settings import config
+
+        names = {
+            downloader._filename_for(config.data_sources[name].url, name)
+            for name in downloader.DATASET_GROUPS["interpro-85"]
+        }
+        assert names == {"protein2ipr.dat.gz", "interpro2go", "entry.list"}
