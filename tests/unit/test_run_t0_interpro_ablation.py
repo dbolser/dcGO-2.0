@@ -102,6 +102,22 @@ def test_a_subset_already_cut_from_the_same_source_is_reused(tmp_path):
     assert "extract" in other
 
 
+def test_completed_rungs_are_not_rerun(tmp_path):
+    (tmp_path / "single").mkdir()
+    (tmp_path / "single" / "run_manifest_go.json").write_text('{"status": "completed"}')
+    (tmp_path / "supra").mkdir()  # interrupted: the manifest never finalised
+    (tmp_path / "supra" / "run_manifest_go.json").write_text('{"status": "running"}')
+
+    names = [
+        name
+        for name, _ in runbook.build_steps(
+            tmp_path / "src.dat.gz", tmp_path / "subset.dat.gz", tmp_path, tmp_path
+        )
+    ]
+    assert "single" not in names
+    assert names[names.index("supra") :] == [*runbook.RUNGS[1:], "eval"]
+
+
 def test_dry_run_prints_and_runs_nothing(tmp_path, capsys):
     run_dir = tmp_path / "runs"
     assert runbook.main(["--dry-run", "--run-dir", str(run_dir)]) == 0
