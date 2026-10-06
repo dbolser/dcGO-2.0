@@ -22,7 +22,9 @@ before it runs and logged to ``<run-dir>/<step>.log``:
 
 Run it from the repository root; paths are relative to it, and ``data/`` must
 hold the inputs. The md5 of the archived protein2ipr is verified first
-(``scripts/download_data.py --group interpro-85``).
+(``scripts/download_data.py --group interpro-85``). Resumable: a rung whose
+manifest says ``completed`` is not rerun — safe, because the evaluator refuses
+a rung trained on a different protein2ipr than ``--subset``.
 
 Dry run of the whole chain without the archive: pass the current subset as
 ``--source`` (with scratch ``--subset``/``--run-dir``/``--eval-dir``). A wider
@@ -45,6 +47,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
+from src.run_manifest import manifest_filename  # noqa: E402
 from src.universe_provenance import read_marker  # noqa: E402
 
 MANIFESTS = REPO / "validation" / "ablation_manifests"
@@ -75,10 +78,19 @@ def rung_command(manifest: Path, output_dir: Path, interpro: Path) -> list[str]:
     return [sys.executable, *args, "--gaf", str(T0_GAF), "--interpro", str(interpro)]
 
 
+def completed(output_dir: Path) -> bool:
+    """Whether a rung's run finished (its manifest is finalised)."""
+    manifest = output_dir / manifest_filename("go")
+    return (
+        manifest.exists()
+        and json.loads(manifest.read_text(encoding="utf-8"))["status"] == "completed"
+    )
+
+
 def build_steps(
     source: Path, subset: Path, run_dir: Path, eval_dir: Path
 ) -> list[tuple[str, list[str]]]:
-    """(log name, command) for every step, in order."""
+    """(log name, command) for every step still to run, in order."""
     steps = []
     if source == ARCHIVE:
         steps.append(
@@ -109,9 +121,10 @@ def build_steps(
             )
         )
     for rung in RUNGS:
-        steps.append(
-            (rung, rung_command(MANIFESTS / f"{rung}.json", run_dir / rung, subset))
-        )
+        if not completed(run_dir / rung):
+            steps.append(
+                (rung, rung_command(MANIFESTS / f"{rung}.json", run_dir / rung, subset))
+            )
     steps.append(
         (
             "eval",
