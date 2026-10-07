@@ -25,6 +25,17 @@ implementation.
   archived t0 InterPro/protein2ipr snapshot, or explicitly limit every claim to
   an annotation-temporal benchmark. This also closes the 31.9% universe loss in
   the all-species held-out arm.
+  **§4 ablation done on t0 architectures (2026-10-07).** The `ipr_manual`
+  cell was retrained and rescored on InterPro 85.0 (2021-04-08), with a
+  selection-control arm, and paired on the committed cohort
+  (`VALIDATION_PLAN.md` §4 "t0 InterPro architectures"). Base drops by up to
+  0.022 F_max (MF). No conclusion changes. Still open:
+  - the §2 headline benchmark, the multi-ontology breadth test, the
+    surprise-score held-out test, and the all-species and mouse arms still read
+    current `protein2ipr` (the code path exists: `--interpro`,
+    `extract_human_interpro.py --source`);
+  - GO-vocabulary look-ahead: seven of nine rungs train with `go-basic.obo`
+    2026-06-15 (propagation, parental background, retired-id remap).
 - [ ] **Correct phylogenetic non-independence (gene / UniRef50 collapse).**
   Protein-level pooling inflates all-species support by about 2.44× and half of
   associations rest on at most three UniRef50 clusters; the model-organism and

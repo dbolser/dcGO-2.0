@@ -1,0 +1,188 @@
+{
+  "analysis": {
+    "ontology": {
+      "annotation_inputs": [
+        "gaf"
+      ],
+      "hierarchy_inputs": [],
+      "key": "go",
+      "label": "go",
+      "name": "Gene Ontology",
+      "ontology_id": "GO",
+      "propagation": "go_dag",
+      "propagation_relations": [
+        "is_a",
+        "part_of"
+      ],
+      "relative_inference_enabled": false,
+      "supports_true_path": true,
+      "term_prefix": "GO:",
+      "true_path_enabled": false
+    },
+    "thresholds": {
+      "enable_supra_domains": true,
+      "evidence_filter": "manual",
+      "fdr_families": [
+        "single",
+        "supra"
+      ],
+      "fdr_method": "benjamini_hochberg",
+      "fdr_threshold": 0.01,
+      "fisher_alternative": "greater",
+      "ic_source": "direct",
+      "input_annotations_propagated": false,
+      "max_supra_domain_length": 3,
+      "min_domain_length": 10,
+      "min_ic": null,
+      "min_proteins_per_association": null,
+      "parental_background_min_size": 3,
+      "relative_inference_combination": null
+    }
+  },
+  "command": [
+    "/home/danbolser/Build/dcGO-2.0-wt/t0-interpro/.venv/bin/python3",
+    "run_dcgo_human.py",
+    "--num-cores",
+    "8",
+    "--output-dir",
+    "/home/danbolser/Build/dcGO-2.0/results/ablation-t0interpro/ipr_manual/supra",
+    "--gaf",
+    "data/raw/goa_archive/goa_human.gaf.205.gz",
+    "--interpro",
+    "/home/danbolser/Build/dcGO-2.0/data/interim/protein2ipr_human_t0_ipr85.dat.gz"
+  ],
+  "completed_at": "2026-10-07T09:13:22.380647+00:00",
+  "git": {
+    "available": true,
+    "branch": "t0-interpro-inputs",
+    "commit": "ac7485a81097fae331880065c994632cfa6742c5",
+    "dirty": false,
+    "untracked_files": 0
+  },
+  "inputs": [
+    {
+      "modified_at": "2026-10-07T09:11:26.842479+00:00",
+      "path": "/home/danbolser/Build/dcGO-2.0/data/interim/protein2ipr_human_t0_ipr85.dat.gz",
+      "role": "domain_annotations",
+      "sha256": "b99bbafcbc33568c7dd6fb6dac49412ac7ffafaa69261b807218bf971316f28c",
+      "size_bytes": 2668416
+    },
+    {
+      "modified_at": "2026-07-09T09:44:17.040277+00:00",
+      "path": "data/raw/goa_archive/goa_human.gaf.205.gz",
+      "release_metadata": {
+        "date_generated": "2021-04-21 13:14",
+        "gaf_version": "2.2",
+        "generated_by": "UniProt",
+        "go_version": "http://purl.obolibrary.org/obo/go/releases/2021-04-18/extensions/go-plus.owl"
+      },
+      "role": "gaf",
+      "sha256": "69ae7d90743400c6519a6bfe3a1b1578476585f151de39323bfd890cbae13d86",
+      "size_bytes": 8577421
+    }
+  ],
+  "outputs": [
+    {
+      "modified_at": "2026-10-07T09:13:22.220374+00:00",
+      "path": "/home/danbolser/Build/dcGO-2.0/results/ablation-t0interpro/ipr_manual/supra/domain_go_associations_significant.tsv",
+      "role": "significant_associations",
+      "sha256": "04717940a481e722fa459f5487934e5a19b59121356566ea9432b572d05bed0f",
+      "size_bytes": 21489331
+    },
+    {
+      "modified_at": "2026-10-07T09:13:22.279377+00:00",
+      "path": "/home/danbolser/Build/dcGO-2.0/results/ablation-t0interpro/ipr_manual/supra/domain_go_associations_top100.tsv",
+      "role": "top100",
+      "sha256": "976f9fac4232733a7840d6e2429c8a6b90008b26f894b359937a7cab815c70b8",
+      "size_bytes": 12026
+    }
+  ],
+  "parameters": {
+    "batch_size": 50000,
+    "chebi_obo": "data/raw/chebi/chebi_lite.obo",
+    "civic_evidence": "data/raw/civic/nightly-ClinicalEvidenceSummaries.tsv",
+    "doid_obo": "data/raw/disease_ontology/doid.obo",
+    "domain_key": "interpro",
+    "efo_obo": "data/raw/efo/efo.obo",
+    "enable_relative_inference": false,
+    "enable_supra_domains": true,
+    "enable_true_path": false,
+    "enzyme_dat": "data/raw/enzyme/enzyme.dat",
+    "evidence_filter": "manual",
+    "fb_genotype_phenotype": "data/raw/flybase/genotype_phenotype_data_fb_2026_02.tsv.gz",
+    "fbal_to_fbgn": "data/raw/flybase/fbal_to_fbgn_fb_2026_02.tsv.gz",
+    "fbbt_obo": "data/raw/flybase_ontology/fbbt.obo",
+    "fbcv_obo": "data/raw/flybase_ontology/fbcv.obo",
+    "fbgn_uniprot": "data/raw/flybase/fbgn_NAseq_Uniprot_fb_2026_02.tsv.gz",
+    "fdr_threshold": 0.01,
+    "gaf": "data/raw/goa_archive/goa_human.gaf.205.gz",
+    "go_ontology": "data/raw/go_ontology/go-basic.obo",
+    "gwas_associations": "data/raw/gwas_catalog/gwas-catalog-associations_ontology-annotated-full.zip",
+    "hpa_single_cell": "data/raw/hpa/rna_single_cell_type.tsv.zip",
+    "hpo_genes_to_phenotype": "data/raw/hpo/genes_to_phenotype.txt",
+    "hpo_obo": "data/raw/hpo/hp.obo",
+    "interpro": "/home/danbolser/Build/dcGO-2.0/data/interim/protein2ipr_human_t0_ipr85.dat.gz",
+    "keyword_list": "data/raw/uniprot_keywlist/keywlist.txt",
+    "mgi_genepheno": "data/raw/mgi_reports/MGI_GenePheno.rpt",
+    "mgi_marker_swissprot": "data/raw/mgi_reports/MRK_SwissProt_TrEMBL.rpt",
+    "min_ic": 0.0,
+    "min_support": 0,
+    "mondo_obo": "data/raw/mondo/mondo.obo",
+    "mp_obo": "data/raw/mp_ontology/mp.obo",
+    "ncit_obo": "data/raw/ncit/ncit.obo",
+    "num_cores": 8,
+    "oncotree_json": "data/raw/oncotree/oncotree_tumortypes.json",
+    "ontology": "go",
+    "output_dir": "/home/danbolser/Build/dcGO-2.0/results/ablation-t0interpro/ipr_manual/supra",
+    "permute_annotations": null,
+    "propagate_annotations": false,
+    "reactome_relations": "data/raw/reactome_relations/ReactomePathwaysRelation.txt",
+    "species": "human",
+    "subcell": "data/raw/uniprot_subcell/subcell.txt",
+    "syngo_zip": "data/raw/syngo/syngo1.3_complete_data.zip",
+    "uniprot_dat": "data/raw/uniprot_sprot_dat/uniprot_sprot.dat.gz",
+    "wb_anatomy": "data/raw/wormbase/anatomy_association.WS298.wb.gz",
+    "wb_phenotype": "data/raw/wormbase/phenotype_association.WS298.wb.gz",
+    "wbbt_obo": "data/raw/wormbase_ontology/wbbt.obo",
+    "wbphenotype_obo": "data/raw/wormbase_ontology/wbphenotype.obo",
+    "worm_idmapping": "data/raw/uniprot_idmapping/CAEEL_6239_idmapping.dat.gz",
+    "xref_db": null,
+    "xref_term_from_type": false,
+    "xref_type": null,
+    "zfa_obo": "data/raw/zfin_ontology/zfa.obo",
+    "zfin_phenotype": "data/raw/zfin/phenoGeneCleanData_fish.txt",
+    "zfin_uniprot": "data/raw/zfin/uniprot.txt"
+  },
+  "schema_version": "1.0",
+  "software": {
+    "dcgo_pipeline_version": "0.1.0",
+    "dependency_lock": {
+      "available": true,
+      "path": "uv.lock",
+      "sha256": "57e605b4882c7d51b2cd9000afa999c1c7ab56177e5c11a50d8d36b32bfedc9c",
+      "size_bytes": 386547
+    },
+    "executable": "/home/danbolser/Build/dcGO-2.0-wt/t0-interpro/.venv/bin/python3",
+    "platform": "Linux-6.8.0-100-generic-x86_64-with-glibc2.39",
+    "python_implementation": "CPython",
+    "python_version": "3.12.3"
+  },
+  "started_at": "2026-10-07T09:12:02.559685+00:00",
+  "status": "completed",
+  "summary": {
+    "bh_threshold_pvalue": {
+      "single": 1.4015190222725488e-06,
+      "supra": 9.307380316674168e-07
+    },
+    "domains": 88522,
+    "ontology": "go",
+    "propagated_annotations": 0,
+    "proteins": 18507,
+    "runtime_seconds": 9.75,
+    "significant_associations": 144823,
+    "terms": 16040,
+    "tests": 1419892880,
+    "tests_evaluated": 2694075
+  },
+  "working_directory": "/home/danbolser/Build/dcGO-2.0-wt/t0-interpro"
+}
