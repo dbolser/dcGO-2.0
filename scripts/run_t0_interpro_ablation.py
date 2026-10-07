@@ -12,7 +12,7 @@ before it runs and logged to ``<run-dir>/<step>.log``:
    architectures. (The current subset was selected by the t1 GAF's non-IEA
    proteins alone, a strict subset of this.) Skipped when the subset exists
    and its provenance marker records this exact extraction: the same source,
-   GAFs and evidence filter.
+   GAFs (by path and SHA-256) and evidence filter.
 2. **Train** the nine rungs: exactly the commands recorded in
    ``validation/ablation_manifests/<rung>.json``, with ``--output-dir`` moved
    under ``--run-dir`` and ``--gaf``/``--interpro`` added.
@@ -53,7 +53,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
-from src.run_manifest import manifest_filename  # noqa: E402
+from src.run_manifest import manifest_filename, sha256_file  # noqa: E402
 from src.universe_provenance import marker_path, read_marker  # noqa: E402
 
 MANIFESTS = REPO / "validation" / "ablation_manifests"
@@ -97,6 +97,17 @@ def completed(output_dir: Path) -> bool:
     )
 
 
+def selection_hashes() -> tuple[str, ...] | None:
+    """SHA-256 of the two selecting GAFs, or ``None`` if either is missing.
+
+    The t1 GAF sits at a current-release path a new download overwrites, so
+    a subset is reused only if the GAF *bytes* that selected it are unchanged.
+    """
+    if not (T0_GAF.exists() and T1_GAF.exists()):
+        return None
+    return (sha256_file(T0_GAF), sha256_file(T1_GAF))
+
+
 def build_steps(
     source: Path, subset: Path, run_dir: Path, eval_dir: Path
 ) -> list[tuple[str, list[str]]]:
@@ -115,6 +126,8 @@ def build_steps(
         and marker is not None
         and (marker.interpro_source, marker.selection_sources, marker.evidence_filter)
         == (str(source), (str(T0_GAF), str(T1_GAF)), EVIDENCE_FILTER)
+        and marker.selection_sha256 is not None
+        and marker.selection_sha256 == selection_hashes()
     )
     if extracting:
         steps.append(

@@ -64,6 +64,23 @@ class TestMarkerRoundTrip:
         marker_path(extract).write_text(json.dumps(payload))
         assert read_marker(extract).evidence_filter is None
 
+    def test_selection_hashes_read_back_in_source_order(self, extract):
+        write_marker(
+            extract,
+            selection_rule="goa",
+            selection_sources=["t0.gaf.gz", "t1.gaf.gz"],
+            interpro_source="protein2ipr.dat.gz",
+            n_accessions=2,
+            n_matched_lines=2,
+            tool="extract_human_interpro.py",
+            selection_sha256=["aa", "bb"],
+        )
+        assert read_marker(extract).selection_sha256 == ("aa", "bb")
+
+    def test_a_marker_from_before_the_hashes_reads_as_unknown(self, extract):
+        write_goa_marker(extract)
+        assert read_marker(extract).selection_sha256 is None
+
     def test_missing_marker_reads_as_none(self, extract):
         assert read_marker(extract) is None
 

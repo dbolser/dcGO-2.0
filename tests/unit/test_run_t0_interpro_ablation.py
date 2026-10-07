@@ -74,7 +74,22 @@ def test_the_archive_is_verified_and_the_subset_extracted(tmp_path):
     assert evaluate[evaluate.index("--cohort-interpro") + 1] == str(runbook.COHORT)
 
 
-def _cut(subset, source, gafs=(runbook.T0_GAF, runbook.T1_GAF), evidence="all"):
+#: Stand-ins for the two selecting GAFs' SHA-256s (the real files are not in CI).
+GAF_HASHES = ("t0-sha", "t1-sha")
+
+
+@pytest.fixture(autouse=True)
+def _gaf_hashes(monkeypatch):
+    monkeypatch.setattr(runbook, "selection_hashes", lambda: GAF_HASHES)
+
+
+def _cut(
+    subset,
+    source,
+    gafs=(runbook.T0_GAF, runbook.T1_GAF),
+    evidence="all",
+    hashes=GAF_HASHES,
+):
     """A subset on disk whose marker records how it was extracted."""
     from src.universe_provenance import write_marker
 
@@ -88,6 +103,7 @@ def _cut(subset, source, gafs=(runbook.T0_GAF, runbook.T1_GAF), evidence="all"):
         n_matched_lines=0,
         tool="extract_human_interpro.py",
         evidence_filter=evidence,
+        selection_sha256=hashes,
     )
 
 
@@ -107,17 +123,19 @@ def test_a_subset_cut_by_this_exact_extraction_is_reused(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "gafs,evidence",
+    "gafs,evidence,hashes",
     [
-        ((runbook.T0_GAF,), "all"),  # the t1-only no-knowledge proteins missing
-        ((runbook.T0_GAF, runbook.T1_GAF), "manual"),  # the extract default
-        ((runbook.T0_GAF, runbook.T1_GAF), None),  # marker predates the field
+        ((runbook.T0_GAF,), "all", GAF_HASHES),  # t1-only no-knowledge missing
+        ((runbook.T0_GAF, runbook.T1_GAF), "manual", GAF_HASHES),  # extract default
+        ((runbook.T0_GAF, runbook.T1_GAF), None, GAF_HASHES),  # predates the field
+        ((runbook.T0_GAF, runbook.T1_GAF), "all", ("t0-sha", "old-t1")),  # new t1
+        ((runbook.T0_GAF, runbook.T1_GAF), "all", None),  # predates the hashes
     ],
 )
-def test_a_subset_selected_differently_is_cut_again(tmp_path, gafs, evidence):
+def test_a_subset_selected_differently_is_cut_again(tmp_path, gafs, evidence, hashes):
     source = tmp_path / "protein2ipr.dat.gz"
     subset = tmp_path / "subset.dat.gz"
-    _cut(subset, source, gafs, evidence)
+    _cut(subset, source, gafs, evidence, hashes)
 
     assert "extract" in _names(source, subset, tmp_path)
 

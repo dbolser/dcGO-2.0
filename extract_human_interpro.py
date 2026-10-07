@@ -136,6 +136,7 @@ def main():
 
     # Parse GOA to get this species' protein IDs
     from src.goa_parser import parse_goa
+    from src.run_manifest import sha256_file
     from src.universe_provenance import (
         ProvenanceConflictError,
         ensure_overwrite_allowed,
@@ -209,6 +210,7 @@ def main():
         output_file,
         selection_rule="goa",
         selection_sources=goa_files,
+        selection_sha256=[sha256_file(goa_file) for goa_file in goa_files],
         interpro_source=interpro_file,
         evidence_filter=args.evidence_filter,
         n_accessions=n_accessions,
