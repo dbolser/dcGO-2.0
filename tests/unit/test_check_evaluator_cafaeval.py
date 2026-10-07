@@ -222,6 +222,25 @@ class TestManifestHashes:
         problems = ck.manifest_hash_mismatches(tmp_path / "m", {"gaf": gaf})
         assert len(problems) == 1 and problems[0].startswith("b.json: gaf")
 
+    def test_a_role_no_manifest_records_is_reported(self, tmp_path):
+        gaf = tmp_path / "t0.gaf"
+        gaf.write_text("x")
+        (tmp_path / "m").mkdir()
+        (tmp_path / "m" / "a.json").write_text(
+            json.dumps({"inputs": [{"role": "gaf", "sha256": ck.sha256(gaf)}]})
+        )
+        expected = {"gaf": gaf, "go_obo": gaf}
+        problems = ck.manifest_hash_mismatches(tmp_path / "m", expected)
+        assert problems == [f"no manifest under {tmp_path / 'm'} records role go_obo"]
+
+    def test_a_wrong_manifest_dir_does_not_pass(self, tmp_path):
+        gaf = tmp_path / "t0.gaf"
+        gaf.write_text("x")
+        problems = ck.manifest_hash_mismatches(tmp_path / "missing", {"gaf": gaf})
+        assert problems == [
+            f"no manifest under {tmp_path / 'missing'} records role gaf"
+        ]
+
 
 class TestAgainstCafaeval:
     """Score the fixture with cafaeval and require our numbers back."""

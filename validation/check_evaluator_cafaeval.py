@@ -255,19 +255,27 @@ def manifest_hash_mismatches(
 ) -> list[str]:
     """Inputs whose sha256 differs from what the training runs recorded.
 
-    ``expected`` maps a manifest input ``role`` (``gaf``, ``go_obo``) to the file
-    this check reads for it.
+    ``expected`` maps a manifest input ``role`` (``gaf``, ``go_obo``,
+    ``domain_annotations``) to the file this check reads for it. A role no
+    manifest records is a problem too — a wrong or empty ``manifest_dir``
+    would otherwise pass without comparing anything.
     """
     hashes = {role: sha256(path) for role, path in expected.items()}
     problems = []
+    seen: set[str] = set()
     for manifest in sorted(manifest_dir.glob("*.json")):
         for entry in json.loads(manifest.read_text()).get("inputs", []):
             want = hashes.get(entry.get("role"))
-            if want is not None and entry.get("sha256") != want:
+            if want is None:
+                continue
+            seen.add(entry["role"])
+            if entry.get("sha256") != want:
                 problems.append(
                     f"{manifest.name}: {entry['role']} {entry['sha256'][:12]} "
                     f"!= {expected[entry['role']]} {want[:12]}"
                 )
+    for role in sorted(set(expected) - seen):
+        problems.append(f"no manifest under {manifest_dir} records role {role}")
     return problems
 
 
@@ -453,8 +461,15 @@ def main() -> int:  # pragma: no cover - I/O wiring
     args = parser.parse_args()
     ic_floors = [0.0, 2.0, 4.0]
 
+    # The t1 GAF is not a training input, so no manifest records it; the
+    # committed-metrics gate below is what catches a different one.
     problems = manifest_hash_mismatches(
-        args.manifest_dir, {"gaf": args.t0_gaf, "go_obo": args.go_ontology}
+        args.manifest_dir,
+        {
+            "gaf": args.t0_gaf,
+            "go_obo": args.go_ontology,
+            "domain_annotations": args.interpro,
+        },
     )
     problems += abl.run_setting_mismatches(
         args.run_dir,
@@ -465,7 +480,7 @@ def main() -> int:  # pragma: no cover - I/O wiring
         for problem in problems:
             logger.error(f"Input mismatch — {problem}")
         return 1
-    logger.info(f"✓ t0 GAF and GO ontology match {args.manifest_dir}")
+    logger.info(f"✓ t0 GAF, GO ontology and domain file match {args.manifest_dir}")
 
     # --------------------------------------------- our side, as ablation.py --
     inputs = abl.load_benchmark_inputs(
