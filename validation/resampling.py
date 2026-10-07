@@ -183,6 +183,61 @@ def _auprc_from_curve(precision: np.ndarray, recall: np.ndarray) -> float:
     return area
 
 
+@dataclass(frozen=True)
+class PanelCurve:
+    """The CAFA curves of a panel, one value per threshold (shape ``(T,)``).
+
+    ``precision`` is averaged over the proteins with at least one prediction at
+    the cutoff, ``recall``, ``ru`` and ``mi`` over the whole cohort;
+    ``coverage`` is the fraction of the cohort with at least one prediction.
+    """
+
+    precision: np.ndarray
+    recall: np.ndarray
+    f: np.ndarray
+    coverage: np.ndarray
+    ru: np.ndarray
+    mi: np.ndarray
+    s: np.ndarray
+    #: fraction of the cohort with a prediction at any threshold
+    coverage_any: float
+
+
+def panel_curve(panel: EvaluationPanel, index: np.ndarray | None = None) -> PanelCurve:
+    """Per-threshold CAFA curves for the (possibly resampled) rows in ``index``.
+
+    ``index`` as for :func:`panel_metrics`; the panel must be non-empty.
+    """
+    idx = np.arange(panel.n_proteins) if index is None else np.asarray(index)
+    n = len(idx)
+
+    n_pred = panel.n_pred[idx]  # (n, T)
+    has_pred = n_pred > 0
+    with np.errstate(divide="ignore", invalid="ignore"):
+        prec_contrib = np.where(has_pred, panel.tp[idx] / np.maximum(n_pred, 1), 0.0)
+    rec_contrib = panel.tp[idx] / panel.n_true[idx][:, None]
+
+    m = has_pred.sum(axis=0).astype(np.float64)  # (T,)
+    precision = np.where(m > 0, prec_contrib.sum(axis=0) / np.maximum(m, 1), 0.0)
+    recall = rec_contrib.sum(axis=0) / n
+
+    denom = precision + recall
+    f = np.where(denom > 0, 2 * precision * recall / np.maximum(denom, 1e-300), 0.0)
+
+    ru = panel.ru[idx].sum(axis=0) / n
+    mi = panel.mi[idx].sum(axis=0) / n
+    return PanelCurve(
+        precision=precision,
+        recall=recall,
+        f=f,
+        coverage=m / n,
+        ru=ru,
+        mi=mi,
+        s=np.sqrt(ru * ru + mi * mi),
+        coverage_any=float(has_pred.any(axis=1).sum() / n),
+    )
+
+
 def panel_metrics(
     panel: EvaluationPanel, index: np.ndarray | None = None
 ) -> dict[str, float]:
@@ -211,41 +266,24 @@ def panel_metrics(
             "coverage_at_fmax": 0.0,
             "coverage_any": 0.0,
         }
-    idx = np.arange(panel.n_proteins) if index is None else np.asarray(index)
-    n = len(idx)
-
-    n_pred = panel.n_pred[idx]  # (n, T)
-    has_pred = n_pred > 0
-    with np.errstate(divide="ignore", invalid="ignore"):
-        prec_contrib = np.where(has_pred, panel.tp[idx] / np.maximum(n_pred, 1), 0.0)
-    rec_contrib = panel.tp[idx] / panel.n_true[idx][:, None]
-
-    m = has_pred.sum(axis=0).astype(np.float64)  # (T,)
-    precision = np.where(m > 0, prec_contrib.sum(axis=0) / np.maximum(m, 1), 0.0)
-    recall = rec_contrib.sum(axis=0) / n
-
-    denom = precision + recall
-    f = np.where(denom > 0, 2 * precision * recall / np.maximum(denom, 1e-300), 0.0)
-    best = int(np.argmax(f))
-    f_max = float(f[best])
+    n = panel.n_proteins if index is None else len(index)
+    curve = panel_curve(panel, index)
+    best = int(np.argmax(curve.f))
+    f_max = float(curve.f[best])
     # Reference implementation starts at best_f = 0.0 / best_tau = 0.0 and only
     # improves on a strictly greater F, so an all-zero curve reports tau 0.0.
     f_max_tau = float(panel.thresholds[best]) if f_max > 0 else 0.0
-
-    ru = panel.ru[idx].sum(axis=0) / n
-    mi = panel.mi[idx].sum(axis=0) / n
-    s = np.sqrt(ru * ru + mi * mi)
-    s_best = int(np.argmin(s))
+    s_best = int(np.argmin(curve.s))
 
     return {
         "n_eval_proteins": n,
         "f_max": f_max,
         "f_max_tau": f_max_tau,
-        "s_min": float(s[s_best]),
+        "s_min": float(curve.s[s_best]),
         "s_min_tau": float(panel.thresholds[s_best]),
-        "auprc": _auprc_from_curve(precision, recall),
-        "coverage_at_fmax": float(m[best] / n),
-        "coverage_any": float(has_pred.any(axis=1).sum() / n),
+        "auprc": _auprc_from_curve(curve.precision, curve.recall),
+        "coverage_at_fmax": float(curve.coverage[best]),
+        "coverage_any": curve.coverage_any,
     }
 
 
