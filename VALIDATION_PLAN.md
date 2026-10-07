@@ -1036,6 +1036,120 @@ the strongest justification and should not be enabled by default merely for
 paper parity. The primary configuration must be pre-specified against an
 untouched final evaluation rather than selected from these cells.
 
+### Evaluator cross-check against CAFA-evaluator (2026-10-07)
+
+Our protein-centric metrics are home-grown (`temporal_benchmark.py` +
+`resampling.py`), so they were checked against the reference implementation,
+CAFA-evaluator (`cafaeval` 1.3.0, Piovesan et al. 2024; in the `dev`
+dependency group). `validation/check_evaluator_cafaeval.py` rebuilds the
+committed `ipr_manual` cell with `ablation.py`'s own functions — same cohort,
+truth, p-score transfer and IC floor — exports all 15 scored methods to CAFA
+format and scores them with `cafaeval` on the same `go-basic.obo` (sha256
+checked against `validation/ablation_manifests/`): 15 methods × 3 aspects ×
+3 IC floors = 135 cells, in `validation/evaluator_crosscheck.tsv` (ours,
+cafaeval, difference).
+
+**What cafaeval recomputes itself.** It gets the *unpropagated* 2026 truth and
+propagates it over its own parse of the ontology (`is_a` + `part_of`, obsolete
+terms dropped). It max-propagates our predictions again. Our IC goes in as its
+information-accretion weights. It has no IC floor, so the floor is applied
+through its `Graph.toi` (the term set its `-no_orphans` option restricts),
+and each floor gets its own ground-truth file holding only that floor's
+cohort.
+
+**It found two bugs in our evaluator, both fixed, with every §4 table
+regenerated:**
+
+1. **The threshold sweep missed the top of the score range.** It took 51
+   quantiles of the pooled scores. The naive baseline gives every protein the
+   same term frequencies, nearly all near zero, so no cutoff fell between
+   ~0.03 and the top term. Naive's F_max was read off the wrong operating
+   point (IC≥0: BP 0.093, MF 0.472, CC 0.368; now 0.245, 0.719, 0.593).
+   The sweep now adds 101 evenly spaced values. Against the exact curve
+   (every distinct score a threshold) the largest error over the 90
+   non-sensitivity cells fell from 0.247 to 0.004 in F_max, 0.086 to 0.0009
+   in AUPRC and 3.2 to 0.12 in S_min (measured before fix 2). The rungs barely moved (F_max ≤ +0.005
+   here); the naive comparison did — see the correction under §2.
+2. **Predictions on retired GO ids were dropped.** Runs trained without
+   input propagation skip the pipeline's input cleanup, so five rungs
+   (`single`, `supra`, `supra_relative`, `supra_output`,
+   `supra_relative_output`) still carry 2021 ids: 6.6% of `supra`'s
+   associations. Scoring dropped them, after they had already taken part in
+   the p-score's per-protein scaling; cafaeval maps merged ids to the live
+   term. They are now mapped (alt_id, then replaced_by) before transfer, as
+   the GAFs already were. None of the report's four configurations is
+   affected.
+
+**After the fixes, the implementations agree:**
+
+| check | result (135 cells) |
+|---|---|
+| propagated truth, term by term | 0 mismatches |
+| predictions after cafaeval's propagation, term by term | 0 mismatches |
+| cohort size per cell | identical |
+| precision / recall / coverage / S curves, at our own thresholds and on a 0.001 grid | max \|Δ\| 5.7 × 10⁻⁹ |
+
+**Reported metrics** (cafaeval run as `cafa_eval` runs it: `th_step` 0.001,
+ten times finer than its default, zero-coverage thresholds dropped) differ only
+through the threshold set:
+
+- **F_max:** max |Δ| 0.0027 in the 118 cells whose optimum is at τ ≥ 0.001 —
+  threshold-sampling noise, in both directions (cafaeval higher in 68, ours in
+  28). In the other 17 the optimum is below 0.001 (8 of them at exactly 0),
+  which a CAFA grid cannot reach, and ours is higher by up to 0.026 (CC IC≥2,
+  `supra_input`).
+- **S_min:** within 0.8% everywhere (max |Δ| 0.26 bits on values of 13–90).
+- **Coverage at F_max:** identical wherever the two pick the same τ.
+- **AUPRC:** cafaeval computes none; our trapezoid on its curve is lower in
+  129 of 135 cells (by up to 0.040 for dcGO, 0.134 for naive), because a
+  curve that starts at τ = 0.001 never reaches the high-recall end ours does.
+
+**Convention differences, kept and documented rather than "fixed":**
+
+- **τ = 0 and the range below `th_step`.** The p-score's per-protein min-max
+  scaling gives each protein's weakest term exactly 0, and when one
+  association dominates a protein, most of its terms land below 0.001. Our
+  sweep starts at the minimum score, so "predict every transferred term" is an
+  operating point; in CAFA format a zero score means "not predicted" and the
+  grid starts at `th_step`.
+- **S weights.** Ours are marginal IC (−log₂ of a term's propagated t0
+  frequency); CAFA's S_min uses information accretion (IA, conditional on the
+  parents). Handing our IC to cafaeval as IA reproduces our S exactly, which
+  checks the arithmetic, not the choice. Marginal IC counts an ancestor
+  chain's information again at every level, so our S_min values are larger
+  than and not comparable to published CAFA S_min.
+- **cafa_eval's own best-S table** (1.3.0) minimises the *unweighted*
+  (term-count) S even when an IA file is given; the comparison above uses its
+  IA-weighted `s_w` column.
+- **Precision, recall and coverage** follow CAFA exactly: precision averaged
+  over the proteins with ≥ 1 prediction at τ, recall over the whole cohort
+  (unpredicted proteins count as zero), coverage the share with a prediction.
+- **AUPRC:** trapezoid over (recall, precision) points, the higher precision
+  kept at tied recall, no extrapolation to recall 0 or 1, no interpolated
+  precision.
+- **The IC floor changes the cohort.** It restricts truth and predictions to
+  terms with IC ≥ the floor; proteins left with no truth leave the cohort
+  (proteins left with no prediction stay, as misses). Cohorts at IC 0/2/4 are
+  BP 298/298/292, MF 406/159/151, CC 436/298/210, so floors are not compared
+  on the same proteins.
+
+**Found on the way, not changed here:** in the runs without input
+propagation, relative inference keeps 79% (8,544) of the associations on
+retired ids against 19% of all associations — 28% of `supra_relative`'s
+table. Consistent with a term the 2026 DAG does not contain having no parents
+and so skipping the relative test, as roots do. A training-side question for
+the non-input rungs; it does not touch the report's configurations.
+
+Regenerate (≈ 50 min on 8 × 2 cores):
+
+```bash
+uv run python validation/check_evaluator_cafaeval.py \
+    --t0-gaf data/raw/goa_archive/goa_human.gaf.205.gz \
+    --t1-gaf data/raw/goa_annotations/goa_human.gaf.gz \
+    --run-dir results/ablation-replacedby/ipr_manual \
+    --work-dir results/ablation-cafaeval/ipr_manual
+```
+
 ## 5. Decisions to settle before writing the paper
 
 ### Held-out validation of the surprise score (2026-07-28) — DONE
