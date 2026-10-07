@@ -46,7 +46,11 @@ Two comparisons
    S_min is the minimum of its IA-weighted ``s_w`` column: cafaeval 1.3.0's own
    ``evaluation_best_s`` minimises the *unweighted* (term-count) S even when an
    IA file is given. cafaeval reports no area, so AUPRC is our trapezoid
-   (``temporal_benchmark.auprc``) over its curve.
+   (``temporal_benchmark.auprc``) over its curve. That curve has no
+   zero-coverage row, so it lacks the predict-nothing point (recall 0,
+   precision 0) that anchors our area at the origin; the anchor, not the
+   missing ``tau < th_step`` range, is nearly all of the AUPRC difference
+   (``check_metric_conventions.py`` reports it as ``auprc_anchor``).
 
 Regeneration::
 

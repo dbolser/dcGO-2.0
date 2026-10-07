@@ -508,7 +508,12 @@ def auprc(curve: list[tuple[float, float, float]]) -> float:
 
     ``curve`` is a list of ``(threshold, precision, recall)`` points. Points are
     sorted by increasing recall and integrated; precision is treated as a
-    function of recall. Endpoints are not extrapolated.
+    function of recall. No point is invented, but the sweep's predict-nothing
+    sentinel (:func:`_candidate_thresholds`) is a point of its own at recall 0,
+    precision 0, so on a sweep's curve the area runs to the origin: a triangle
+    of ``r_top * p_top / 2`` below the strictest real cutoff. It is up to 0.13
+    for the naive baseline in §4 (``check_metric_conventions.py`` measures it).
+    Nothing is extrapolated towards recall 1.
     """
     pts = sorted(((r, p) for _t, p, r in curve))
     # collapse duplicate recall values to their max precision (upper envelope)
