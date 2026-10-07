@@ -49,6 +49,17 @@ settings, particularly for higher-information GO terms. See the AUPRC note in
 > three aspects and at every floor in CC; (c) the hierarchy stages separate cleanly: **relative inference is the main
 > negative component, output propagation is mostly neutral-to-helpful, and input
 > propagation rescues relative-inference configurations.** See §4.
+>
+> **Correction (2026-10-07, §4 evaluator cross-check).** Every naive number in
+> this section, and (b) above, came from a threshold sweep that left the top
+> of naive's score range unsampled, so naive's F_max was understated — by up
+> to 0.25. Rerun on the current §4 cohort with the sweep fixed, naive's F_max
+> at IC≥0/2/4 is BP 0.245/0.139/0.047, MF 0.719/0.076/0.075, CC
+> 0.593/0.272/0.104. Against it, the supra model is significantly ahead on
+> F_max only in BP and MF at IC≥2 and IC≥4; naive is significantly ahead at
+> IC≥0 in MF and CC and in CC at IC≥2, and BP at IC≥0 and CC at IC≥4 are
+> ties. "Beats naive on F_max on informative terms" therefore holds for BP
+> and MF, not for CC. The §2 tables below were not regenerated.
 
 ### Next steps (as of 2026-07-09, after the §2 benchmark + method audit)
 
@@ -270,6 +281,14 @@ snapshots fetched via `scripts/download_data.py --goa-archive <version>`.
       third of the cohort.
 
 ### Results — 2021→2026 temporal split (2026-07-09, p-score transfer)
+
+> **Correction (2026-10-07).** The naive F_max and AUPRC columns below are
+> wrong: the threshold sweep that produced them left the top of naive's score
+> range unsampled (see §4, "Evaluator cross-check against CAFA-evaluator").
+> Corrected naive numbers on the current cohort are in the correction under
+> "Where §2 landed" above; the read-out below about naive is superseded. The
+> dcGO columns came from the same sweep; on the §4 cohort the fix moved the
+> equivalent configuration's F_max by at most 0.005.
 
 No-knowledge benchmark sizes (IC≥0): **BP 324 / MF 418 / CC 572** proteins (a
 leak-free gate on training evidence — much smaller and cleaner than the earlier
@@ -935,7 +954,9 @@ applies the training's retired-id cleanup (`alt_id`, `replaced_by`) to both
 GAFs, and takes `--evidence-filter` so the no-knowledge cohort and IC are
 built from the evidence each cell trained on (it refuses to run if a rung's
 manifest disagrees). Both gaps had let proteins with 2021 knowledge into the
-cohort.
+cohort. It was regenerated again on 2026-10-07, after the CAFA-evaluator
+cross-check (end of this section) found that the threshold sweep left the
+sparse top of the score range unsampled; every number below is from that run.
 
 ### Design
 
@@ -983,27 +1004,28 @@ improves significantly in two.
 
 The three hierarchy stages do not behave as one component:
 
-- **Input propagation is context-dependent.** Added directly to supra it is
-  mixed: F_max rises in six of nine cells (two significant), AUPRC falls in
-  six (none significant). Added to relative inference plus output
-  propagation, it improves F_max in all nine cells (all significant) and
-  AUPRC in all nine (eight significant).
+- **Input propagation is context-dependent.** Added directly to supra it
+  helps a little: F_max rises in six of nine cells (two significant), AUPRC
+  in seven (one significant). Added to relative inference plus output
+  propagation, it improves F_max and AUPRC in all nine cells, all
+  significantly.
 - **Relative inference is the main negative component on this benchmark.**
   Added directly to supra, it lowers F_max and AUPRC in all nine cells,
-  significantly in eight. Added to input plus output propagation, it lowers
+  significantly in eight and nine. Added to input plus output propagation, it lowers
   F_max in eight of nine cells (five significant) and AUPRC in eight of nine
   (all eight significant).
 - **Output True Path propagation is not uniformly harmful.** Added directly to
   supra, F_max rises in six of nine cells and is significant in three; AUPRC is
-  mixed (four up, five down, one significant each way). Added after input
+  mixed (five up, two significantly; four down, one significantly). Added after input
   propagation and relative inference, it raises F_max and AUPRC in six of nine
   cells, significantly in two and three respectively.
 
 There is no single winning configuration across all cells. The full
 paper-parity pipeline is best only for MF at IC 0. Input plus output
-propagation is best for BP and CC at IC 0 on both metrics, and on AUPRC in six
+propagation is best for BP and CC at IC 0 on both metrics, and on AUPRC in seven
 of nine cells; input propagation alone has the best F_max for BP at IC 2/4 and
-MF at IC 4. Single domains remain best for CC at IC 4 on both metrics.
+MF at IC 4. Single domains remain best for CC at IC 4 on F_max (output
+propagation alone, narrowly, on AUPRC).
 
 ### Decision
 

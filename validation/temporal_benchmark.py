@@ -359,13 +359,23 @@ def precision_recall_at_threshold(
     return precision, recall, m
 
 
-def _candidate_thresholds(pred_scores: PredScores, n_points: int = 51) -> list[float]:
-    """Threshold sweep at *observed* score cutoffs, plus a predict-nothing endpoint.
+def _candidate_thresholds(
+    pred_scores: PredScores, n_points: int = 51, n_grid: int = 101
+) -> list[float]:
+    """Threshold sweep: score quantiles, an even value grid, and a predict-nothing endpoint.
 
-    Cutoffs are drawn from the score distribution (quantiles of the observed
-    scores), not spaced evenly over the value range: for skewed scores like
-    ``-log10(p)`` a value-linspace wastes points in the empty high range and can
-    miss the cutoff that separates a useful term from a slightly lower false one.
+    Two samplings, because each misses what the other catches. Quantiles of the
+    observed scores put cutoffs where the predictions are dense: for skewed
+    scores like ``-log10(p)`` a value grid alone wastes points in the empty high
+    range and can miss the cutoff that separates a useful term from a slightly
+    lower false one. But quantiles alone leave the sparse upper tail unsampled,
+    and that is where a ranking's best cutoff can sit: the naive baseline gives
+    every protein the same term frequencies, nearly all close to zero, so the
+    quantiles had no cutoff between ~0.03 and the single top term and its F_max
+    was read off the wrong operating point (BP at IC >= 0: 0.093 instead of
+    0.246). ``n_grid`` evenly spaced values over ``[min, max]`` — CAFA's 0.01
+    step when scores span [0, 1] — keep the whole range resolved.
+
     A sentinel strictly above the maximum is always appended so ``S_min`` (and
     ``F_max``) can evaluate "predict nothing" when every prediction is a high
     false positive.
@@ -382,8 +392,10 @@ def _candidate_thresholds(pred_scores: PredScores, n_points: int = 51) -> list[f
     # where the mass is. Keeps the sweep cheap while tracking the distribution.
     xs = sorted(all_scores)
     step = (len(xs) - 1) / (n_points - 1)
-    sampled = sorted({xs[round(i * step)] for i in range(n_points)})
-    return sampled + [sentinel]
+    sampled = {xs[round(i * step)] for i in range(n_points)}
+    lo = xs[0]
+    grid = {lo + (hi - lo) * i / (n_grid - 1) for i in range(n_grid)}
+    return sorted(sampled | grid) + [sentinel]
 
 
 def pr_curve(
