@@ -109,7 +109,7 @@ def main():
     parser.add_argument(
         "--source",
         type=Path,
-        default=Path("data/raw/interpro_mappings/protein2ipr.dat.gz"),
+        default=None,
         help="protein2ipr file to filter, e.g. an archived release "
         "(default: data/raw/interpro_mappings/protein2ipr.dat.gz)",
     )
@@ -118,7 +118,8 @@ def main():
         type=Path,
         default=None,
         help="Output path (default: data/interim/protein2ipr_<species>.dat.gz). "
-        "The selecting accession list is written beside it",
+        "The selecting accession list is written beside it. Required with "
+        "--source or --gaf",
     )
     parser.add_argument(
         "--force",
@@ -128,6 +129,10 @@ def main():
         "extract from scripts/extract_species_interpro.py)",
     )
     args = parser.parse_args()
+    # The default extract is every run's and evaluator's default --interpro;
+    # a subset of another release or selection must not replace it unasked.
+    if (args.source or args.gaf) and not args.output:
+        parser.error("--source and --gaf require an explicit --output")
 
     # Parse GOA to get this species' protein IDs
     from src.goa_parser import parse_goa
@@ -180,7 +185,7 @@ def main():
     logger.info(
         f"Step 2: Extracting {args.species} protein annotations from InterPro..."
     )
-    interpro_file = args.source
+    interpro_file = args.source or Path("data/raw/interpro_mappings/protein2ipr.dat.gz")
     if not interpro_file.exists():
         logger.error(f"InterPro mappings file not found: {interpro_file}")
         logger.error(

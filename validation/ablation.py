@@ -223,9 +223,11 @@ def selection_stage_counts(
     has-a-domain restriction; ``benchmark_with_domains`` is the one actually
     scored. Both are ``{aspect: {protein: truth}}``. ``transfer_proteins``,
     given when the cohort comes from another protein2ipr than the transfer
-    step, adds how many cohort proteins have no architecture to transfer
-    through (scored as misses).
+    step, adds the transfer file's own protein count and how many cohort
+    proteins have no architecture to transfer through (scored as misses);
+    ``all_architecture_proteins`` is then the cohort file's.
     """
+    transfer = set(transfer_proteins) if transfer_proteins is not None else None
     rows: list[dict] = [
         {
             "stage": "t0_annotated_proteins",
@@ -253,9 +255,28 @@ def selection_stage_counts(
             "n_proteins": len(set(all_architecture_proteins)),
             "n_dropped_vs_ic0": "-",
             "pct_of_ic0": "-",
-            "note": "proteins with >=1 InterPro domain (predictable at all by a domain method)",
+            "note": (
+                "proteins with >=1 InterPro domain in --cohort-interpro "
+                "(the file that selects the scored cohort)"
+                if transfer is not None
+                else "proteins with >=1 InterPro domain (predictable at all by "
+                "a domain method)"
+            ),
         },
     ]
+    if transfer is not None:
+        rows.append(
+            {
+                "stage": "transfer_proteins_with_domains",
+                "aspect": "-",
+                "min_ic": "-",
+                "n_proteins": len(transfer),
+                "n_dropped_vs_ic0": "-",
+                "pct_of_ic0": "-",
+                "note": "proteins with >=1 InterPro domain in --interpro "
+                "(predictable at all by this run's transfer step)",
+            }
+        )
     for aspect in ("BP", "MF", "CC"):
         rows.append(
             {
@@ -279,8 +300,7 @@ def selection_stage_counts(
                 "note": "the scored cohort before any IC floor",
             }
         )
-        if transfer_proteins is not None:
-            transfer = set(transfer_proteins)
+        if transfer is not None:
             rows.append(
                 {
                     "stage": "no_knowledge_without_transfer_architectures",

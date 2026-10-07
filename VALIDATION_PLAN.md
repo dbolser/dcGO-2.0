@@ -1314,11 +1314,18 @@ share one cohort, one IC table and one naive baseline. Both checks passed.
 | CC 2 | 0.194 / 0.193 / 0.190 | −0.004 (−0.010, +0.002) | 0.058 / 0.058 / 0.054 | −0.004\* (−0.008, −0.001) |
 | CC 4 | 0.128 / 0.128 / 0.126 | −0.001 (−0.012, +0.005) | 0.036 / 0.036 / 0.031 | −0.005\* (−0.010, −0.001) |
 
-- **Protein selection moves nothing material.** Control − baseline is
+- **Protein selection barely moves the estimates.** Control − baseline is
   within ±0.003 for Base, and within −0.003 to +0.008 (F_max) and −0.001 to
   +0.005 (AUPRC) across all four configurations. A few of these differences
   are significant only because the two arms are almost identical, so the
-  intervals are very narrow.
+  intervals are very narrow. It does move borderline significance calls:
+  9 of the control arm's 414 paired calls differ from the committed cell's
+  (22 for the t0 arm), none with a change of sign. Two are supra − single
+  F_max, a significant loss in the control arm at MF IC 0 (−0.012, 95% CI
+  −0.022 to −0.001) and CC IC 2 (−0.004, −0.010 to −0.001); no supra − single
+  F_max cell is significant in the baseline or t0 arm. A single cell's
+  significance call is that fragile; the patterns below are what the arms
+  support.
 - **Dating the architectures costs a little, mostly in MF.** Across the four
   configurations, t0 − control is lower in 32 of 36 F_max comparisons
   (11 significant, none significantly higher). It is lower in 36 of 36 AUPRC
@@ -1350,17 +1357,27 @@ share one cohort, one IC table and one naive baseline. Both checks passed.
   AUPRC.
 
 **What this does and does not remove.** It removes the domain-side look-ahead
-from this one cell: training and transfer both read InterPro 85.0, released
-13 days before GOA 205. It does **not** remove the vocabulary look-ahead
-described above. Seven of the nine rungs still train with `go-basic.obo`
-2026-06-15 for propagation and the parental background, and retired t0 ids are
-remapped to their 2026 successors. The evaluator also uses that ontology for
-truth propagation, IC and aspects, as CAFA does. The other temporal analyses
-(§2 headline benchmark, multi-ontology breadth, surprise-score held-out test,
-all-species and mouse arms) still read current `protein2ipr`.
+from training and transfer in this one cell: both read InterPro 85.0, released
+13 days before GOA 205. Which proteins are scored still depends on the current
+release, because the cohort is the committed cell's (a domain in the 2026
+`protein2ipr`). That biases against t0 (its 19 / 16 / 14 misses); the
+own-cohort run is free of it and makes the same significance calls for
+Base → Base + relative in 9/9 cells on both metrics. It does **not** remove
+the vocabulary look-ahead described above. Seven of the nine rungs still train
+with `go-basic.obo` 2026-06-15 for propagation and the parental background,
+and retired t0 ids are remapped to their 2026 successors. The evaluator also
+uses that ontology for truth propagation, IC and aspects, as CAFA does. The
+other temporal analyses (§2 headline benchmark, multi-ontology breadth,
+surprise-score held-out test, all-species and mouse arms) still read current
+`protein2ipr`.
 
-Regeneration. The two new arms' runs (`run_dcgo_human.py` unchanged since)
-are the runbook's:
+Regeneration. The two new arms' runs are the runbook's. Their 18 rung
+manifests record commit `ac7485a`, the pre-rebase twin of `613ead2`, which is
+on no branch. `run_dcgo_human.py`, `src/` and `config/` are byte-identical
+between the two; `uv.lock` differs only by #74's dev-group `cafaeval` entry,
+so the manifests' `uv.lock` hash (`57e605…`) is `ac7485a`'s. Since then the
+only changes there are a comment in `config/settings.py` and the extract
+sidecar's `evidence_filter` field, which training does not read.
 
 ```bash
 uv run python scripts/run_t0_interpro_ablation.py               # t0 arm

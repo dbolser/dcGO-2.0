@@ -169,9 +169,21 @@ class TestSelectionStageCounts:
         }
         assert missing == {"BP": 1, "MF": 0, "CC": 0}
 
+    def test_the_cohort_and_transfer_files_are_counted_separately(self):
+        # The domain row is the cohort file's; the transfer file gets its own.
+        rows = {
+            r["stage"]: r
+            for r in _rows(transfer_proteins=["P1", "P2", "P3"])
+            if r["aspect"] == "-"
+        }
+        assert rows["proteins_with_domains"]["n_proteins"] == 4
+        assert "--cohort-interpro" in rows["proteins_with_domains"]["note"]
+        assert rows["transfer_proteins_with_domains"]["n_proteins"] == 3
+
     def test_no_transfer_row_when_the_cohort_is_the_transfer_file(self):
         stages = {r["stage"] for r in _rows()}
         assert "no_knowledge_without_transfer_architectures" not in stages
+        assert "transfer_proteins_with_domains" not in stages
 
     def test_empty_aspects_are_still_reported_as_zero(self):
         rows = [
