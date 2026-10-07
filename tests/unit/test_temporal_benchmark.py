@@ -313,6 +313,15 @@ class TestAUPRC:
     def test_single_point_is_zero(self):
         assert tb.auprc([(0.0, 0.5, 0.5)]) == 0.0
 
+    def test_predict_nothing_point_anchors_the_area_at_the_origin(self):
+        # The sweep's sentinel predicts nothing: recall 0, precision 0. The
+        # trapezoid then runs to it from the strictest real cutoff.
+        pred = {"P1": {"GO:a": 0.9, "GO:b": 0.5}}
+        true = {"P1": {"GO:a"}}
+        curve = tb.pr_curve(pred, true)
+        assert curve[-1][1:] == (0.0, 0.0)
+        assert tb.auprc(curve) == pytest.approx(1.0 * 1.0 / 2)
+
 
 class TestShuffleDeterminism:
     def test_seed_is_deterministic(self):

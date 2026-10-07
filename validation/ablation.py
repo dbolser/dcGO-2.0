@@ -558,13 +558,26 @@ def floor_cell(
     return tb.filter_by_ic(truth, ic, min_ic), pred_f, tb._candidate_thresholds(pred_f)
 
 
+def bootstrap_seed(seed: int, aspect: str, min_ic: float) -> int:
+    """The paired bootstrap's seed for one aspect x IC-floor cell.
+
+    Derived from ``--seed`` alone, so a re-analysis of the committed cells
+    (``check_metric_conventions.py``) can score exactly the resamples their
+    intervals were computed on.
+    """
+    import numpy as np
+
+    rng = np.random.default_rng(seed)
+    per_aspect = {a: int(rng.integers(0, 2**31 - 1)) for a in ("BP", "MF", "CC")}
+    return per_aspect[aspect] + int(min_ic * 1000)
+
+
 # --------------------------------------------------------------------------- #
 # Driver                                                                       #
 # --------------------------------------------------------------------------- #
 def main() -> int:  # pragma: no cover - I/O wiring
     import argparse
 
-    import numpy as np
     import pandas as pd
     from loguru import logger
 
@@ -697,10 +710,6 @@ def main() -> int:  # pragma: no cover - I/O wiring
     # --------------------------------------------------- evaluate + bootstrap --
     metric_rows: list[dict] = []
     paired_rows: list[dict] = []
-    rng_master = np.random.default_rng(args.seed)
-    aspect_seeds = {
-        a: int(rng_master.integers(0, 2**31 - 1)) for a in ("BP", "MF", "CC")
-    }
 
     aspect_preds = {
         name: {
@@ -749,7 +758,7 @@ def main() -> int:  # pragma: no cover - I/O wiring
                 panels,
                 metrics=("f_max", "auprc"),
                 n_replicates=args.n_bootstrap,
-                seed=aspect_seeds[aspect] + int(min_ic * 1000),
+                seed=bootstrap_seed(args.seed, aspect, min_ic),
                 level=args.ci_level,
             )
             for name in panels:

@@ -38,7 +38,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Iterable, Mapping, Sequence
+from typing import Callable, Iterable, Mapping, Sequence
 
 import numpy as np
 
@@ -167,7 +167,8 @@ def _auprc_from_curve(precision: np.ndarray, recall: np.ndarray) -> float:
     """Trapezoidal AUPRC over the upper envelope of (recall, precision) points.
 
     Kept bit-identical in behaviour to ``temporal_benchmark.auprc`` so panel and
-    reference implementations agree.
+    reference implementations agree — including the (recall 0, precision 0)
+    point a zero-coverage threshold contributes (see that docstring).
     """
     dedup: dict[float, float] = {}
     for r, p in zip(recall.tolist(), precision.tolist()):
@@ -306,6 +307,9 @@ def paired_bootstrap(
     n_replicates: int = 1000,
     seed: int = 0,
     level: float = 0.95,
+    evaluate: Callable[
+        [EvaluationPanel, np.ndarray], Mapping[str, float]
+    ] = panel_metrics,
 ) -> dict[str, np.ndarray]:
     """Bootstrap every method on the **same** protein resample, replicate by replicate.
 
@@ -315,6 +319,10 @@ def paired_bootstrap(
     method on those rows, so ``value[a] - value[b]`` is a paired difference and
     its percentile interval is a legitimate test of "does A beat B on these
     proteins", which two independent intervals are not.
+
+    ``evaluate(panel, index)`` computes the ``metrics``; it defaults to
+    :func:`panel_metrics`. The resamples depend only on ``seed`` and the cohort
+    size, so another ``evaluate`` with the same seed scores the same resamples.
 
     Returns ``{f"{method}::{metric}": array(n_replicates)}``. Differences are the
     caller's business (see :func:`summarise_paired`), because which pairs matter
@@ -336,7 +344,7 @@ def paired_bootstrap(
     for r in range(n_replicates):
         idx = rng.integers(0, n, size=n)
         for name in names:
-            vals = panel_metrics(panels[name], idx)
+            vals = evaluate(panels[name], idx)
             for k in metrics:
                 out[f"{name}::{k}"][r] = vals[k]
     return out
