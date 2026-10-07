@@ -74,6 +74,41 @@ class TestRemapRetiredIds:
         assert out == {"P1": {"GO:alt"}}
 
 
+class TestRemapRetiredScores:
+    ALT = {"GO:merged": "GO:leaf"}
+    REPLACED = {"GO:obsolete": "GO:other"}
+
+    def test_retired_ids_move_and_unknown_ids_go(self):
+        out = tb.remap_retired_scores(
+            {"D1": {"GO:merged": 2.0, "GO:obsolete": 3.0, "GO:dead": 9.0}},
+            self.ALT,
+            self.REPLACED,
+            ANCESTORS,
+        )
+        assert out == {"D1": {"GO:leaf": 2.0, "GO:other": 3.0}}
+
+    def test_collision_keeps_the_higher_score(self):
+        out = tb.remap_retired_scores(
+            {"D1": {"GO:merged": 2.0, "GO:leaf": 5.0}}, self.ALT, {}, ANCESTORS
+        )
+        assert out == {"D1": {"GO:leaf": 5.0}}
+
+    def test_domain_left_with_nothing_is_dropped(self):
+        assert (
+            tb.remap_retired_scores({"D1": {"GO:dead": 1.0}}, {}, {}, ANCESTORS) == {}
+        )
+
+    def test_merged_id_prediction_is_scored_and_propagated(self):
+        # Regression: a table trained without input cleanup names the merged id.
+        # Unmapped, the prediction had no ancestors and no aspect, so scoring
+        # dropped it; CAFA-evaluator scores it under the live id.
+        scores = tb.remap_retired_scores(
+            {"D1": {"GO:merged": 4.0, "GO:other": 1.0}}, self.ALT, {}, ANCESTORS
+        )
+        pred = tb.transfer_predictions_pscore({"P1": ["D1"]}, scores, anc)
+        assert pred["P1"] == {"GO:leaf": 1.0, "GO:mid": 1.0, "GO:other": 0.0}
+
+
 class TestBuildNKBenchmark:
     def test_truth_is_full_t1_not_delta(self):
         # t0 experimental has nothing in BP; t1 adds leaf. Truth is the FULL

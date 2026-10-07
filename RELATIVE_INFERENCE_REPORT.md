@@ -560,7 +560,10 @@ test with its measured cost rather than as a default.
   most 0.011 (up to 0.031 and 0.111 in the small SSF + IEA cell). No
   conclusion changed: one near-zero AUPRC contrast (CC 2, +0.000) became a
   small loss (−0.006), and significance shifted in a few robustness cells.
-  Inputs are unchanged: training GAF
+  The cross-check's second finding — runs trained without input
+  propagation leave retired GO ids in their association tables, which
+  scoring then dropped — touches none of the four configurations here:
+  all of them clean their input. Inputs are unchanged: training GAF
   sha256 `69ae7d90…` (= archived GOA release 205),
   `data/interim/protein2ipr_human.dat.gz` sha256 `a932a515…` (InterPro
   `current_release` snapshot of 2026-07-22), `go-basic.obo` sha256
