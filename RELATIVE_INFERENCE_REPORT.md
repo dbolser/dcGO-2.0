@@ -13,8 +13,8 @@ human-only run of that reimplementation:
 
 - **Training annotations:** human UniProtKB-GOA, archived release 205
   (April 2021), manual (non-IEA) evidence codes — 18,735 annotated proteins.
-- **Domains:** InterPro entries (InterPro `current_release` snapshot of
-  2026-07-22), plus contiguous "supra-domain" combinations of up to three
+- **Domains:** InterPro entries (InterPro `current_release` as downloaded
+  2026-07-07), plus contiguous "supra-domain" combinations of up to three
   entries (as in the original method, which used SCOP superfamilies).
 - **Ontology:** GO, `go-basic.obo` release 2026-06-15, `is_a`/`part_of`
   edges. Input annotations are true-path propagated before testing, as the
@@ -591,7 +591,7 @@ test with its measured cost rather than as a default.
   all of them clean their input. Inputs are unchanged: training GAF
   sha256 `69ae7d90…` (= archived GOA release 205),
   `data/interim/protein2ipr_human.dat.gz` sha256 `a932a515…` (InterPro
-  `current_release` snapshot of 2026-07-22), `go-basic.obo` sha256
+  `current_release` as downloaded 2026-07-07), `go-basic.obo` sha256
   `c72fc198…` (release 2026-06-15). Design and prose: `VALIDATION_PLAN.md`
   §4.
 - **Regeneration check**: the committed manifests come from a clean

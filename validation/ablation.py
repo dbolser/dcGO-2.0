@@ -47,11 +47,17 @@ without sharing statistics:
 
 Each rung is one ``run_dcgo_human.py --gaf <t0 GAF> --output-dir <run-dir>/<rung>``
 plus its stage flags (``validation/ablation_manifests/*.json`` record the exact
-commands). ``scripts/run_t0_interpro_ablation.sh`` runs a whole cell — the nine
+commands). ``scripts/run_t0_interpro_ablation.py`` runs a whole cell — the nine
 rungs and this evaluation — with ``--interpro`` set to t0 domain architectures.
-``--interpro`` here must be the protein2ipr file the rungs were trained on, and
-``--domain-key``/``--evidence-filter`` their settings: the driver refuses to
-score a run whose manifest says otherwise.
+``--interpro`` here must be the protein2ipr file the rungs were trained on,
+``--t0-gaf`` their GAF and ``--domain-key``/``--evidence-filter`` their
+settings: the driver refuses to score a run whose manifest says otherwise.
+
+The scored cohort is the no-knowledge proteins with a domain in
+``--cohort-interpro`` (default: ``--interpro``). Fixing it to one file lets
+cells trained on different architectures be scored on the same proteins: a
+cohort protein with no domain in ``--interpro`` gets no dcGO prediction and
+counts as a miss, rather than leaving the denominator.
 
 Honest caveat, stated once here and again in ``VALIDATION_PLAN.md``: the True
 Path rungs are scored on ``q_value`` because the propagated output carries no
@@ -201,6 +207,7 @@ def selection_stage_counts(
     benchmark_with_domains: Mapping[str, Mapping[str, set]],
     ic: Mapping[str, float],
     ic_floors: Sequence[float],
+    transfer_proteins: Iterable[str] | None = None,
 ) -> list[dict]:
     """Every filter between "the input files" and "the scored cohort", counted.
 
@@ -214,7 +221,10 @@ def selection_stage_counts(
 
     ``benchmark_all`` is the no-knowledge benchmark built **without** the
     has-a-domain restriction; ``benchmark_with_domains`` is the one actually
-    scored. Both are ``{aspect: {protein: truth}}``.
+    scored. Both are ``{aspect: {protein: truth}}``. ``transfer_proteins``,
+    given when the cohort comes from another protein2ipr than the transfer
+    step, adds how many cohort proteins have no architecture to transfer
+    through (scored as misses).
     """
     rows: list[dict] = [
         {
@@ -269,6 +279,22 @@ def selection_stage_counts(
                 "note": "the scored cohort before any IC floor",
             }
         )
+        if transfer_proteins is not None:
+            transfer = set(transfer_proteins)
+            rows.append(
+                {
+                    "stage": "no_knowledge_without_transfer_architectures",
+                    "aspect": aspect,
+                    "min_ic": "-",
+                    "n_proteins": len(
+                        set(benchmark_with_domains.get(aspect, {})) - transfer
+                    ),
+                    "n_dropped_vs_ic0": "-",
+                    "pct_of_ic0": "-",
+                    "note": "cohort proteins with no domain in --interpro: no "
+                    "dcGO prediction, scored as misses",
+                }
+            )
     for aspect in ("BP", "MF", "CC"):
         base = set(benchmark_with_domains.get(aspect, {}))
         for min_ic in ic_floors:
@@ -315,16 +341,16 @@ def run_setting_mismatches(
     run_root: Path,
     rungs: Iterable[Rung],
     expected: Mapping[str, str],
-    interpro_sha256: str | None = None,
+    input_sha256: Mapping[str, str] | None = None,
 ) -> list[str]:
     """Rungs whose run manifest disagrees with the evaluator's settings.
 
     The no-knowledge cohort and IC are built from what training saw, so the
     evaluator's ``domain_key``/``evidence_filter`` must be the ones each run
-    used. Likewise the transfer step must read the domain architectures the
-    run was trained on: ``interpro_sha256``, if given, is compared with the
-    run's recorded protein2ipr (see ``tb.recorded_interpro_sha256``). Rungs
-    without a manifest are not checked.
+    used. Likewise the evaluator must read the inputs the run was trained on:
+    ``input_sha256``, if given, maps manifest input roles (the protein2ipr and
+    the t0 GAF) to the evaluator's digests — see
+    ``tb.training_input_mismatches``. Rungs without a manifest are not checked.
     """
     problems = []
     for rung in rungs:
@@ -336,13 +362,11 @@ def run_setting_mismatches(
             got = params.get(key)
             if got is not None and got != want:
                 problems.append(f"{rung.name}: run {key}={got}, evaluator {want}")
-        if interpro_sha256 is not None:
-            trained_on = tb.recorded_interpro_sha256(manifest)
-            if trained_on is not None and trained_on != interpro_sha256:
-                problems.append(
-                    f"{rung.name}: run protein2ipr sha256={trained_on}, "
-                    f"evaluator {interpro_sha256}"
-                )
+        if input_sha256:
+            problems.extend(
+                f"{rung.name}: {problem}"
+                for problem in tb.training_input_mismatches(manifest, input_sha256)
+            )
     return problems
 
 
@@ -366,7 +390,11 @@ class BenchmarkInputs:
     replaced_by_map: dict[str, str]
     t0_map: dict[str, set[str]]
     t1_exp_map: dict[str, set[str]]
+    #: protein -> features in ``--interpro`` (the transfer step)
     protein_domains: dict[str, list[str]]
+    #: proteins with a feature in the cohort protein2ipr (``--cohort-interpro``,
+    #: else ``--interpro``): the has-a-domain restriction on the cohort
+    cohort_proteins: set[str]
     #: ``{aspect: {protein: truth}}`` without / with the has-a-domain restriction
     benchmark_all: dict[str, dict[str, set[str]]]
     benchmark: dict[str, dict[str, set[str]]]
@@ -383,8 +411,14 @@ def load_benchmark_inputs(
     go_ontology: Path,
     domain_key: str,
     evidence_filter: str,
+    cohort_interpro: Path | None = None,
 ) -> BenchmarkInputs:  # pragma: no cover - I/O wiring
-    """Parse the GAFs, ontology and architectures into the scored benchmark."""
+    """Parse the GAFs, ontology and architectures into the scored benchmark.
+
+    The cohort is the no-knowledge proteins with a feature in
+    ``cohort_interpro`` (default: ``interpro``); a cohort protein with none in
+    ``interpro`` gets no dcGO prediction and is scored as a miss.
+    """
     from loguru import logger
 
     if str(_ROOT) not in sys.path:
@@ -413,18 +447,24 @@ def load_benchmark_inputs(
         t1_exp_map, processor.alt_id_map, processor.replaced_by_map
     )
 
+    def feature_map(protein2ipr: Path) -> dict[str, list[str]]:
+        architectures = DomainAnnotationParser(
+            max_supra_domain_length=3,
+            min_domain_length=10,
+            domain_key=domain_key,
+        ).parse_protein2ipr_file(protein2ipr)
+        out: dict[str, list[str]] = {}
+        for protein, arch in architectures.items():
+            domains = list(arch.single_domains) + list(arch.supra_domains)
+            if domains:
+                out[protein] = domains
+        return out
+
     logger.info("Parsing domain architectures...")
-    dom_parser = DomainAnnotationParser(
-        max_supra_domain_length=3,
-        min_domain_length=10,
-        domain_key=domain_key,
+    protein_domains = feature_map(interpro)
+    cohort_proteins = (
+        set(feature_map(cohort_interpro)) if cohort_interpro else set(protein_domains)
     )
-    architectures = dom_parser.parse_protein2ipr_file(interpro)
-    protein_domains: dict[str, list[str]] = {}
-    for protein, arch in architectures.items():
-        domains = list(arch.single_domains) + list(arch.supra_domains)
-        if domains:
-            protein_domains[protein] = domains
 
     # One cohort for every rung. Supra-domains are built out of single domains,
     # so "has >=1 feature" is the same set either way — which is what makes the
@@ -438,7 +478,7 @@ def load_benchmark_inputs(
         t1_exp_map,
         term_aspect,
         get_ancestors,
-        predictable_proteins=set(protein_domains),
+        predictable_proteins=cohort_proteins,
     )
     eval_proteins = {p for aspect in benchmark.values() for p in aspect}
     for aspect, truths in benchmark.items():
@@ -461,6 +501,7 @@ def load_benchmark_inputs(
         t0_map=t0_map,
         t1_exp_map=t1_exp_map,
         protein_domains=protein_domains,
+        cohort_proteins=cohort_proteins,
         benchmark_all=benchmark_all,
         benchmark=benchmark,
         eval_proteins=eval_proteins,
@@ -491,7 +532,9 @@ def build_methods(
     rung's predictions are missing.
     """
     transfer = TRANSFERS[transfer_name]
-    eval_domains = {p: inputs.protein_domains[p] for p in inputs.eval_proteins}
+    # A cohort protein with no architecture to transfer through gets no dcGO
+    # prediction (only possible with a separate cohort protein2ipr).
+    eval_domains = {p: inputs.protein_domains.get(p, []) for p in inputs.eval_proteins}
 
     def on_scoring_vocabulary(scores: dict) -> dict:
         return tb.remap_retired_scores(
@@ -625,9 +668,18 @@ def main() -> int:  # pragma: no cover - I/O wiring
         "--interpro",
         type=Path,
         default=Path("data/interim/protein2ipr_human.dat.gz"),
-        help="protein2ipr file for the transfer step and the cohort — must be "
-        "the one the runs under --run-dir were trained on "
+        help="protein2ipr file for the transfer step — must be the one the "
+        "runs under --run-dir were trained on "
         "(default: data/interim/protein2ipr_human.dat.gz)",
+    )
+    parser.add_argument(
+        "--cohort-interpro",
+        type=Path,
+        default=None,
+        help="protein2ipr file whose proteins define the scored cohort "
+        "(default: --interpro). Pass one file to score cells trained on "
+        "different architectures on the same proteins; a cohort protein with "
+        "no domain in --interpro is scored with no dcGO predictions",
     )
     parser.add_argument(
         "--domain-key",
@@ -684,16 +736,36 @@ def main() -> int:  # pragma: no cover - I/O wiring
     ic_floors = sorted(set(args.min_ic)) if args.min_ic else [0.0, 2.0, 4.0]
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    for path in (args.t0_gaf, args.t1_gaf, args.interpro, args.go_ontology):
+    cohort_interpro = args.cohort_interpro or args.interpro
+    for path in (
+        args.t0_gaf,
+        args.t1_gaf,
+        args.interpro,
+        cohort_interpro,
+        args.go_ontology,
+    ):
         if not path.exists():
             logger.error(f"Missing required input: {path}")
             return 1
-    interpro_sha256 = sha256_file(args.interpro)
+    # Every method is scored with these inputs; recorded per provenance row.
+    inputs_used = {
+        "interpro_file": str(args.interpro),
+        "interpro_sha256": sha256_file(args.interpro),
+        "cohort_interpro_file": str(cohort_interpro),
+        "cohort_interpro_sha256": sha256_file(cohort_interpro),
+        "t0_gaf_file": str(args.t0_gaf),
+        "t0_gaf_sha256": sha256_file(args.t0_gaf),
+        "t1_gaf_file": str(args.t1_gaf),
+        "t1_gaf_sha256": sha256_file(args.t1_gaf),
+    }
     mismatches = run_setting_mismatches(
         args.run_dir,
         LADDER,
         {"domain_key": args.domain_key, "evidence_filter": args.evidence_filter},
-        interpro_sha256=interpro_sha256,
+        input_sha256={
+            "domain_annotations": inputs_used["interpro_sha256"],
+            "gaf": inputs_used["t0_gaf_sha256"],
+        },
     )
     if mismatches:
         for problem in mismatches:
@@ -708,6 +780,7 @@ def main() -> int:  # pragma: no cover - I/O wiring
         args.go_ontology,
         args.domain_key,
         args.evidence_filter,
+        cohort_interpro=args.cohort_interpro,
     )
     benchmark, ic, term_aspect = inputs.benchmark, inputs.ic, inputs.term_aspect
     if not inputs.eval_proteins:
@@ -717,11 +790,12 @@ def main() -> int:  # pragma: no cover - I/O wiring
     counts = selection_stage_counts(
         inputs.t0_map,
         inputs.t1_exp_map,
-        inputs.protein_domains,
+        inputs.cohort_proteins,
         inputs.benchmark_all,
         benchmark,
         ic,
         ic_floors,
+        transfer_proteins=set(inputs.protein_domains) if args.cohort_interpro else None,
     )
     counts_file = args.output_dir / "ablation_selection_counts.tsv"
     pd.DataFrame(counts).to_csv(counts_file, sep="\t", index=False)
@@ -735,12 +809,7 @@ def main() -> int:  # pragma: no cover - I/O wiring
     except FileNotFoundError as missing:
         logger.error(str(missing))
         return 1
-    # Every method is scored on the cohort and architectures of this file.
-    architectures_used = {
-        "interpro_file": str(args.interpro),
-        "interpro_sha256": interpro_sha256,
-    }
-    provenance = [{**row, **architectures_used} for row in provenance]
+    provenance = [{**row, **inputs_used} for row in provenance]
     pd.DataFrame(provenance).to_csv(
         args.output_dir / "ablation_provenance.tsv", sep="\t", index=False
     )
@@ -851,7 +920,9 @@ def main() -> int:  # pragma: no cover - I/O wiring
         )
         base_scores = rung_scores[null_rung]
         transfer = TRANSFERS[args.transfer]
-        eval_domains = {p: inputs.protein_domains[p] for p in inputs.eval_proteins}
+        eval_domains = {
+            p: inputs.protein_domains.get(p, []) for p in inputs.eval_proteins
+        }
         null_samples: dict[tuple[str, float, str], list[float]] = defaultdict(list)
         for i in range(args.n_permutations):
             seed = args.seed * 1_000_003 + i

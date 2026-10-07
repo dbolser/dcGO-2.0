@@ -25,8 +25,10 @@ run () {
     echo "  done: $out"
 }
 
+# Any further arguments go to temporal_benchmark.py.
 bench () {
     local preds=$1 out=$2
+    shift 2
     echo "=== benchmark: $out ==="
     uv run python validation/temporal_benchmark.py \
         --t0-gaf data/raw/goa_annotations/goa_human_t0_2021.gaf.gz \
@@ -34,7 +36,7 @@ bench () {
         --predictions "$preds" \
         --interpro data/interim/protein2ipr_human.dat.gz \
         --disable-supra-domains --n-permutations 20 \
-        --output-dir "$out" \
+        --output-dir "$out" "$@" \
         > "scratch_allspecies/bench_$(basename "$out").log" 2>&1
     echo "  done: $out"
 }
@@ -44,8 +46,9 @@ run allspecies_t0_2021 results_allspecies_t0_exp
 
 bench results_human_t0_exp/domain_go_associations_significant.tsv \
       validation/heldout_human_single_exp
+# Trained on the all-species protein2ipr and GAF on purpose (see 13).
 bench results_allspecies_t0_exp/domain_go_associations_significant.tsv \
-      validation/heldout_allspecies_single_exp
+      validation/heldout_allspecies_single_exp --allow-input-mismatch
 
 echo "EXPERIMENTAL HELD-OUT COMPLETE"
 uv run python scratch_allspecies/12_compare_heldout.py \

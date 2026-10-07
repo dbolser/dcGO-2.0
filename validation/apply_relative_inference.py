@@ -48,7 +48,9 @@ sys.path.insert(0, str(project_root))
 from src.domain_annotation_parser import DomainAnnotationParser  # noqa: E402
 from src.goa_parser import parse_goa_human  # noqa: E402
 from src.ontology_processor import OntologyProcessor  # noqa: E402
+from src.run_manifest import sha256_file  # noqa: E402
 from validation.association_io import load_associations  # noqa: E402
+from validation.temporal_benchmark import training_input_mismatches  # noqa: E402
 
 
 def build_protein_domain_map(
@@ -71,7 +73,10 @@ def main() -> int:
     ap.add_argument("--predictions", type=Path, required=True)
     ap.add_argument("--t0-gaf", type=Path, required=True)
     ap.add_argument(
-        "--interpro", type=Path, default=Path("data/interim/protein2ipr_human.dat.gz")
+        "--interpro",
+        type=Path,
+        default=Path("data/interim/protein2ipr_human.dat.gz"),
+        help="protein2ipr file — must be the one the predictions were trained on",
     )
     ap.add_argument(
         "--go-ontology", type=Path, default=Path("data/raw/go_ontology/go-basic.obo")
@@ -84,6 +89,22 @@ def main() -> int:
         "--disable-supra-domains", dest="enable_supra_domains", action="store_false"
     )
     args = ap.parse_args()
+
+    # The backgrounds must be built from the inputs training read (see
+    # training_input_mismatches); predictions without a manifest are not checked.
+    manifest = args.predictions.parent / "run_manifest_go.json"
+    if manifest.exists():
+        mismatches = training_input_mismatches(
+            manifest,
+            {
+                "domain_annotations": sha256_file(args.interpro),
+                "gaf": sha256_file(args.t0_gaf),
+            },
+        )
+        for problem in mismatches:
+            logger.error(f"Settings mismatch — {manifest}: {problem}")
+        if mismatches:
+            return 1
 
     logger.info("Loading GO ontology...")
     processor = OntologyProcessor(args.go_ontology)

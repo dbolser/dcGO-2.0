@@ -11,20 +11,26 @@ before it runs and logged to ``<run-dir>/<step>.log``:
    protein and every held-out protein the evaluator transfers to has t0
    architectures. (The current subset was selected by the t1 GAF's non-IEA
    proteins alone, a strict subset of this.) Skipped when the subset exists
-   and its provenance marker names the same source.
+   and its provenance marker records this exact extraction: the same source,
+   GAFs and evidence filter.
 2. **Train** the nine rungs: exactly the commands recorded in
    ``validation/ablation_manifests/<rung>.json``, with ``--output-dir`` moved
    under ``--run-dir`` and ``--gaf``/``--interpro`` added.
 3. **Evaluate** with ``validation/ablation.py`` under the committed
    evaluation's arguments (all defaults besides the GAFs and run dir), plus
-   ``--interpro`` set to the subset. The rung manifests are copied to
-   ``<eval-dir>/manifests/``, as for the other cells.
+   ``--interpro`` set to the subset and ``--cohort-interpro`` to the committed
+   cell's file: every arm is scored on the committed cohort, and a cohort
+   protein with no domain in the subset counts as a miss instead of leaving
+   the denominator. The rung manifests are copied to ``<eval-dir>/manifests/``,
+   as for the other cells, with the subset's provenance sidecar (the archive,
+   GAFs and evidence filter it was cut with).
 
 Run it from the repository root; paths are relative to it, and ``data/`` must
 hold the inputs. The md5 of the archived protein2ipr is verified first
 (``scripts/download_data.py --group interpro-85``). Resumable: a rung whose
-manifest says ``completed`` is not rerun — safe, because the evaluator refuses
-a rung trained on a different protein2ipr than ``--subset``.
+manifest says ``completed`` is not rerun, unless the subset is being cut again
+— and the evaluator refuses a rung trained on a different protein2ipr than
+``--subset`` regardless.
 
 Dry run of the whole chain without the archive: pass the current subset as
 ``--source`` (with scratch ``--subset``/``--run-dir``/``--eval-dir``). A wider
@@ -48,12 +54,16 @@ REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
 from src.run_manifest import manifest_filename  # noqa: E402
-from src.universe_provenance import read_marker  # noqa: E402
+from src.universe_provenance import marker_path, read_marker  # noqa: E402
 
 MANIFESTS = REPO / "validation" / "ablation_manifests"
 ARCHIVE = Path("data/raw/interpro_archive/85.0/protein2ipr.dat.gz")
 T0_GAF = Path("data/raw/goa_archive/goa_human.gaf.205.gz")
 T1_GAF = Path("data/raw/goa_annotations/goa_human.gaf.gz")
+#: Selects the subset: any protein either GAF annotates, under any evidence.
+EVIDENCE_FILTER = "all"
+#: The committed ipr_manual cell's protein2ipr, whose proteins are the cohort.
+COHORT = Path("data/interim/protein2ipr_human.dat.gz")
 RUNGS = (
     "single",
     "supra",
@@ -100,7 +110,13 @@ def build_steps(
             )
         )
     marker = read_marker(subset)
-    if not (subset.exists() and marker and marker.interpro_source == str(source)):
+    extracting = not (
+        subset.exists()
+        and marker is not None
+        and (marker.interpro_source, marker.selection_sources, marker.evidence_filter)
+        == (str(source), (str(T0_GAF), str(T1_GAF)), EVIDENCE_FILTER)
+    )
+    if extracting:
         steps.append(
             (
                 "extract",
@@ -114,14 +130,15 @@ def build_steps(
                     "--gaf",
                     str(T1_GAF),
                     "--evidence-filter",
-                    "all",
+                    EVIDENCE_FILTER,
                     "--output",
                     str(subset),
                 ],
             )
         )
     for rung in RUNGS:
-        if not completed(run_dir / rung):
+        # A new subset makes every finished rung stale.
+        if extracting or not completed(run_dir / rung):
             steps.append(
                 (rung, rung_command(MANIFESTS / f"{rung}.json", run_dir / rung, subset))
             )
@@ -139,6 +156,8 @@ def build_steps(
                 str(run_dir),
                 "--interpro",
                 str(subset),
+                "--cohort-interpro",
+                str(COHORT),
                 "--output-dir",
                 str(eval_dir),
             ],
@@ -193,6 +212,8 @@ def main(argv: list[str] | None = None) -> int:
         shutil.copy(
             args.run_dir / rung / "run_manifest_go.json", manifests / f"{rung}.json"
         )
+    sidecar = marker_path(args.subset)
+    shutil.copy(sidecar, manifests / sidecar.name)
     print(f"Done. Evaluation tables and rung manifests in {args.eval_dir}")
     return 0
 

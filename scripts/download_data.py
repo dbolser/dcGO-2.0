@@ -140,7 +140,7 @@ DATASET_GROUPS: dict[str, list[str]] = {
         "zebrafish_idmapping",
     ],
     # InterPro 85.0 (2021-04-08), the t0 domain architectures of the temporal
-    # benchmark (scripts/run_t0_interpro_ablation.sh). ~15 GB; the protein2ipr
+    # benchmark (scripts/run_t0_interpro_ablation.py). ~15 GB; the protein2ipr
     # is checked against the release's published md5.
     "interpro-85": [
         "interpro_85_protein2ipr",

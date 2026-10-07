@@ -70,52 +70,80 @@ def test_the_archive_is_verified_and_the_subset_extracted(tmp_path):
     assert extract[extract.index("--evidence-filter") + 1] == "all"
     evaluate = steps["eval"]
     assert evaluate[evaluate.index("--interpro") + 1] == str(tmp_path / "subset.dat.gz")
+    # Every arm is scored on the committed cell's cohort.
+    assert evaluate[evaluate.index("--cohort-interpro") + 1] == str(runbook.COHORT)
 
 
-def test_a_subset_already_cut_from_the_same_source_is_reused(tmp_path):
+def _cut(subset, source, gafs=(runbook.T0_GAF, runbook.T1_GAF), evidence="all"):
+    """A subset on disk whose marker records how it was extracted."""
     from src.universe_provenance import write_marker
 
-    source = tmp_path / "protein2ipr.dat.gz"
-    subset = tmp_path / "subset.dat.gz"
     subset.write_bytes(b"")
     write_marker(
         subset,
         selection_rule="goa",
-        selection_sources=[runbook.T0_GAF, runbook.T1_GAF],
+        selection_sources=list(gafs),
         interpro_source=source,
         n_accessions=0,
         n_matched_lines=0,
         tool="extract_human_interpro.py",
+        evidence_filter=evidence,
     )
 
-    names = [
-        name for name, _ in runbook.build_steps(source, subset, tmp_path, tmp_path)
-    ]
+
+def _names(source, subset, run_dir):
+    return [name for name, _ in runbook.build_steps(source, subset, run_dir, run_dir)]
+
+
+def test_a_subset_cut_by_this_exact_extraction_is_reused(tmp_path):
+    source = tmp_path / "protein2ipr.dat.gz"
+    subset = tmp_path / "subset.dat.gz"
+    _cut(subset, source)
+
+    names = _names(source, subset, tmp_path)
     assert "verify" not in names  # not the archive: nothing to verify
     assert "extract" not in names
-    other = [
-        name
-        for name, _ in runbook.build_steps(
-            tmp_path / "other.dat.gz", subset, tmp_path, tmp_path
-        )
-    ]
-    assert "extract" in other
+    assert "extract" in _names(tmp_path / "other.dat.gz", subset, tmp_path)
+
+
+@pytest.mark.parametrize(
+    "gafs,evidence",
+    [
+        ((runbook.T0_GAF,), "all"),  # the t1-only no-knowledge proteins missing
+        ((runbook.T0_GAF, runbook.T1_GAF), "manual"),  # the extract default
+        ((runbook.T0_GAF, runbook.T1_GAF), None),  # marker predates the field
+    ],
+)
+def test_a_subset_selected_differently_is_cut_again(tmp_path, gafs, evidence):
+    source = tmp_path / "protein2ipr.dat.gz"
+    subset = tmp_path / "subset.dat.gz"
+    _cut(subset, source, gafs, evidence)
+
+    assert "extract" in _names(source, subset, tmp_path)
+
+
+def _finish(run_dir, rung, status="completed"):
+    (run_dir / rung).mkdir()
+    (run_dir / rung / "run_manifest_go.json").write_text(json.dumps({"status": status}))
 
 
 def test_completed_rungs_are_not_rerun(tmp_path):
-    (tmp_path / "single").mkdir()
-    (tmp_path / "single" / "run_manifest_go.json").write_text('{"status": "completed"}')
-    (tmp_path / "supra").mkdir()  # interrupted: the manifest never finalised
-    (tmp_path / "supra" / "run_manifest_go.json").write_text('{"status": "running"}')
+    source = tmp_path / "src.dat.gz"
+    subset = tmp_path / "subset.dat.gz"
+    _cut(subset, source)
+    _finish(tmp_path, "single")
+    _finish(tmp_path, "supra", "running")  # interrupted: never finalised
 
-    names = [
-        name
-        for name, _ in runbook.build_steps(
-            tmp_path / "src.dat.gz", tmp_path / "subset.dat.gz", tmp_path, tmp_path
-        )
-    ]
+    names = _names(source, subset, tmp_path)
     assert "single" not in names
     assert names[names.index("supra") :] == [*runbook.RUNGS[1:], "eval"]
+
+
+def test_a_new_subset_reruns_completed_rungs(tmp_path):
+    _finish(tmp_path, "single")  # trained on whatever subset was there before
+
+    names = _names(tmp_path / "src.dat.gz", tmp_path / "subset.dat.gz", tmp_path)
+    assert names == ["extract", *runbook.RUNGS, "eval"]
 
 
 def test_dry_run_prints_and_runs_nothing(tmp_path, capsys):
@@ -124,3 +152,32 @@ def test_dry_run_prints_and_runs_nothing(tmp_path, capsys):
     printed = capsys.readouterr().out
     assert "# full" in printed and "validation/ablation.py" in printed
     assert not run_dir.exists()
+
+
+def test_the_subset_sidecar_is_kept_with_the_rung_manifests(tmp_path, monkeypatch):
+    # The subset sits in gitignored data/interim; its sidecar (archive, GAFs,
+    # evidence filter) must travel with the committed evaluation.
+    source = tmp_path / "src.dat.gz"
+    subset = tmp_path / "subset.dat.gz"
+    _cut(subset, source)
+    run_dir = tmp_path / "runs"
+    run_dir.mkdir()
+    for rung in runbook.RUNGS:
+        _finish(run_dir, rung)
+    monkeypatch.setattr(
+        runbook.subprocess,
+        "run",
+        lambda *a, **k: runbook.subprocess.CompletedProcess(a, 0),
+    )
+
+    eval_dir = tmp_path / "eval"
+    argv = ["--source", str(source), "--subset", str(subset)]
+    argv += ["--run-dir", str(run_dir), "--eval-dir", str(eval_dir)]
+    assert runbook.main(argv) == 0
+
+    copied = eval_dir / "manifests" / "subset.dat.gz.provenance.json"
+    assert json.loads(copied.read_text())["evidence_filter"] == "all"
+    assert {p.name for p in (eval_dir / "manifests").glob("*.json")} == {
+        copied.name,
+        *(f"{rung}.json" for rung in runbook.RUNGS),
+    }

@@ -249,8 +249,10 @@ def t0_benchmark(tmp_path: Path) -> dict[str, Path]:
     return {"t0": t0, "t1": t1, "interpro": interpro}
 
 
-def _write_run(directory: Path, interpro_sha256: str) -> None:
-    """A rung's association tables and the manifest naming its protein2ipr."""
+def _write_run(
+    directory: Path, interpro_sha256: str, gaf_sha256: str | None = None
+) -> None:
+    """A rung's association tables and the manifest naming its inputs."""
     directory.mkdir(parents=True, exist_ok=True)
     table = pd.DataFrame(
         [("IPR_A", CHILD, 0.001, 0.01, 0.01)],
@@ -262,7 +264,10 @@ def _write_run(directory: Path, interpro_sha256: str) -> None:
         json.dumps(
             {
                 "parameters": {"domain_key": "interpro", "evidence_filter": "manual"},
-                "inputs": [{"role": "domain_annotations", "sha256": interpro_sha256}],
+                "inputs": [
+                    {"role": "domain_annotations", "sha256": interpro_sha256},
+                    *([{"role": "gaf", "sha256": gaf_sha256}] if gaf_sha256 else []),
+                ],
             }
         ),
         encoding="utf-8",
@@ -335,6 +340,89 @@ def test_temporal_benchmark_refuses_other_architectures(
     assert not (tmp_path / "metrics").exists()
 
 
+def test_apply_relative_inference_refuses_other_architectures(
+    tmp_path: Path, go_obo: Path, t0_benchmark: dict[str, Path]
+) -> None:
+    # t0-trained predictions, but --interpro left at another (e.g. today's) file.
+    run = tmp_path / "run"
+    _write_run(run, "0" * 64, gaf_sha256=_sha256(t0_benchmark["t0"]))
+
+    result = _run(
+        "apply_relative_inference.py",
+        "--predictions",
+        run / "domain_go_associations_significant.tsv",
+        "--t0-gaf",
+        t0_benchmark["t0"],
+        "--interpro",
+        t0_benchmark["interpro"],
+        "--go-ontology",
+        go_obo,
+        "--output",
+        tmp_path / "relative.tsv",
+    )
+
+    assert result.returncode == 1
+    assert "protein2ipr sha256" in result.stderr
+    assert not (tmp_path / "relative.tsv").exists()
+
+
+def _benchmark(
+    tmp_path: Path, go_obo: Path, inputs: dict[str, Path], *extra: object
+) -> subprocess.CompletedProcess[str]:
+    return _run(
+        "temporal_benchmark.py",
+        "--t0-gaf",
+        inputs["t0"],
+        "--t1-gaf",
+        inputs["t1"],
+        "--predictions",
+        tmp_path / "run" / "domain_go_associations_significant.tsv",
+        "--interpro",
+        inputs["interpro"],
+        "--go-ontology",
+        go_obo,
+        "--n-permutations",
+        1,
+        "--min-ic",
+        0,
+        "--output-dir",
+        tmp_path / "metrics",
+        *extra,
+    )
+
+
+def test_temporal_benchmark_refuses_a_run_trained_on_another_gaf(
+    tmp_path: Path, go_obo: Path, t0_benchmark: dict[str, Path]
+) -> None:
+    # A replayed command without --gaf trains on the current GAF: the t1 labels.
+    _write_run(
+        tmp_path / "run",
+        _sha256(t0_benchmark["interpro"]),
+        gaf_sha256=_sha256(t0_benchmark["t1"]),
+    )
+
+    result = _benchmark(tmp_path, go_obo, t0_benchmark)
+
+    assert result.returncode == 1
+    assert "GAF sha256" in result.stderr
+    assert not (tmp_path / "metrics").exists()
+
+
+def test_temporal_benchmark_scores_a_wider_universe_when_told_to(
+    tmp_path: Path, go_obo: Path, t0_benchmark: dict[str, Path]
+) -> None:
+    # The all-species arm: trained on other protein2ipr and GAF files on
+    # purpose, transferred onto the human subset and scored on the human GAFs.
+    _write_run(tmp_path / "run", "0" * 64, gaf_sha256="1" * 64)
+
+    result = _benchmark(tmp_path, go_obo, t0_benchmark, "--allow-input-mismatch")
+
+    assert result.returncode == 0, result.stderr
+    assert "protein2ipr sha256" in result.stderr  # still said, as a warning
+    assert "GAF sha256" in result.stderr
+    assert (tmp_path / "metrics" / "temporal_benchmark_metrics.tsv").exists()
+
+
 @pytest.mark.parametrize("matching", [True, False])
 def test_ablation_scores_only_runs_trained_on_its_protein2ipr(
     tmp_path: Path, go_obo: Path, t0_benchmark: dict[str, Path], matching: bool
@@ -385,3 +473,75 @@ def test_ablation_scores_only_runs_trained_on_its_protein2ipr(
     provenance = pd.read_csv(tmp_path / "eval" / "ablation_provenance.tsv", sep="\t")
     assert set(provenance["interpro_file"]) == {str(t0_benchmark["interpro"])}
     assert set(provenance["interpro_sha256"]) == {sha256}
+    assert set(provenance["t0_gaf_sha256"]) == {_sha256(t0_benchmark["t0"])}
+    assert set(provenance["t1_gaf_sha256"]) == {_sha256(t0_benchmark["t1"])}
+
+
+LADDER_RUNS = (
+    "single",
+    "supra",
+    "supra_input",
+    "supra_relative",
+    "supra_output",
+    "supra_input_relative",
+    "supra_input_output",
+    "supra_relative_output",
+    "full",
+)
+
+
+@pytest.mark.parametrize("fixed_cohort", [True, False])
+def test_ablation_scores_a_fixed_cohort_through_other_architectures(
+    tmp_path: Path, go_obo: Path, t0_benchmark: dict[str, Path], fixed_cohort: bool
+) -> None:
+    """P2 joins the held-out cohort but has no domain in the t0 subset: with
+    the cohort fixed by the current file it is a miss, not a dropped protein."""
+    t1 = tmp_path / "t1_p2.gaf.gz"
+    with gzip.open(t1, "wt") as handle:
+        handle.write("!gaf-version: 2.2\n")
+        for protein in ("P0", "P1", "P2"):
+            handle.write(_gaf_row(protein, CHILD) + "\n")
+    current = tmp_path / "protein2ipr_current.dat.gz"
+    with gzip.open(current, "wt") as handle:
+        for protein in ("P0", "P1", "P2"):
+            handle.write(f"{protein}\tIPR_A\tA\tPF00001\t10\t100\n")
+    for rung in LADDER_RUNS:
+        _write_run(tmp_path / "runs" / rung, _sha256(t0_benchmark["interpro"]))
+
+    cohort = ["--cohort-interpro", current] if fixed_cohort else []
+    result = _run(
+        "ablation.py",
+        "--t0-gaf",
+        t0_benchmark["t0"],
+        "--t1-gaf",
+        t1,
+        "--run-dir",
+        tmp_path / "runs",
+        "--interpro",
+        t0_benchmark["interpro"],
+        *cohort,
+        "--go-ontology",
+        go_obo,
+        "--min-ic",
+        0,
+        "--n-bootstrap",
+        2,
+        "--n-permutations",
+        0,
+        "--output-dir",
+        tmp_path / "eval",
+    )
+
+    assert result.returncode == 0, result.stderr
+    metrics = pd.read_csv(tmp_path / "eval" / "ablation_metrics.tsv", sep="\t")
+    single = metrics[metrics["method"] == "single"].iloc[0]
+    counts = pd.read_csv(tmp_path / "eval" / "ablation_selection_counts.tsv", sep="\t")
+    missing = counts[counts["stage"] == "no_knowledge_without_transfer_architectures"]
+    if fixed_cohort:
+        assert single["n_eval_proteins"] == 2  # P1 hit, P2 missed
+        assert single["f_max"] == pytest.approx(2 / 3)  # precision 1, recall 1/2
+        assert dict(zip(missing["aspect"], missing["n_proteins"]))["BP"] == 1
+    else:
+        assert single["n_eval_proteins"] == 1  # P2 silently left the cohort
+        assert single["f_max"] == pytest.approx(1.0)
+        assert missing.empty

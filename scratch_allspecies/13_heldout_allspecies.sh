@@ -9,6 +9,8 @@
 #
 # --interpro stays the human domain file: it defines which proteins the
 # predictions are transferred onto for scoring, and the evaluation set is human.
+# Training read the all-species protein2ipr and GAF, so the run manifest names
+# other files than --interpro/--t0-gaf on purpose: --allow-input-mismatch.
 set -euo pipefail
 
 # Wait on the artefact 11_build_t0.sh actually produces, not on a log of it.
@@ -28,6 +30,7 @@ uv run python validation/temporal_benchmark.py \
     --t1-gaf data/raw/goa_annotations/goa_human.gaf.gz \
     --predictions results_allspecies_t0_2021/domain_go_associations_significant.tsv \
     --interpro data/interim/protein2ipr_human.dat.gz \
+    --allow-input-mismatch \
     --disable-supra-domains --n-permutations 20 \
     --output-dir validation/heldout_allspecies_single \
     > scratch_allspecies/bench_allspecies.log 2>&1

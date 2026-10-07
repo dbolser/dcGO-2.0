@@ -647,21 +647,38 @@ def _load_resampling():  # pragma: no cover - import plumbing
     return module
 
 
-def recorded_interpro_sha256(manifest_path: Path) -> str | None:
-    """SHA-256 of the protein2ipr file a run manifest says training read.
+#: Run-manifest input roles an evaluator reads too, and how to name them.
+TRAINING_INPUT_LABELS = {"domain_annotations": "protein2ipr", "gaf": "GAF"}
 
-    ``None`` when the manifest records no ``domain_annotations`` input. The
-    evaluator must transfer through the same architectures training learned
-    from: a different file is a different domain vocabulary (supra-domain ids
-    are built from it) and, for a temporal benchmark, a different date. The
-    digest is of the file's bytes, so a re-compressed copy of identical rows
-    also counts as different — pass the file the runs were made with.
+
+def training_input_mismatches(
+    manifest_path: Path, evaluator_sha256: Mapping[str, str]
+) -> list[str]:
+    """Training inputs a run manifest records with other bytes than the evaluator's.
+
+    ``evaluator_sha256`` maps a manifest input role to the SHA-256 of the file
+    the evaluator reads for it:
+
+    * ``domain_annotations`` (``--interpro``) — the transfer step must read the
+      architectures training learned from: a different file is a different
+      domain vocabulary (supra-domain ids are built from it) and, for a
+      temporal benchmark, a different date.
+    * ``gaf`` (``--t0-gaf``) — the cohort, IC and naive baseline must come from
+      the snapshot training saw. A run trained on a later GAF has seen the
+      held-out labels.
+
+    A role the manifest does not record is not checked. The digest is of the
+    file's bytes, so a re-compressed copy of identical rows also counts as
+    different — pass the files the runs were made with.
     """
     data = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
-    for record in data.get("inputs", []):
-        if record.get("role") == "domain_annotations":
-            return record.get("sha256")
-    return None
+    recorded = {r.get("role"): r.get("sha256") for r in data.get("inputs", [])}
+    return [
+        f"run {TRAINING_INPUT_LABELS.get(role, role)} sha256={recorded[role]}, "
+        f"evaluator {sha256}"
+        for role, sha256 in evaluator_sha256.items()
+        if recorded.get(role) is not None and recorded[role] != sha256
+    ]
 
 
 def build_term_aspect(processor) -> dict[str, str]:
@@ -715,6 +732,14 @@ def main() -> int:
         default=Path("data/interim/protein2ipr_human.dat.gz"),
         help="protein2ipr human subset (domain architectures) — must be the "
         "file the predictions were trained on",
+    )
+    parser.add_argument(
+        "--allow-input-mismatch",
+        action="store_true",
+        help="Score predictions whose run manifest records another protein2ipr "
+        "or GAF than --interpro/--t0-gaf, with a warning instead of an error. "
+        "For a deliberately wider training universe transferred onto the human "
+        "subset (scratch_allspecies/13, 14)",
     )
     parser.add_argument(
         "--go-ontology",
@@ -787,17 +812,21 @@ def main() -> int:
             logger.error(f"Missing required input: {p}")
             return 1
 
-    # Transfer through the architectures training learned from (see
-    # recorded_interpro_sha256). Predictions without a manifest are not checked.
+    # Score through the architectures and t0 snapshot training read (see
+    # training_input_mismatches). Predictions without a manifest are not checked.
     manifest = args.predictions.parent / "run_manifest_go.json"
     if manifest.exists():
-        trained_on = recorded_interpro_sha256(manifest)
-        given = sha256_file(args.interpro)
-        if trained_on is not None and trained_on != given:
-            logger.error(
-                f"Settings mismatch — {manifest} records protein2ipr sha256 "
-                f"{trained_on}, --interpro {args.interpro} is {given}"
-            )
+        mismatches = training_input_mismatches(
+            manifest,
+            {
+                "domain_annotations": sha256_file(args.interpro),
+                "gaf": sha256_file(args.t0_gaf),
+            },
+        )
+        log = logger.warning if args.allow_input_mismatch else logger.error
+        for problem in mismatches:
+            log(f"Settings mismatch — {manifest}: {problem}")
+        if mismatches and not args.allow_input_mismatch:
             return 1
 
     args.output_dir.mkdir(parents=True, exist_ok=True)

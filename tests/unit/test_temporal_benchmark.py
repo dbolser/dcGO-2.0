@@ -110,25 +110,43 @@ class TestRemapRetiredScores:
         assert pred["P1"] == {"GO:leaf": 1.0, "GO:mid": 1.0, "GO:other": 0.0}
 
 
-class TestRecordedInterproSha256:
-    def test_reads_the_domain_annotations_input(self, tmp_path):
-        manifest = tmp_path / "run_manifest_go.json"
-        manifest.write_text(
+class TestTrainingInputMismatches:
+    @pytest.fixture
+    def manifest(self, tmp_path):
+        path = tmp_path / "run_manifest_go.json"
+        path.write_text(
             json.dumps(
                 {
                     "inputs": [
                         {"role": "domain_annotations", "sha256": "a" * 64},
                         {"role": "gaf", "sha256": "b" * 64},
+                        {"role": "go_obo", "sha256": "c" * 64},
                     ]
                 }
             )
         )
-        assert tb.recorded_interpro_sha256(manifest) == "a" * 64
+        return path
 
-    def test_none_when_the_manifest_records_no_domain_file(self, tmp_path):
+    def test_matching_inputs_pass(self, manifest):
+        given = {"domain_annotations": "a" * 64, "gaf": "b" * 64}
+        assert tb.training_input_mismatches(manifest, given) == []
+
+    def test_each_differing_input_is_named(self, manifest):
+        given = {"domain_annotations": "x" * 64, "gaf": "y" * 64}
+        assert tb.training_input_mismatches(manifest, given) == [
+            f"run protein2ipr sha256={'a' * 64}, evaluator {'x' * 64}",
+            f"run GAF sha256={'b' * 64}, evaluator {'y' * 64}",
+        ]
+
+    def test_only_the_roles_given_are_checked(self, manifest):
+        # go_obo differs from nothing: the evaluator did not say what it reads.
+        assert tb.training_input_mismatches(manifest, {"gaf": "b" * 64}) == []
+
+    def test_a_role_the_manifest_does_not_record_is_not_checked(self, tmp_path):
         manifest = tmp_path / "run_manifest_go.json"
         manifest.write_text(json.dumps({"inputs": [{"role": "gaf"}]}))
-        assert tb.recorded_interpro_sha256(manifest) is None
+        given = {"domain_annotations": "x" * 64, "gaf": "y" * 64}
+        assert tb.training_input_mismatches(manifest, given) == []
 
 
 class TestBuildNKBenchmark:

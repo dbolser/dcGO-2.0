@@ -727,7 +727,7 @@ class Config:
             # The last InterPro release before GOA release 205 (2021-04-21),
             # the temporal benchmark's t0, so training and transfer can use
             # domain architectures of the same date as the annotations
-            # (VALIDATION_PLAN §4, scripts/run_t0_interpro_ablation.sh).
+            # (VALIDATION_PLAN §4, scripts/run_t0_interpro_ablation.py).
             # Opt-in: scripts/download_data.py --group interpro-85.
             "interpro_85_protein2ipr": DataSource(
                 name="interpro_85_protein2ipr",

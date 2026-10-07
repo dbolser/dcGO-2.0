@@ -1232,7 +1232,10 @@ uv run python validation/check_metric_conventions.py \
 Each rung is the command its manifest records, with the training GAF passed
 explicitly (the committed runs read it through a link at the default GAF path,
 which is why their `gaf` input carries the current-release `source_url`; the
-SHA-256 `69ae7d90…` is the identity):
+SHA-256 `69ae7d90…` is the identity). That path now holds the 2026 GAF — the
+held-out labels — so a replay without `--gaf` trains on them; the evaluator
+refuses such a run, because it checks each manifest's GAF SHA-256 against
+`--t0-gaf`:
 
 ```bash
 uv run python run_dcgo_human.py --num-cores 8 \
@@ -1245,15 +1248,27 @@ uv run python validation/ablation.py \
 ```
 
 These cells still read **current** domain architectures
-(`protein2ipr_human.dat.gz`, InterPro of 2026-07-22) in training and in the
-transfer step — temporal look-ahead on the domain side (TODO.md P0).
-`scripts/run_t0_interpro_ablation.py` reruns the `ipr_manual` cell on InterPro
-85.0 (2021-04-08, the last release before GOA 205): it cuts a human subset of
-the archived `protein2ipr` selected by the t0 *and* t1 GAFs, runs the nine
-recorded rung commands with `--gaf`/`--interpro` added, and evaluates into
-`validation/ablation_cells/ipr_manual_t0interpro/`. `validation/ablation.py`
+(`protein2ipr_human.dat.gz`, cut from InterPro `current_release` as downloaded
+2026-07-07) in training and in the transfer step — temporal look-ahead on the
+domain side (TODO.md P0). `scripts/run_t0_interpro_ablation.py` reruns the
+`ipr_manual` cell on InterPro 85.0 (2021-04-08, the last release before GOA
+205): it cuts a human subset of the archived `protein2ipr` selected by the t0
+*and* t1 GAFs, runs the nine recorded rung commands with `--gaf`/`--interpro`
+added, and evaluates into `validation/ablation_cells/ipr_manual_t0interpro/`.
+The evaluation keeps the committed cell's cohort (`--cohort-interpro`): a
+no-knowledge protein with no InterPro 85.0 domain is scored as a miss, not
+dropped, so the cell pays for coverage it lacked in 2021
+(`ablation_selection_counts.tsv` counts those proteins). `validation/ablation.py`
 refuses to score a rung whose manifest records a different `protein2ipr` than
-its `--interpro`. Results to follow.
+its `--interpro`, or a different GAF than its `--t0-gaf`.
+
+The rerun is domain- and annotation-dated, **not** free of look-ahead. Seven of
+the nine rungs (all but `single` and `supra`) read `go-basic.obo` 2026-06-15
+during training — for input or output propagation and the parental
+background — and the input-propagation rungs remap t0 terms obsoleted since
+2021 to their 2026 successors (74 alt_id and 417 replaced_by terms in the
+committed cell). The residual favours the hierarchy stages the ablation
+compares, so the results must not be called prospective. Results to follow.
 
 ## 5. Decisions to settle before writing the paper
 

@@ -197,7 +197,9 @@ def main() -> int:  # pragma: no cover - I/O wiring
 
     from src.domain_annotation_parser import DomainAnnotationParser
     from src.ontology_registry import get_ontology
+    from src.run_manifest import manifest_filename, sha256_file
     from src.uniprot_annotation_source import parse_uniprot_accessions
+    from validation.temporal_benchmark import training_input_mismatches
 
     logger.remove()
     logger.add(sys.stderr, level="INFO")
@@ -327,6 +329,18 @@ def main() -> int:  # pragma: no cover - I/O wiring
     # Before the architecture pass: every one of these checks is cheap, and
     # every one of them used to fail only after that pass had spent its time.
     problems = snapshot_problems(args.ontologies, paths_t0, paths_t1, args.propagate)
+    # Carriers come from --interpro: it must be what each t0 run was trained on
+    # (see training_input_mismatches). Runs without a manifest are not checked.
+    interpro_sha256 = sha256_file(args.interpro)
+    for ontology in args.ontologies:
+        manifest = args.t0_results / manifest_filename(ontology)
+        if manifest.exists():
+            problems += [
+                f"Settings mismatch — {manifest}: {problem}"
+                for problem in training_input_mismatches(
+                    manifest, {"domain_annotations": interpro_sha256}
+                )
+            ]
     if problems:
         for problem in problems:
             logger.error(problem)
