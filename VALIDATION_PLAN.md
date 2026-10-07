@@ -52,14 +52,19 @@ settings, particularly for higher-information GO terms. See the AUPRC note in
 >
 > **Correction (2026-10-07, §4 evaluator cross-check).** Every naive number in
 > this section, and (b) above, came from a threshold sweep that left the top
-> of naive's score range unsampled, so naive's F_max was understated — by up
-> to 0.25. Rerun on the current §4 cohort with the sweep fixed, naive's F_max
-> at IC≥0/2/4 is BP 0.245/0.139/0.047, MF 0.719/0.076/0.075, CC
-> 0.593/0.272/0.104. Against it, the supra model is significantly ahead on
-> F_max only in BP and MF at IC≥2 and IC≥4; naive is significantly ahead at
-> IC≥0 in MF and CC and in CC at IC≥2, and BP at IC≥0 and CC at IC≥4 are
-> ties. "Beats naive on F_max on informative terms" therefore holds for BP
-> and MF, not for CC. The §2 tables below were not regenerated.
+> of naive's score range unsampled, so naive's F_max was understated — by
+> 0.25 on the §4 cohort, by up to 0.32 in its robustness cells
+> (`validation/ablation_cells/`). Rerun on the current §4 cohort with the
+> sweep fixed, naive's F_max at IC≥0/2/4 is BP 0.245/0.139/0.047, MF
+> 0.719/0.076/0.075, CC 0.593/0.272/0.104. Against it, the supra model is
+> significantly ahead on F_max only in BP and MF at IC≥2 and IC≥4; naive is
+> significantly ahead at IC≥0 in MF and CC and in CC at IC≥2, and BP at
+> IC≥0 and CC at IC≥4 are ties. "Beats naive on F_max on informative terms"
+> therefore holds for BP and MF, not for CC. Naive's AUPRC is inflated
+> by our AUPRC convention, which closes the area at the origin (§4, "AUPRC"):
+> by up to 0.13 (MF IC≥0) against at most 0.03 for any dcGO configuration.
+> Without that, naive still leads on AUPRC at IC≥0 in all three aspects, by
+> less. The §2 tables below were not regenerated.
 
 ### Next steps (as of 2026-07-09, after the §2 benchmark + method audit)
 
@@ -287,8 +292,12 @@ snapshots fetched via `scripts/download_data.py --goa-archive <version>`.
 > range unsampled (see §4, "Evaluator cross-check against CAFA-evaluator").
 > Corrected naive numbers on the current cohort are in the correction under
 > "Where §2 landed" above; the read-out below about naive is superseded. The
-> dcGO columns came from the same sweep; on the §4 cohort the fix moved the
-> equivalent configuration's F_max by at most 0.005.
+> dcGO columns carry both §4 evaluator bugs too: the same sweep, and
+> predictions on retired GO ids dropped (the §2 model trains without input
+> cleanup, and `temporal_benchmark.py`'s driver applies neither retired-id
+> remap). On the §4 cohort the equivalent configuration (`supra`) moved by at
+> most +0.005 F_max from the sweep fix and by −0.001 to +0.017 from the
+> retired-id fix.
 
 No-knowledge benchmark sizes (IC≥0): **BP 324 / MF 418 / CC 572** proteins (a
 leak-free gate on training evidence — much smaller and cleaner than the earlier
@@ -1020,6 +1029,21 @@ The three hierarchy stages do not behave as one component:
   propagation and relative inference, it raises F_max and AUPRC in six of nine
   cells, significantly in two and three respectively.
 
+**Caveat on the rungs with relative inference but no input propagation**
+(`supra_relative`, `supra_relative_output`, and so every contrast above that
+involves them). Those runs skip the pipeline's input cleanup, so their tables
+keep 2021 GO ids. An id the 2026 DAG no longer contains has no parents, and a
+parentless term skips the relative test (`src/relative_inference.py` gives it
+relative p = 0, as for a root). `supra_relative` keeps 8,544 retired-id
+associations, 79% as many as `supra` (10,816), against 19% of all associations
+(30,700 of 163,153), so they make up 28% of its table. Since the 2026-10-07
+retired-id fix (below) those associations are scored. So these contrasts
+measure a relative stage that more than a quarter of the scored table never
+went through, and they probably understate its cost. The input-propagated
+contrasts (`supra_input` → `supra_input_relative`, `supra_input_output` →
+`full`, the report's) are not affected: those runs clean their input before
+testing.
+
 There is no single winning configuration across all cells. The full
 paper-parity pipeline is best only for MF at IC 0. Input plus output
 propagation is best for BP and CC at IC 0 on both metrics, and on AUPRC in seven
@@ -1067,9 +1091,12 @@ regenerated:**
    point (IC≥0: BP 0.093, MF 0.472, CC 0.368; now 0.245, 0.719, 0.593).
    The sweep now adds 101 evenly spaced values. Against the exact curve
    (every distinct score a threshold) the largest error over the 90
-   non-sensitivity cells fell from 0.247 to 0.004 in F_max, 0.086 to 0.0009
-   in AUPRC and 3.2 to 0.12 in S_min (measured before fix 2). The rungs barely moved (F_max ≤ +0.005
-   here); the naive comparison did — see the correction under §2.
+   non-sensitivity cells fell from 0.247 to 0.004 in F_max, 0.086 to 0.0007
+   in AUPRC and 3.2 to 0.12 in S_min (`validation/metric_conventions.tsv`,
+   columns `*_exact` and `*_quantile_sweep`; the 135 cells with the
+   sensitivity variants: 0.0045, 0.0010, 0.12). The rungs barely moved
+   (F_max ≤ +0.005 here); the naive comparison did — see the correction
+   under §2.
 2. **Predictions on retired GO ids were dropped.** Runs trained without
    input propagation skip the pipeline's input cleanup, so five rungs
    (`single`, `supra`, `supra_relative`, `supra_output`,
@@ -1097,12 +1124,20 @@ through the threshold set:
   threshold-sampling noise, in both directions (cafaeval higher in 68, ours in
   28). In the other 17 the optimum is below 0.001 (8 of them at exactly 0),
   which a CAFA grid cannot reach, and ours is higher by up to 0.026 (CC IC≥2,
-  `supra_input`).
-- **S_min:** within 0.8% everywhere (max |Δ| 0.26 bits on values of 13–90).
+  `supra_input`). That cell is the report's Base in the one aspect × IC cell
+  where relative inference raises F_max, so the convention decides a
+  conclusion there — see "How much the conventions matter" below.
+- **S_min:** within 0.8% everywhere (max |Δ| 0.26 bits on values of 12–89).
 - **Coverage at F_max:** identical wherever the two pick the same τ.
 - **AUPRC:** cafaeval computes none; our trapezoid on its curve is lower in
-  129 of 135 cells (by up to 0.040 for dcGO, 0.134 for naive), because a
-  curve that starts at τ = 0.001 never reaches the high-recall end ours does.
+  129 of 135 cells, by up to 0.134 (naive, MF IC≥0). Nearly all of that is
+  our predict-nothing point, not the τ < 0.001 range: our sweep ends at a
+  sentinel above every score, where no protein predicts anything (recall 0,
+  precision 0), and the trapezoid runs from there to the strictest real
+  cutoff, adding r_top × p_top / 2. cafaeval's curve has no zero-coverage
+  row, so it has no such point. With that point dropped from ours
+  (`auprc_no_anchor` in `validation/metric_conventions.tsv`), the two agree
+  within 0.008 in all 135 cells (0.0004 for naive).
 
 **Convention differences, kept and documented rather than "fixed":**
 
@@ -1125,22 +1160,60 @@ through the threshold set:
   over the proteins with ≥ 1 prediction at τ, recall over the whole cohort
   (unpredicted proteins count as zero), coverage the share with a prediction.
 - **AUPRC:** trapezoid over (recall, precision) points, the higher precision
-  kept at tied recall, no extrapolation to recall 0 or 1, no interpolated
-  precision.
+  kept at tied recall, no interpolated precision, nothing extrapolated towards
+  recall 1. Towards recall 0 the predict-nothing point (recall 0, precision
+  0) closes the area at the origin, a triangle of r_top × p_top / 2 below
+  the strictest real cutoff. This was not stated before 2026-10-07 (the old
+  wording said "no extrapolation to recall 0"), and it is in every AUPRC
+  `temporal_benchmark.py` and `resampling.py` have produced since §2. It is
+  worth up to 0.133 for
+  naive (MF IC≥0), up to 0.033 for a rung (`single`, MF IC≥2) and up to
+  0.016 for the report's four configurations (`auprc_anchor`). It differs
+  between rungs, so it moves contrasts — see below. The alternatives move
+  them too: with no point at recall 0 the range below r_top earns nothing,
+  and an average-precision step would credit it with the full r_top × p_top.
+  The convention is kept here and stated; which one the paper reports is an
+  open decision (TODO.md).
 - **The IC floor changes the cohort.** It restricts truth and predictions to
   terms with IC ≥ the floor; proteins left with no truth leave the cohort
   (proteins left with no prediction stay, as misses). Cohorts at IC 0/2/4 are
   BP 298/298/292, MF 406/159/151, CC 436/298/210, so floors are not compared
   on the same proteins.
 
-**Found on the way, not changed here:** in the runs without input
-propagation, relative inference keeps 79% (8,544) of the associations on
-retired ids against 19% of all associations — 28% of `supra_relative`'s
-table. Consistent with a term the 2026 DAG does not contain having no parents
-and so skipping the relative test, as roots do. A training-side question for
-the non-input rungs; it does not touch the report's configurations.
+**How much the conventions matter.** `validation/check_metric_conventions.py`
+re-scores the committed cell under the two conventions above — F_max only at
+τ ≥ 0.001 (CAFA's grid floor) and AUPRC without the predict-nothing point —
+and reruns every committed paired contrast on the same 1,000 bootstrap
+resamples (it refuses to write unless it first reproduces the committed
+metrics and intervals). Output: `validation/metric_conventions_paired.tsv`.
+Over the 207 contrast cells per metric (23 comparisons × 9 cells):
 
-Regenerate (≈ 50 min on 8 × 2 cores):
+- **F_max at τ ≥ 0.001:** significance changes in 5 cells, all gains, four
+  of them CC IC≥2, where `supra_input` and `supra_relative` have their best
+  cutoff below 0.001 (τ = 0.00007 and 0). One of them is the report's:
+  **`supra_input` → `supra_input_relative` (Base → Base + relative) in CC
+  IC≥2 goes from +0.011, not significant, to +0.039, significant** (95% CI
+  +0.012 to +0.056; on cafaeval's own 0.001 grid, +0.035). Relative
+  inference added to supra then lowers F_max significantly in eight of nine
+  cells rather than seven. No significant contrast changes sign.
+- **AUPRC without the anchor:** significance changes in 9 cells (4 gained,
+  5 lost), and 10 non-significant contrasts change sign. For the report's
+  two contrasts the counts hold (`supra_input` → `supra_input_relative`:
+  lower in 8 of 9, 5 significantly, 1 significant gain;
+  `supra_input_output` → `full`: unchanged), but cells move: MF IC≥2 goes
+  from −0.048 (significant) to −0.031 (CI −0.060 to +0.000), and CC IC≥0
+  from −0.006 to −0.009 (significant). Naive still leads every dcGO
+  configuration on AUPRC at IC≥0 in all three aspects without its anchor
+  (BP 0.141 vs at most 0.124, MF 0.286 vs 0.213, CC 0.470 vs 0.245), but by
+  less (with it: 0.155 vs 0.130, 0.419 vs 0.217, 0.541 vs 0.248).
+
+**Found on the way, not changed here:** in the runs without input
+propagation, retired GO ids skip the relative test, so 28% of
+`supra_relative`'s table never went through it (the caveat under Results).
+A training-side question for the non-input rungs; it does not touch the
+report's configurations.
+
+Regenerate (≈ 50 min on 8 × 2 cores, then ≈ 7 min on 9):
 
 ```bash
 uv run python validation/check_evaluator_cafaeval.py \
@@ -1148,6 +1221,10 @@ uv run python validation/check_evaluator_cafaeval.py \
     --t1-gaf data/raw/goa_annotations/goa_human.gaf.gz \
     --run-dir results/ablation-replacedby/ipr_manual \
     --work-dir results/ablation-cafaeval/ipr_manual
+uv run python validation/check_metric_conventions.py \
+    --t0-gaf data/raw/goa_archive/goa_human.gaf.205.gz \
+    --t1-gaf data/raw/goa_annotations/goa_human.gaf.gz \
+    --run-dir results/ablation-replacedby/ipr_manual
 ```
 
 ## 5. Decisions to settle before writing the paper

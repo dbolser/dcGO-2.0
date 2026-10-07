@@ -57,7 +57,7 @@ implementation.
   and our curves to 6 × 10⁻⁹ at the same thresholds; reported F_max agrees
   within 0.003 wherever the optimum is reachable by a CAFA grid. It found
   two evaluator bugs, both fixed and regenerated: the threshold sweep missed
-  the top of the score range (naive F_max understated by up to 0.25), and
+  the top of the score range (naive F_max understated by up to 0.32), and
   predictions on retired GO ids were dropped. Threshold sampling, AUPRC
   interpolation, coverage, S_min weighting and the IC-floor cohorts are
   documented there.
@@ -65,10 +65,19 @@ implementation.
   `temporal_benchmark_metrics.tsv` and the claims built on it (RESULTS.md,
   README.md, the MULTISPECIES_BACKGROUND.md held-out cells, the mouse axis,
   CLAUDE.md's "beats the naive F_max baseline on informative terms") were
-  scored with the old sweep, which understated naive's F_max by up to 0.25.
+  scored with the old sweep, which understated naive's F_max by up to 0.32
+  on the §4 cells.
   `temporal_benchmark.py`'s own driver also still applies neither retired-id
   remap. On the current §4 cohort dcGO's F_max lead over naive holds in BP
   and MF at IC≥2/4 but not in CC (`VALIDATION_PLAN.md` §2 correction).
+- [ ] **Decide the reported scoring conventions.** Two of ours differ from
+  CAFA-evaluator's, and each decides a cell (`VALIDATION_PLAN.md` §4, "How
+  much the conventions matter"): F_max cutoffs below 0.001, which a CAFA
+  grid cannot reach (read the CAFA way, relative inference is a significant
+  F_max gain in CC IC≥2), and AUPRC's predict-nothing point at the origin
+  (up to 0.13 of naive's AUPRC, at most 0.03 of a rung's). Fix one of each
+  before the untouched final evaluation, and use it for every AUPRC
+  reported.
 
 ## P1 — reproducibility and release
 
