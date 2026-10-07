@@ -128,3 +128,24 @@ def test_a_missing_gaf_fails_before_scanning(tmp_path: Path) -> None:
     assert result.returncode == 1
     assert "absent.gaf.gz" in result.stderr
     assert not output.exists()
+
+
+@pytest.mark.parametrize("flag", ["--source", "--gaf"])
+def test_a_non_default_selection_needs_an_explicit_output(
+    tmp_path: Path, flag: str
+) -> None:
+    # Without --output it would replace the species' default extract, which
+    # every run and evaluator reads by default.
+    default = _protein2ipr(tmp_path / "data/interim/protein2ipr_toy.dat.gz")
+    before = default.read_bytes()
+    value = (
+        _protein2ipr(tmp_path / "archive.dat.gz")
+        if flag == "--source"
+        else _gaf(tmp_path / "t0.gaf.gz", T0_ROWS)
+    )
+
+    result = _extract(tmp_path, "--species", "toy", flag, value)
+
+    assert result.returncode == 2
+    assert "--output" in result.stderr
+    assert default.read_bytes() == before
