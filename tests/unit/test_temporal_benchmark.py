@@ -255,6 +255,19 @@ class TestCandidateThresholds:
         assert smin == pytest.approx(3.0)  # ru only, no misinformation term
         assert tau > 100.0  # achieved at the predict-nothing sentinel
 
+    def test_sparse_upper_tail_is_resolved(self):
+        # The naive baseline's shape: a mass of low scores and the few terms
+        # that matter far above it. The best cutoff lies in the empty gap, where
+        # score quantiles alone put no threshold (they found F = 0.25 here).
+        low = {f"GO:low{i}": 0.001 + 0.049 * i / 999 for i in range(1000)}
+        high = {"GO:t1": 0.6, "GO:t2": 0.7, "GO:t3": 0.8, "GO:top": 0.95}
+        pred = {"P1": {**low, **high}}
+        true = {"P1": {"GO:t1", "GO:t2", "GO:t3"}}
+        every_score = sorted({*low.values(), *high.values()})
+        exact, _ = tb.f_max(pred, true, every_score)
+        assert exact == pytest.approx(6 / 7)  # cut at 0.6: P = 3/4, R = 1
+        assert tb.f_max(pred, true)[0] == pytest.approx(exact)
+
 
 class TestAUPRC:
     def test_constant_precision(self):
