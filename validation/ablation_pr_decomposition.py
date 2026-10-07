@@ -224,10 +224,15 @@ def main() -> int:  # pragma: no cover - I/O wiring
         if not path.exists():
             logger.error(f"[{rung.name}] missing predictions: {path}")
             return 1
-        scores_q = tb.load_domain_go_scores(
-            path,
-            "q_value" if rung.kind == "propagated" else "adj_p_value",
-            neg_log10=True,
+        scores_q = tb.remap_retired_scores(
+            tb.load_domain_go_scores(
+                path,
+                "q_value" if rung.kind == "propagated" else "adj_p_value",
+                neg_log10=True,
+            ),
+            processor.alt_id_map,
+            processor.replaced_by_map,
+            term_aspect,
         )
         methods[rung.name] = tb.transfer_predictions_pscore(
             eval_domains, scores_q, get_ancestors

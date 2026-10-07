@@ -999,24 +999,24 @@ both F_max and AUPRC in all nine aspect × IC cells (18/18 empirical
 `p = 1/201`).
 
 Supra-domains themselves have little protein-centric effect. Relative to single
-domains, their F_max change is significant in one of nine cells (a loss); AUPRC
+domains, their F_max change is significant in none of nine cells; AUPRC
 improves significantly in two.
 
 The three hierarchy stages do not behave as one component:
 
 - **Input propagation is context-dependent.** Added directly to supra it
-  helps a little: F_max rises in six of nine cells (two significant), AUPRC
-  in seven (one significant). Added to relative inference plus output
-  propagation, it improves F_max and AUPRC in all nine cells, all
-  significantly.
+  is mixed: F_max rises in six of nine cells (one significant); AUPRC rises
+  in seven (one significant) and falls in two (one significant). Added to
+  relative inference plus output propagation, it improves F_max and AUPRC
+  in all nine cells (eight significant each).
 - **Relative inference is the main negative component on this benchmark.**
   Added directly to supra, it lowers F_max and AUPRC in all nine cells,
-  significantly in eight and nine. Added to input plus output propagation, it lowers
+  significantly in seven and nine. Added to input plus output propagation, it lowers
   F_max in eight of nine cells (five significant) and AUPRC in eight of nine
   (all eight significant).
 - **Output True Path propagation is not uniformly harmful.** Added directly to
-  supra, F_max rises in six of nine cells and is significant in three; AUPRC is
-  mixed (five up, two significantly; four down, one significantly). Added after input
+  supra, both metrics are mixed: each rises in five of nine cells (two
+  significantly) and falls in four (one significantly). Added after input
   propagation and relative inference, it raises F_max and AUPRC in six of nine
   cells, significantly in two and three respectively.
 

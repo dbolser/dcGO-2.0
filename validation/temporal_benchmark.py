@@ -44,7 +44,7 @@ import math
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import Callable, Iterable, Mapping
+from typing import Callable, Container, Iterable, Mapping
 
 # Runnable both as a package module and as a bare script (repo convention).
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -107,6 +107,35 @@ def remap_retired_ids(
         protein: {alt_id_map.get(t) or replaced_by_map.get(t) or t for t in terms}
         for protein, terms in annotation_map.items()
     }
+
+
+def remap_retired_scores(
+    domain_go_scores: Mapping[str, Mapping[str, float]],
+    alt_id_map: Mapping[str, str],
+    replaced_by_map: Mapping[str, str],
+    known_terms: Container[str],
+) -> dict[str, dict[str, float]]:
+    """Put an association table on the scoring vocabulary before transfer.
+
+    A run trained without the hierarchy skips the pipeline's input cleanup, so
+    its table can still name retired GO ids. Each is mapped as
+    :func:`remap_retired_ids` maps the GAFs; ids the ontology still does not
+    know are dropped. Without this a prediction on a merged id was never
+    propagated or scored, yet still took part in the p-score's per-protein
+    min-max scaling — while CAFA-evaluator scores it under the live id. Two
+    associations of one domain that land on the same term keep the higher
+    score, as :func:`load_domain_go_scores` does for duplicate rows.
+    """
+    out: dict[str, dict[str, float]] = {}
+    for domain, terms in domain_go_scores.items():
+        mapped: dict[str, float] = {}
+        for term, score in terms.items():
+            live = alt_id_map.get(term) or replaced_by_map.get(term) or term
+            if live in known_terms and score > mapped.get(live, float("-inf")):
+                mapped[live] = score
+        if mapped:
+            out[domain] = mapped
+    return out
 
 
 def build_nk_benchmark_by_aspect(

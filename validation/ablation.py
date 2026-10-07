@@ -340,6 +340,9 @@ class BenchmarkInputs:
 
     get_ancestors: Callable[[str], set[str]]
     term_aspect: dict[str, str]
+    #: retired GO id -> live id (``OntologyProcessor.alt_id_map`` / ``replaced_by_map``)
+    alt_id_map: dict[str, str]
+    replaced_by_map: dict[str, str]
     t0_map: dict[str, set[str]]
     t1_exp_map: dict[str, set[str]]
     protein_domains: dict[str, list[str]]
@@ -432,6 +435,8 @@ def load_benchmark_inputs(
     return BenchmarkInputs(
         get_ancestors=get_ancestors,
         term_aspect=term_aspect,
+        alt_id_map=processor.alt_id_map,
+        replaced_by_map=processor.replaced_by_map,
         t0_map=t0_map,
         t1_exp_map=t1_exp_map,
         protein_domains=protein_domains,
@@ -467,6 +472,11 @@ def build_methods(
     transfer = TRANSFERS[transfer_name]
     eval_domains = {p: inputs.protein_domains[p] for p in inputs.eval_proteins}
 
+    def on_scoring_vocabulary(scores: dict) -> dict:
+        return tb.remap_retired_scores(
+            scores, inputs.alt_id_map, inputs.replaced_by_map, inputs.term_aspect
+        )
+
     methods: dict[str, dict] = {}
     provenance: list[dict] = []
     rung_scores: dict[str, dict] = {}
@@ -483,6 +493,8 @@ def build_methods(
             "q_value" if rung.kind == "propagated" else "adj_p_value",
             neg_log10=True,
         )
+        n_domains = len(scores_q)
+        scores_q = on_scoring_vocabulary(scores_q)
         rung_scores[rung.name] = scores_q
         methods[rung.name] = transfer(eval_domains, scores_q, inputs.get_ancestors)
         provenance.append(
@@ -492,12 +504,14 @@ def build_methods(
                 "adds": rung.adds,
                 "predictions_file": str(path),
                 "n_rows": n_rows,
-                "n_domains": len(scores_q),
+                "n_domains": n_domains,
                 "score": "-log10(q)",
             }
         )
         if rung.kind == "associations":
-            scores_p = tb.load_domain_go_scores(path, "p_value", neg_log10=True)
+            scores_p = on_scoring_vocabulary(
+                tb.load_domain_go_scores(path, "p_value", neg_log10=True)
+            )
             methods[f"{rung.name}__p"] = transfer(
                 eval_domains, scores_p, inputs.get_ancestors
             )
@@ -508,7 +522,7 @@ def build_methods(
                     "adds": "sensitivity: score column only",
                     "predictions_file": str(path),
                     "n_rows": n_rows,
-                    "n_domains": len(scores_p),
+                    "n_domains": n_domains,
                     "score": "-log10(p)",
                 }
             )
