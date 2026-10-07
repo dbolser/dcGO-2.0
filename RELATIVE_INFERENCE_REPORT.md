@@ -93,9 +93,11 @@ they are defined where used.
 2. **Held-out, it makes protein-level prediction worse in most cells.** Base
    → Base + relative: F_max lower in 8 of 9 aspect × IC cells (5
    significantly), AUPRC lower in 8 of 9 (5 significantly); one significant
-   gain (MF at IC ≥ 0, AUPRC). The same pattern holds with output
-   propagation on (Base + output → Full), and — run as a robustness check —
-   under SCOP-superfamily domain keys and with IEA annotations included in
+   gain (MF at IC ≥ 0, AUPRC). Scored without cutoffs below 0.001, as
+   CAFA-evaluator scores, CC at IC ≥ 2 becomes a second significant gain
+   (F_max, §4.2). The same pattern holds with output propagation on (Base +
+   output → Full), and — run as a robustness check — under
+   SCOP-superfamily domain keys and with IEA annotations included in
    training (§4.2).
 3. **It is not simply trading sensitivity for specificity.** Decomposing
    each configuration's operating point: sensitivity (recall) falls in 16 of
@@ -280,7 +282,12 @@ predict anything at that τ — CAFA's convention, with the covered fraction
 reported alongside). **F_max** is the best harmonic mean of the two over
 all τ: each configuration is read at its own best operating point.
 **AUPRC** is the area under the whole PPV–sensitivity curve: it rewards
-ranking the right terms high everywhere, not just at one cutoff.
+ranking the right terms high everywhere, not just at one cutoff. One
+detail of ours: the sweep ends at a cutoff above every score, where nothing
+is predicted, and that point (sensitivity 0, PPV 0) closes the area at the
+origin. It adds a thin triangle below each configuration's strictest
+cutoff — at most 0.016 here, and not the same for every configuration —
+so §4.2 also gives the contrasts without it.
 
 **Step 5 — the IC floors.** Scoring is repeated counting only terms with
 information content ≥ 0, ≥ 2 and ≥ 4 (IC = −log₂ of a term's propagated
@@ -337,6 +344,24 @@ F_max lower in 8 of 9 cells (5 significantly), higher in 1 (not
 significantly); AUPRC lower in 8 of 9 (5 significantly), higher in 1
 (significantly — MF at IC 0). Every biological-process cell is
 significantly worse on both metrics.
+
+Two scoring conventions move single cells of this table (each re-scored on
+the same bootstrap resamples by `validation/check_metric_conventions.py`;
+details in `VALIDATION_PLAN.md` §4):
+
+- **F_max below τ = 0.001.** Our sweep can cut anywhere, down to 0 (the
+  p-score scaling gives each protein's weakest term exactly 0);
+  CAFA-evaluator's thresholds start at 0.001. Base's best CC 2 cutoff is
+  τ = 0.00007. Restricted to τ ≥ 0.001, Base scores 0.166 there (0.169 on
+  CAFA-evaluator's own grid), and **the CC 2 contrast becomes +0.039,
+  significant** (95% CI +0.012 to +0.056). Read the CAFA way, the relative
+  test raises F_max significantly in one cell. No other cell changes.
+- **AUPRC's point at the origin.** Without it the counts are the same
+  (lower in 8 of 9, 5 significantly; MF 0 still a significant gain), but
+  MF 2 shrinks from −0.048 to −0.031 and is no longer significant, while
+  CC 0 (−0.009) becomes significant.
+
+Neither convention changes the Base + output → Full counts below.
 
 **Base + output → Full**
 
@@ -556,8 +581,8 @@ test with its measured cost rather than as a default.
   evaluation was regenerated once more, after the CAFA-evaluator
   cross-check (`VALIDATION_PLAN.md` §4) showed that the threshold sweep left
   the sparse top of the score range unsampled. In this cell the four
-  configurations' F_max rose by at most 0.005 and their AUPRC moved by at
-  most 0.011 (up to 0.031 and 0.111 in the small SSF + IEA cell). No
+  configurations' F_max rose by at most 0.003 and their AUPRC moved by at
+  most 0.011 (at most 0.013 and 0.032 in the small SSF + IEA cell). No
   conclusion changed: one near-zero AUPRC contrast (CC 2, +0.000) became a
   small loss (−0.006), and significance shifted in a few robustness cells.
   The cross-check's second finding — runs trained without input
@@ -577,6 +602,11 @@ test with its measured cost rather than as a default.
 - **Robustness cells** (§4.2): the same nine-rung ladder rerun with
   `--domain-key ssf` and/or `--evidence-filter all`; eval tables and
   per-run manifests in `validation/ablation_cells/{ipr_all,ssf_manual,ssf_all}/`.
+- **Scoring conventions** (§4.0, §4.2): `validation/check_metric_conventions.py`
+  re-scores the cell with F_max only at τ ≥ 0.001 and AUPRC without its
+  point at the origin, on the committed bootstrap resamples; output
+  `validation/metric_conventions{,_paired}.tsv`. The evaluator itself was
+  cross-checked against CAFA-evaluator (`VALIDATION_PLAN.md` §4).
 - **Sensitivity/PPV decomposition** (§4.3):
   `validation/ablation_pr_decomposition.py` (reuses the ablation's own panel
   machinery), output `validation/ablation_pr_decomposition.tsv`.
