@@ -51,6 +51,10 @@ class UniverseProvenance:
         evidence_filter: the GAF evidence filter that selected the accessions
             (``"goa"`` rule only); ``None`` for other rules and for markers
             written before it was recorded.
+        selection_sha256: SHA-256 of each ``selection_sources`` file, in the
+            same order — paths such as the current-release GAF are mutable, so
+            the path alone does not say which bytes selected the accessions.
+            ``None`` for markers written before it was recorded.
     """
 
     selection_rule: str
@@ -61,6 +65,7 @@ class UniverseProvenance:
     tool: str
     created: str
     evidence_filter: Optional[str] = None
+    selection_sha256: Optional[tuple[str, ...]] = None
 
 
 def marker_path(extract_path: Path) -> Path:
@@ -82,6 +87,8 @@ def read_marker(extract_path: Path) -> Optional[UniverseProvenance]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
         payload["selection_sources"] = tuple(payload["selection_sources"])
+        if payload.get("selection_sha256") is not None:
+            payload["selection_sha256"] = tuple(payload["selection_sha256"])
         return UniverseProvenance(**payload)
     except (ValueError, TypeError, KeyError) as exc:
         logger.warning(f"Unreadable provenance marker {path}: {exc}")
@@ -99,6 +106,7 @@ def write_marker(
     tool: str,
     created: Optional[str] = None,
     evidence_filter: Optional[str] = None,
+    selection_sha256: Optional[Sequence[str]] = None,
 ) -> Path:
     """Write the sidecar for a freshly written extract; returns its path."""
     provenance = UniverseProvenance(
@@ -110,6 +118,9 @@ def write_marker(
         tool=tool,
         created=created or datetime.now(timezone.utc).isoformat(timespec="seconds"),
         evidence_filter=evidence_filter,
+        selection_sha256=(
+            tuple(selection_sha256) if selection_sha256 is not None else None
+        ),
     )
     path = marker_path(extract_path)
     path.write_text(json.dumps(asdict(provenance), indent=2) + "\n", encoding="utf-8")
