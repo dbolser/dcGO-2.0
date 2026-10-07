@@ -52,7 +52,14 @@ BENCH_DOM = {
 
 def _rows(**kwargs):
     return ab.selection_stage_counts(
-        T0, T1, ["P1", "P2", "P3", "P4"], BENCH_ALL, BENCH_DOM, IC, [0.0, 2.0, 4.0]
+        T0,
+        T1,
+        ["P1", "P2", "P3", "P4"],
+        BENCH_ALL,
+        BENCH_DOM,
+        IC,
+        [0.0, 2.0, 4.0],
+        **kwargs,
     )
 
 
@@ -151,6 +158,21 @@ class TestSelectionStageCounts:
         rows = [r for r in _rows() if r["stage"] == "cohort_at_ic_floor"]
         assert len(rows) == 3 * 3  # BP/MF/CC x three floors
 
+    def test_cohort_proteins_without_transfer_architectures_are_counted(self):
+        # A cohort fixed by another protein2ipr: P4 has no domain in the one
+        # the transfer step reads, so it is scored with no prediction.
+        rows = _rows(transfer_proteins=["P1", "P2", "P3"])
+        missing = {
+            r["aspect"]: r["n_proteins"]
+            for r in rows
+            if r["stage"] == "no_knowledge_without_transfer_architectures"
+        }
+        assert missing == {"BP": 1, "MF": 0, "CC": 0}
+
+    def test_no_transfer_row_when_the_cohort_is_the_transfer_file(self):
+        stages = {r["stage"] for r in _rows()}
+        assert "no_knowledge_without_transfer_architectures" not in stages
+
     def test_empty_aspects_are_still_reported_as_zero(self):
         rows = [
             r
@@ -185,10 +207,10 @@ class TestRunSettingMismatches:
         )
 
     @staticmethod
-    def _domains(sha256):
+    def _domains(sha256, gaf_sha256="f" * 64):
         return [
             {"role": "domain_annotations", "sha256": sha256},
-            {"role": "gaf", "sha256": "f" * 64},
+            {"role": "gaf", "sha256": gaf_sha256},
         ]
 
     def test_matching_runs_pass(self, tmp_path):
@@ -220,18 +242,33 @@ class TestRunSettingMismatches:
         rung = ab.LADDER[0]
         self._write(tmp_path, rung, inputs=self._domains("a" * 64))
         problems = ab.run_setting_mismatches(
-            tmp_path, [rung], {}, interpro_sha256="b" * 64
+            tmp_path, [rung], {}, input_sha256={"domain_annotations": "b" * 64}
         )
         assert problems == [
             f"{rung.name}: run protein2ipr sha256={'a' * 64}, evaluator {'b' * 64}"
         ]
 
-    def test_matching_protein2ipr_passes(self, tmp_path):
+    def test_training_gaf_mismatch_is_reported(self, tmp_path):
+        # The bug this guards: a committed command replayed without --gaf reads
+        # the current GAF at the default path — the held-out labels.
+        rung = ab.LADDER[0]
+        self._write(tmp_path, rung, inputs=self._domains("a" * 64, "c" * 64))
+        problems = ab.run_setting_mismatches(
+            tmp_path,
+            [rung],
+            {},
+            input_sha256={"domain_annotations": "a" * 64, "gaf": "d" * 64},
+        )
+        assert problems == [
+            f"{rung.name}: run GAF sha256={'c' * 64}, evaluator {'d' * 64}"
+        ]
+
+    def test_matching_inputs_pass(self, tmp_path):
         for rung in ab.LADDER:
             self._write(tmp_path, rung, inputs=self._domains("a" * 64))
+        given = {"domain_annotations": "a" * 64, "gaf": "f" * 64}
         assert (
-            ab.run_setting_mismatches(tmp_path, ab.LADDER, {}, interpro_sha256="a" * 64)
-            == []
+            ab.run_setting_mismatches(tmp_path, ab.LADDER, {}, input_sha256=given) == []
         )
 
     def test_protein2ipr_is_checked_only_when_given(self, tmp_path):
@@ -243,6 +280,8 @@ class TestRunSettingMismatches:
         rung = ab.LADDER[0]
         self._write(tmp_path, rung)
         assert (
-            ab.run_setting_mismatches(tmp_path, [rung], {}, interpro_sha256="b" * 64)
+            ab.run_setting_mismatches(
+                tmp_path, [rung], {}, input_sha256={"domain_annotations": "b" * 64}
+            )
             == []
         )

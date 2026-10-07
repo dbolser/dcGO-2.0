@@ -92,6 +92,7 @@ def test_union_of_gafs_selects_from_an_archived_source(
     marker = json.loads(Path(f"{output}.provenance.json").read_text())
     assert marker["selection_sources"] == [str(t0), str(t1)]
     assert marker["interpro_source"] == str(source)
+    assert marker["evidence_filter"] == evidence
 
 
 def test_defaults_are_the_species_files(tmp_path: Path) -> None:

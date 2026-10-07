@@ -56,7 +56,9 @@ Inputs passed with `--gaf`/`--interpro` (archived snapshots for the temporal
 benchmark) are hashed and header-read the same way but carry no
 `source_url`/`derived_from`: the species' current-release URL would name
 different bytes. A subset's own `.provenance.json` sidecar names the archive it
-was cut from.
+was cut from, the GAFs and the evidence filter that selected it;
+`scripts/run_t0_interpro_ablation.py` copies it into the evaluation's
+`manifests/` so it is committed with the results.
 
 The inputs recorded are exactly those the selected ontology declares in
 `src/ontology_registry.py` (`needs`, plus `hierarchy_needs` when

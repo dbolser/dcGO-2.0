@@ -48,6 +48,9 @@ class UniverseProvenance:
         n_matched_lines: protein2ipr lines written to the extract.
         tool: the script that wrote it.
         created: ISO-8601 UTC timestamp.
+        evidence_filter: the GAF evidence filter that selected the accessions
+            (``"goa"`` rule only); ``None`` for other rules and for markers
+            written before it was recorded.
     """
 
     selection_rule: str
@@ -57,6 +60,7 @@ class UniverseProvenance:
     n_matched_lines: int
     tool: str
     created: str
+    evidence_filter: Optional[str] = None
 
 
 def marker_path(extract_path: Path) -> Path:
@@ -94,6 +98,7 @@ def write_marker(
     n_matched_lines: int,
     tool: str,
     created: Optional[str] = None,
+    evidence_filter: Optional[str] = None,
 ) -> Path:
     """Write the sidecar for a freshly written extract; returns its path."""
     provenance = UniverseProvenance(
@@ -104,6 +109,7 @@ def write_marker(
         n_matched_lines=n_matched_lines,
         tool=tool,
         created=created or datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        evidence_filter=evidence_filter,
     )
     path = marker_path(extract_path)
     path.write_text(json.dumps(asdict(provenance), indent=2) + "\n", encoding="utf-8")

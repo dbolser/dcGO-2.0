@@ -44,6 +44,26 @@ class TestMarkerRoundTrip:
         assert marker.n_matched_lines == 4200
         assert marker.created == "2026-08-17T00:00:00+00:00"
 
+    def test_evidence_filter_reads_back(self, extract):
+        write_marker(
+            extract,
+            selection_rule="goa",
+            selection_sources=["t0.gaf.gz", "t1.gaf.gz"],
+            interpro_source="protein2ipr.dat.gz",
+            n_accessions=2,
+            n_matched_lines=2,
+            tool="extract_human_interpro.py",
+            evidence_filter="all",
+        )
+        assert read_marker(extract).evidence_filter == "all"
+
+    def test_a_marker_from_before_the_evidence_filter_reads_as_unknown(self, extract):
+        write_goa_marker(extract)
+        payload = json.loads(marker_path(extract).read_text())
+        del payload["evidence_filter"]
+        marker_path(extract).write_text(json.dumps(payload))
+        assert read_marker(extract).evidence_filter is None
+
     def test_missing_marker_reads_as_none(self, extract):
         assert read_marker(extract) is None
 

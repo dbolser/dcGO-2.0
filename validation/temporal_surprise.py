@@ -1288,6 +1288,8 @@ def main() -> int:  # pragma: no cover - I/O wiring, exercised by running it
     from src.domain_annotation_parser import DomainAnnotationParser
     from src.goa_parser import EXPERIMENTAL_EVIDENCE, GOAParser, parse_goa_human
     from src.ontology_processor import OntologyProcessor
+    from src.run_manifest import sha256_file
+    from validation.temporal_benchmark import training_input_mismatches
 
     logger.remove()
     logger.add(sys.stderr, level="INFO")
@@ -1381,6 +1383,21 @@ def main() -> int:  # pragma: no cover - I/O wiring, exercised by running it
         ):
             if not path.exists():
                 logger.error(f"Missing required input: {path}")
+                return 1
+        # Score through the inputs training read (see
+        # training_input_mismatches); a ranking without a manifest is not checked.
+        manifest = args.surprising.parent / "run_manifest_go.json"
+        if manifest.exists():
+            mismatches = training_input_mismatches(
+                manifest,
+                {
+                    "domain_annotations": sha256_file(args.interpro),
+                    "gaf": sha256_file(args.t0_gaf),
+                },
+            )
+            for problem in mismatches:
+                logger.error(f"Settings mismatch — {manifest}: {problem}")
+            if mismatches:
                 return 1
 
     if args.replay:

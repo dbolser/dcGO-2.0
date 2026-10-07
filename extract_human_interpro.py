@@ -205,6 +205,7 @@ def main():
         selection_rule="goa",
         selection_sources=goa_files,
         interpro_source=interpro_file,
+        evidence_filter=args.evidence_filter,
         n_accessions=n_accessions,
         n_matched_lines=n_matched,
         tool="extract_human_interpro.py",
