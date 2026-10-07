@@ -1268,7 +1268,119 @@ during training — for input or output propagation and the parental
 background — and the input-propagation rungs remap t0 terms obsoleted since
 2021 to their 2026 successors (74 alt_id and 417 replaced_by terms in the
 committed cell). The residual favours the hierarchy stages the ablation
-compares, so the results must not be called prospective. Results to follow.
+compares, so the results must not be called prospective. Results in the next
+subsection.
+
+### t0 InterPro architectures: three arms (2026-10-07)
+
+**Design.** Three arms of the `ipr_manual` cell. Each is the nine committed
+rung commands trained on GOA release 205 (`--gaf`); they differ only in the
+protein2ipr subset read in training and in the transfer step:
+
+| arm | protein2ipr | proteins selected by | subset: proteins / InterPro entries | eval tables |
+|---|---|---|---|---|
+| baseline (committed) | current (downloaded 2026-07-07) | t1 GAF, non-IEA | 18,909 / 19,534 | `validation/ablation_*.tsv` |
+| control | current | t0 ∪ t1 GAFs, any evidence | 19,523 / 19,771 | `validation/ablation_cells/ipr_manual_selctrl/` |
+| t0 | InterPro 85.0 (2021-04-08) | t0 ∪ t1 GAFs, any evidence | 19,394 / 17,061 | `validation/ablation_cells/ipr_manual_t0interpro/` |
+
+So control − baseline isolates the protein selection, and t0 − control
+isolates the InterPro release: the domain-architecture look-ahead. The t0
+arm learns fewer associations (`supra_input`: 436,620 over 23,379 features,
+against 491,823 over 27,457 for control). All three are scored on the
+committed cell's cohort (`--cohort-interpro data/interim/protein2ipr_human.dat.gz`):
+298 BP, 406 MF and 436 CC proteins. Of these, 19 / 16 / 14 have no
+InterPro 85.0 domain. They get no t0 prediction and count as misses (0 in
+the control arm). The naive baseline is therefore identical in every arm.
+`validation/compare_t0_interpro.py` pairs the arms on those proteins: one
+1,000-replicate paired bootstrap per aspect × IC cell, over the
+four configurations of `RELATIVE_INFERENCE_REPORT.md` and naive, drawn from
+the same resamples as the per-arm cells. Output:
+`validation/ablation_cells/t0_interpro_comparison.tsv`. It refuses to write
+unless every arm reproduces its committed `ablation_metrics.tsv` and the arms
+share one cohort, one IC table and one naive baseline. Both checks passed.
+
+**Base (`supra_input`) per arm**, and the InterPro-release contrast
+(\* = paired 95% CI excludes 0):
+
+| cell | F_max: baseline / control / t0 | t0 − control (95% CI) | AUPRC: baseline / control / t0 | t0 − control (95% CI) |
+|---|---|---:|---|---:|
+| BP 0 | 0.243 / 0.244 / 0.238 | −0.006 (−0.018, +0.005) | 0.120 / 0.120 / 0.113 | −0.007 (−0.017, +0.002) |
+| BP 2 | 0.193 / 0.193 / 0.187 | −0.006 (−0.015, +0.006) | 0.076 / 0.076 / 0.069 | −0.007 (−0.016, +0.001) |
+| BP 4 | 0.135 / 0.138 / 0.138 | +0.000 (−0.006, +0.007) | 0.036 / 0.036 / 0.035 | −0.001 (−0.005, +0.002) |
+| MF 0 | 0.363 / 0.366 / 0.360 | −0.005 (−0.014, +0.003) | 0.175 / 0.176 / 0.172 | −0.004\* (−0.008, −0.001) |
+| MF 2 | 0.356 / 0.357 / 0.335 | −0.022\* (−0.038, −0.004) | 0.218 / 0.218 / 0.208 | −0.010\* (−0.019, −0.002) |
+| MF 4 | 0.338 / 0.338 / 0.325 | −0.013\* (−0.027, −0.000) | 0.200 / 0.199 / 0.193 | −0.007 (−0.015, +0.000) |
+| CC 0 | 0.371 / 0.370 / 0.366 | −0.004 (−0.013, +0.002) | 0.207 / 0.207 / 0.200 | −0.007\* (−0.013, −0.003) |
+| CC 2 | 0.194 / 0.193 / 0.190 | −0.004 (−0.010, +0.002) | 0.058 / 0.058 / 0.054 | −0.004\* (−0.008, −0.001) |
+| CC 4 | 0.128 / 0.128 / 0.126 | −0.001 (−0.012, +0.005) | 0.036 / 0.036 / 0.031 | −0.005\* (−0.010, −0.001) |
+
+- **Protein selection moves nothing material.** Control − baseline is
+  within ±0.003 for Base, and within −0.003 to +0.008 (F_max) and −0.001 to
+  +0.005 (AUPRC) across all four configurations. A few of these differences
+  are significant only because the two arms are almost identical, so the
+  intervals are very narrow.
+- **Dating the architectures costs a little, mostly in MF.** Across the four
+  configurations, t0 − control is lower in 32 of 36 F_max comparisons
+  (11 significant, none significantly higher). It is lower in 36 of 36 AUPRC
+  comparisons (18 significant). The largest drops are 0.023 F_max and 0.018
+  AUPRC. Some of the cost is coverage: 14–19 cohort proteins per aspect had no
+  2021 domain. Scored instead on its own cohort (no-knowledge proteins with an
+  InterPro 85.0 domain: 280 / 392 / 422), t0 Base is within 0.011 of the
+  committed cell. That comparison is not paired, because the cohorts differ
+  (`validation/ablation_cells/ipr_manual_t0interpro_owncohort/`). In short,
+  current architectures inflated the committed absolute numbers by up to
+  about 0.02.
+- **No conclusion changes.** In the t0 arm, the supra model beats all 200
+  shuffled mappings in 18/18 cell × metric tests (`p = 1/201`), as in the
+  other two arms. Supra-domains do not change F_max significantly in any cell.
+  Relative inference, added directly to supra, lowers both metrics in all nine cells
+  (eight significant on each). Added to input + output propagation it lowers
+  F_max in 8 of 9 (5 significant) and AUPRC in 8 of 9 (7 significant; the MF
+  IC 0 gain stays). Input propagation rescues the relative rungs: `full` vs
+  `supra_relative_output` is higher in 9/9 cells on both metrics (6 and 8
+  significant). Base → Base + relative, the report's spine, keeps its
+  significance pattern. F_max is lower in 7 of 9 cells (5 significant, none
+  significantly higher); AUPRC is lower in 8 of 9 (5 significant, with MF IC 0
+  significantly higher). These are the same significant cells, in the same
+  direction, as the committed cell. The only sign change is CC 0 F_max (−0.004 →
+  +0.002, neither significant). The best rung still varies by cell. Input +
+  output is best on both metrics for BP 0, BP 2 and CC 2. Input alone is best
+  on both for BP 4, MF 2 and MF 4. `full` is best for MF 0, output alone for
+  CC 0. At CC 4, single domains have the best F_max and output alone the best
+  AUPRC.
+
+**What this does and does not remove.** It removes the domain-side look-ahead
+from this one cell: training and transfer both read InterPro 85.0, released
+13 days before GOA 205. It does **not** remove the vocabulary look-ahead
+described above. Seven of the nine rungs still train with `go-basic.obo`
+2026-06-15 for propagation and the parental background, and retired t0 ids are
+remapped to their 2026 successors. The evaluator also uses that ontology for
+truth propagation, IC and aspects, as CAFA does. The other temporal analyses
+(§2 headline benchmark, multi-ontology breadth, surprise-score held-out test,
+all-species and mouse arms) still read current `protein2ipr`.
+
+Regeneration. The two new arms' runs (`run_dcgo_human.py` unchanged since)
+are the runbook's:
+
+```bash
+uv run python scripts/run_t0_interpro_ablation.py               # t0 arm
+uv run python scripts/run_t0_interpro_ablation.py \
+    --source data/raw/interpro_mappings/protein2ipr.dat.gz \
+    --subset data/interim/protein2ipr_human_t0t1sel_current.dat.gz \
+    --run-dir results/ablation-t0interpro/ipr_manual_selctrl \
+    --eval-dir validation/ablation_cells/ipr_manual_selctrl    # control arm
+uv run python validation/compare_t0_interpro.py \
+    --t0-gaf data/raw/goa_archive/goa_human.gaf.205.gz \
+    --t1-gaf data/raw/goa_annotations/goa_human.gaf.gz
+```
+
+The committed tables were scored by running the runbook's `eval` step
+(`validation/ablation.py ... --interpro <subset> --cohort-interpro
+data/interim/protein2ipr_human.dat.gz`) on the existing runs. Their subset
+sidecars predate the marker's `evidence_filter` field: the extraction logs
+record `Evidence codes: ALL`. A runbook rerun would therefore cut the subsets
+and retrain again. The own-cohort sensitivity is the same command
+without `--cohort-interpro` and with `--n-permutations 0`.
 
 ## 5. Decisions to settle before writing the paper
 

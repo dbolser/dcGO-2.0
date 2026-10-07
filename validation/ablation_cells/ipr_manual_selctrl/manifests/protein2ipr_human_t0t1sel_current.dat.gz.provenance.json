@@ -1,0 +1,12 @@
+{
+  "selection_rule": "goa",
+  "selection_sources": [
+    "data/raw/goa_archive/goa_human.gaf.205.gz",
+    "data/raw/goa_annotations/goa_human.gaf.gz"
+  ],
+  "interpro_source": "data/raw/interpro_mappings/protein2ipr.dat.gz",
+  "n_accessions": 19871,
+  "n_matched_lines": 241143,
+  "tool": "extract_human_interpro.py",
+  "created": "2026-10-07T09:02:09+00:00"
+}

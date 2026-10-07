@@ -385,8 +385,9 @@ the same cells either way.
 **Robustness across the design axes.** The same four configurations were
 rerun with the domain key switched to SCOP superfamilies (`ssf`, the
 published dcGO's domain universe) and with IEA annotations included in
-training — four cells in all. The Base → Base + relative contrast, paired
-bootstrap per cell:
+training — four cells in all — and, in the last row, on 2021 domain
+architectures. The Base → Base + relative contrast, paired bootstrap per
+cell:
 
 | cell | cohort BP / MF / CC | F_max: relative worse | AUPRC: relative worse |
 |---|---|---|---|
@@ -394,6 +395,7 @@ bootstrap per cell:
 | InterPro, + IEA | 187 / 242 / 161 | 8/9 (3 sig; 0 sig better) | 8/9 (5 sig; 1 sig better) |
 | SCOP SSF, manual | 140 / 221 / 195 | 7/9 (6 sig; 2 sig better) | 7/9 (6 sig; 1 sig better) |
 | SCOP SSF, + IEA | 72 / 104 / 51 | 8/9 (2 sig; 1 sig better) | 8/9 (6 sig; 1 sig better) |
+| InterPro 85.0 (t0), manual | 298 / 406 / 436 | 7/9 (5 sig; 0 sig better) | 8/9 (5 sig; 1 sig better) |
 
 The direction is the same in every cell: the relative test is worse in 7–8
 of 9 aspect × IC cells on both metrics, with at most two significant gains.
@@ -406,6 +408,12 @@ IEA annotation in 2021 counts as already known in that aspect — the cohort
 is always built from exactly the evidence training saw. The SSF cells keep
 only proteins carrying SSF domains. So absolute numbers are not comparable
 across cells; the within-cell contrasts are.)
+
+On 2021 architectures (last row: the InterPro/manual cell retrained on
+InterPro 85.0, released 2021-04-08, and scored on the same cohort), Base is
+slightly lower, by up to 0.022 F_max in MF. The same cells are significant,
+in the same direction, so domain-side look-ahead does not explain the result
+either (`VALIDATION_PLAN.md` §4 "t0 InterPro architectures").
 
 ### 4.3 Sensitivity / PPV decomposition at the operating point
 
@@ -604,7 +612,11 @@ test with its measured cost rather than as a default.
   (`VALIDATION_PLAN.md` §4, "Regenerating a cell").
 - **Robustness cells** (§4.2): the same nine-rung ladder rerun with
   `--domain-key ssf` and/or `--evidence-filter all`; eval tables and
-  per-run manifests in `validation/ablation_cells/{ipr_all,ssf_manual,ssf_all}/`.
+  per-run manifests in `validation/ablation_cells/{ipr_all,ssf_manual,ssf_all}/`;
+  the InterPro 85.0 (t0) rerun and its selection control in
+  `validation/ablation_cells/{ipr_manual_t0interpro,ipr_manual_selctrl}/`,
+  paired against the committed cell in
+  `validation/ablation_cells/t0_interpro_comparison.tsv`.
 - **Scoring conventions** (§4.0, §4.2): `validation/check_metric_conventions.py`
   re-scores the cell with F_max only at τ ≥ 0.001 and AUPRC without its
   point at the origin, on the committed bootstrap resamples; output
