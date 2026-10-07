@@ -50,9 +50,25 @@ implementation.
   measured, but the predictive benchmark still needs at least one independent
   domain- or protein-function predictor. Treat InterPro2GO strictly as an
   incomplete positive reference, not a precision benchmark.
-- [ ] **Independently verify the evaluator.** Check F_max and AUPRC against a
-  standard CAFA implementation; document threshold sampling, interpolation,
-  coverage handling, and the changing cohorts induced by IC filtering.
+- [x] **Independently verify the evaluator.** Done 2026-10-07
+  (`validation/check_evaluator_cafaeval.py`, `VALIDATION_PLAN.md` §4
+  "Evaluator cross-check against CAFA-evaluator"): on the §4 `ipr_manual`
+  cell, CAFA-evaluator 1.3.0 matches our truth and predictions term for term
+  and our curves to 6 × 10⁻⁹ at the same thresholds; reported F_max agrees
+  within 0.003 wherever the optimum is reachable by a CAFA grid. It found
+  two evaluator bugs, both fixed and regenerated: the threshold sweep missed
+  the top of the score range (naive F_max understated by up to 0.25), and
+  predictions on retired GO ids were dropped. Threshold sampling, AUPRC
+  interpolation, coverage, S_min weighting and the IC-floor cohorts are
+  documented there.
+- [ ] **Redo the pre-§4 naive comparisons with the fixed evaluator.** §2's
+  `temporal_benchmark_metrics.tsv` and the claims built on it (RESULTS.md,
+  README.md, the MULTISPECIES_BACKGROUND.md held-out cells, the mouse axis,
+  CLAUDE.md's "beats the naive F_max baseline on informative terms") were
+  scored with the old sweep, which understated naive's F_max by up to 0.25.
+  `temporal_benchmark.py`'s own driver also still applies neither retired-id
+  remap. On the current §4 cohort dcGO's F_max lead over naive holds in BP
+  and MF at IC≥2/4 but not in CC (`VALIDATION_PLAN.md` §2 correction).
 
 ## P1 — reproducibility and release
 
