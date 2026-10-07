@@ -57,9 +57,10 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Mapping, Sequence
+from typing import Callable, Iterable, Mapping, Sequence
 
 _HERE = Path(__file__).resolve().parent
 _ROOT = _HERE.parent
@@ -331,18 +332,36 @@ def association_count(path: Path) -> int:
 
 
 # --------------------------------------------------------------------------- #
-# Driver                                                                       #
+# Evaluation inputs (shared with check_evaluator_cafaeval.py)                   #
 # --------------------------------------------------------------------------- #
-def main() -> int:  # pragma: no cover - I/O wiring
-    import argparse
-    from collections import defaultdict
+@dataclass(frozen=True)
+class BenchmarkInputs:
+    """Everything the evaluation needs that does not depend on a rung."""
 
-    import numpy as np
-    import pandas as pd
+    get_ancestors: Callable[[str], set[str]]
+    term_aspect: dict[str, str]
+    t0_map: dict[str, set[str]]
+    t1_exp_map: dict[str, set[str]]
+    protein_domains: dict[str, list[str]]
+    #: ``{aspect: {protein: truth}}`` without / with the has-a-domain restriction
+    benchmark_all: dict[str, dict[str, set[str]]]
+    benchmark: dict[str, dict[str, set[str]]]
+    eval_proteins: set[str]
+    ic: dict[str, float]
+    #: propagated t0 term frequency (the naive baseline's scores)
+    term_freq: dict[str, float]
+
+
+def load_benchmark_inputs(
+    t0_gaf: Path,
+    t1_gaf: Path,
+    interpro: Path,
+    go_ontology: Path,
+    domain_key: str,
+    evidence_filter: str,
+) -> BenchmarkInputs:  # pragma: no cover - I/O wiring
+    """Parse the GAFs, ontology and architectures into the scored benchmark."""
     from loguru import logger
-
-    logger.remove()
-    logger.add(sys.stderr, level="INFO")
 
     if str(_ROOT) not in sys.path:
         sys.path.insert(0, str(_ROOT))
@@ -350,6 +369,193 @@ def main() -> int:  # pragma: no cover - I/O wiring
     from src.domain_annotation_parser import DomainAnnotationParser
     from src.goa_parser import EXPERIMENTAL_EVIDENCE, GOAParser, parse_goa
     from src.ontology_processor import OntologyProcessor
+
+    logger.info("Loading GO ontology...")
+    processor = OntologyProcessor(go_ontology)
+    get_ancestors = processor.get_ancestors
+    term_aspect = tb.build_term_aspect(processor)
+
+    logger.info(f"Parsing t0 (training) GOA — {evidence_filter} evidence...")
+    t0_map = parse_goa(t0_gaf, evidence_filter=evidence_filter)
+
+    logger.info("Parsing t1 (test) GOA — experimental evidence only...")
+    t1_exp_map = GOAParser(
+        evidence_codes=EXPERIMENTAL_EVIDENCE, aspects={"P", "F", "C"}
+    ).parse_gaf_file(t1_gaf)
+    t0_map = tb.remap_retired_ids(
+        t0_map, processor.alt_id_map, processor.replaced_by_map
+    )
+    t1_exp_map = tb.remap_retired_ids(
+        t1_exp_map, processor.alt_id_map, processor.replaced_by_map
+    )
+
+    logger.info("Parsing domain architectures...")
+    dom_parser = DomainAnnotationParser(
+        max_supra_domain_length=3,
+        min_domain_length=10,
+        domain_key=domain_key,
+    )
+    architectures = dom_parser.parse_protein2ipr_file(interpro)
+    protein_domains: dict[str, list[str]] = {}
+    for protein, arch in architectures.items():
+        domains = list(arch.single_domains) + list(arch.supra_domains)
+        if domains:
+            protein_domains[protein] = domains
+
+    # One cohort for every rung. Supra-domains are built out of single domains,
+    # so "has >=1 feature" is the same set either way — which is what makes the
+    # paired bootstrap across rungs legitimate.
+    logger.info("Building the CAFA no-knowledge benchmark...")
+    benchmark_all = tb.build_nk_benchmark_by_aspect(
+        t0_map, t1_exp_map, term_aspect, get_ancestors, predictable_proteins=None
+    )
+    benchmark = tb.build_nk_benchmark_by_aspect(
+        t0_map,
+        t1_exp_map,
+        term_aspect,
+        get_ancestors,
+        predictable_proteins=set(protein_domains),
+    )
+    eval_proteins = {p for aspect in benchmark.values() for p in aspect}
+    for aspect, truths in benchmark.items():
+        logger.info(f"  {aspect}: {len(truths):,} no-knowledge benchmark proteins")
+
+    logger.info("Computing information content from t0...")
+    ic = tb.information_content(t0_map, get_ancestors)
+    n_t0 = len(t0_map)
+    freq_counts: dict[str, int] = defaultdict(int)
+    for terms in t0_map.values():
+        for t in tb.propagate_terms(terms, get_ancestors):
+            freq_counts[t] += 1
+    term_freq = {t: c / n_t0 for t, c in freq_counts.items()} if n_t0 else {}
+
+    return BenchmarkInputs(
+        get_ancestors=get_ancestors,
+        term_aspect=term_aspect,
+        t0_map=t0_map,
+        t1_exp_map=t1_exp_map,
+        protein_domains=protein_domains,
+        benchmark_all=benchmark_all,
+        benchmark=benchmark,
+        eval_proteins=eval_proteins,
+        ic=ic,
+        term_freq=term_freq,
+    )
+
+
+#: ``--transfer`` choice -> domain-to-protein transfer function
+TRANSFERS = {
+    "pscore": tb.transfer_predictions_pscore,
+    "max": tb.transfer_predictions,
+}
+
+
+def build_methods(
+    run_root: Path,
+    inputs: BenchmarkInputs,
+    transfer_name: str = "pscore",
+    domain_key: str = "interpro",
+) -> tuple[dict[str, dict], list[dict], dict[str, dict]]:  # pragma: no cover - I/O
+    """Per-protein predictions for every scored method.
+
+    Each rung under ``-log10(q)``, the ``-log10(p)`` sensitivity variant of each
+    association rung (``<rung>__p``), and the naive baseline. Returns
+    ``(methods, provenance rows, {rung: domain -> term -log10(q) scores})``;
+    the last feeds the permutation null. Raises ``FileNotFoundError`` when a
+    rung's predictions are missing.
+    """
+    transfer = TRANSFERS[transfer_name]
+    eval_domains = {p: inputs.protein_domains[p] for p in inputs.eval_proteins}
+
+    methods: dict[str, dict] = {}
+    provenance: list[dict] = []
+    rung_scores: dict[str, dict] = {}
+    for rung in LADDER:
+        path = rung_prediction_file(run_root, rung, domain_key)
+        if not path.exists():
+            raise FileNotFoundError(f"[{rung.name}] missing predictions: {path}")
+        n_rows = association_count(path)
+        # Primary score: -log10(q). Uniform across rungs, because the True Path
+        # output has no p_value column and a ladder scored on two different
+        # columns would confound the component with the score scale.
+        scores_q = tb.load_domain_go_scores(
+            path,
+            "q_value" if rung.kind == "propagated" else "adj_p_value",
+            neg_log10=True,
+        )
+        rung_scores[rung.name] = scores_q
+        methods[rung.name] = transfer(eval_domains, scores_q, inputs.get_ancestors)
+        provenance.append(
+            {
+                "rung": rung.name,
+                "label": rung.label,
+                "adds": rung.adds,
+                "predictions_file": str(path),
+                "n_rows": n_rows,
+                "n_domains": len(scores_q),
+                "score": "-log10(q)",
+            }
+        )
+        if rung.kind == "associations":
+            scores_p = tb.load_domain_go_scores(path, "p_value", neg_log10=True)
+            methods[f"{rung.name}__p"] = transfer(
+                eval_domains, scores_p, inputs.get_ancestors
+            )
+            provenance.append(
+                {
+                    "rung": f"{rung.name}__p",
+                    "label": f"{rung.label} (p-ranked)",
+                    "adds": "sensitivity: score column only",
+                    "predictions_file": str(path),
+                    "n_rows": n_rows,
+                    "n_domains": len(scores_p),
+                    "score": "-log10(p)",
+                }
+            )
+    methods["naive"] = tb.naive_predictions(inputs.eval_proteins, inputs.term_freq)
+    provenance.append(
+        {
+            "rung": "naive",
+            "label": "CAFA naive baseline",
+            "adds": "-",
+            "predictions_file": "-",
+            "n_rows": len(inputs.term_freq),
+            "n_domains": 0,
+            "score": "propagated t0 term frequency",
+        }
+    )
+    return methods, provenance, rung_scores
+
+
+def floor_cell(
+    truth: Mapping[str, set[str]],
+    preds: Mapping[str, Mapping[str, float]],
+    ic: Mapping[str, float],
+    min_ic: float,
+) -> tuple[dict, dict, list[float]]:
+    """One aspect x IC-floor cell exactly as it is scored.
+
+    The floor restricts **both** sides to terms with ``IC >= min_ic``; proteins
+    left with no truth leave the cohort (proteins left with no prediction stay in
+    it, as misses). The threshold sweep is drawn from the filtered predictions.
+    Returns ``(truth, predictions, thresholds)``.
+    """
+    pred_f = tb.filter_by_ic(preds, ic, min_ic)
+    return tb.filter_by_ic(truth, ic, min_ic), pred_f, tb._candidate_thresholds(pred_f)
+
+
+# --------------------------------------------------------------------------- #
+# Driver                                                                       #
+# --------------------------------------------------------------------------- #
+def main() -> int:  # pragma: no cover - I/O wiring
+    import argparse
+
+    import numpy as np
+    import pandas as pd
+    from loguru import logger
+
+    logger.remove()
+    logger.add(sys.stderr, level="INFO")
 
     parser = argparse.ArgumentParser(
         description="dcGO component ablation with bootstrap CIs and a permutation null "
@@ -386,7 +592,7 @@ def main() -> int:  # pragma: no cover - I/O wiring
         "--go-ontology", type=Path, default=Path("data/raw/go_ontology/go-basic.obo")
     )
     parser.add_argument("--output-dir", type=Path, default=Path("validation"))
-    parser.add_argument("--transfer", choices=["max", "pscore"], default="pscore")
+    parser.add_argument("--transfer", choices=sorted(TRANSFERS), default="pscore")
     parser.add_argument(
         "--min-ic",
         type=float,
@@ -436,140 +642,40 @@ def main() -> int:  # pragma: no cover - I/O wiring
         return 1
 
     # ---------------------------------------------------------------- inputs --
-    logger.info("Loading GO ontology...")
-    processor = OntologyProcessor(args.go_ontology)
-    get_ancestors = processor.get_ancestors
-    term_aspect = tb.build_term_aspect(processor)
-
-    logger.info(f"Parsing t0 (training) GOA — {args.evidence_filter} evidence...")
-    t0_map = parse_goa(args.t0_gaf, evidence_filter=args.evidence_filter)
-
-    logger.info("Parsing t1 (test) GOA — experimental evidence only...")
-    t1_exp_map = GOAParser(
-        evidence_codes=EXPERIMENTAL_EVIDENCE, aspects={"P", "F", "C"}
-    ).parse_gaf_file(args.t1_gaf)
-    t0_map = tb.remap_retired_ids(
-        t0_map, processor.alt_id_map, processor.replaced_by_map
+    inputs = load_benchmark_inputs(
+        args.t0_gaf,
+        args.t1_gaf,
+        args.interpro,
+        args.go_ontology,
+        args.domain_key,
+        args.evidence_filter,
     )
-    t1_exp_map = tb.remap_retired_ids(
-        t1_exp_map, processor.alt_id_map, processor.replaced_by_map
-    )
-
-    logger.info("Parsing domain architectures...")
-    dom_parser = DomainAnnotationParser(
-        max_supra_domain_length=3,
-        min_domain_length=10,
-        domain_key=args.domain_key,
-    )
-    architectures = dom_parser.parse_protein2ipr_file(args.interpro)
-    protein_domains: dict[str, list[str]] = {}
-    for protein, arch in architectures.items():
-        domains = list(arch.single_domains) + list(arch.supra_domains)
-        if domains:
-            protein_domains[protein] = domains
-
-    # ------------------------------------------------------------- cohort ----
-    # One cohort for every rung. Supra-domains are built out of single domains,
-    # so "has >=1 feature" is the same set either way — which is what makes the
-    # paired bootstrap across rungs legitimate.
-    logger.info("Building the CAFA no-knowledge benchmark...")
-    benchmark_all = tb.build_nk_benchmark_by_aspect(
-        t0_map, t1_exp_map, term_aspect, get_ancestors, predictable_proteins=None
-    )
-    benchmark = tb.build_nk_benchmark_by_aspect(
-        t0_map,
-        t1_exp_map,
-        term_aspect,
-        get_ancestors,
-        predictable_proteins=set(protein_domains),
-    )
-    eval_proteins = {p for aspect in benchmark.values() for p in aspect}
-    for aspect, truths in benchmark.items():
-        logger.info(f"  {aspect}: {len(truths):,} no-knowledge benchmark proteins")
-    if not eval_proteins:
+    benchmark, ic, term_aspect = inputs.benchmark, inputs.ic, inputs.term_aspect
+    if not inputs.eval_proteins:
         logger.error("Empty benchmark.")
         return 1
 
-    logger.info("Computing information content from t0...")
-    ic = tb.information_content(t0_map, get_ancestors)
-    n_t0 = len(t0_map)
-    freq_counts: dict[str, int] = defaultdict(int)
-    for terms in t0_map.values():
-        for t in tb.propagate_terms(terms, get_ancestors):
-            freq_counts[t] += 1
-    term_freq = {t: c / n_t0 for t, c in freq_counts.items()} if n_t0 else {}
-
     counts = selection_stage_counts(
-        t0_map, t1_exp_map, protein_domains, benchmark_all, benchmark, ic, ic_floors
+        inputs.t0_map,
+        inputs.t1_exp_map,
+        inputs.protein_domains,
+        inputs.benchmark_all,
+        benchmark,
+        ic,
+        ic_floors,
     )
     counts_file = args.output_dir / "ablation_selection_counts.tsv"
     pd.DataFrame(counts).to_csv(counts_file, sep="\t", index=False)
     logger.info(f"✓ Selection-stage counts: {counts_file}")
 
     # ----------------------------------------------------- transfer per rung --
-    transfer = (
-        tb.transfer_predictions_pscore
-        if args.transfer == "pscore"
-        else tb.transfer_predictions
-    )
-    eval_domains = {p: protein_domains[p] for p in eval_proteins}
-
-    methods: dict[str, dict] = {}
-    provenance: list[dict] = []
-    rung_scores: dict[str, dict] = {}
-    for rung in LADDER:
-        path = rung_prediction_file(args.run_dir, rung, args.domain_key)
-        if not path.exists():
-            logger.error(f"[{rung.name}] missing predictions: {path}")
-            return 1
-        n_rows = association_count(path)
-        # Primary score: -log10(q). Uniform across rungs, because the True Path
-        # output has no p_value column and a ladder scored on two different
-        # columns would confound the component with the score scale.
-        scores_q = tb.load_domain_go_scores(
-            path,
-            "q_value" if rung.kind == "propagated" else "adj_p_value",
-            neg_log10=True,
+    try:
+        methods, provenance, rung_scores = build_methods(
+            args.run_dir, inputs, args.transfer, args.domain_key
         )
-        rung_scores[rung.name] = scores_q
-        methods[rung.name] = transfer(eval_domains, scores_q, get_ancestors)
-        provenance.append(
-            {
-                "rung": rung.name,
-                "label": rung.label,
-                "adds": rung.adds,
-                "predictions_file": str(path),
-                "n_rows": n_rows,
-                "n_domains": len(scores_q),
-                "score": "-log10(q)",
-            }
-        )
-        if rung.kind == "associations":
-            scores_p = tb.load_domain_go_scores(path, "p_value", neg_log10=True)
-            methods[f"{rung.name}__p"] = transfer(eval_domains, scores_p, get_ancestors)
-            provenance.append(
-                {
-                    "rung": f"{rung.name}__p",
-                    "label": f"{rung.label} (p-ranked)",
-                    "adds": "sensitivity: score column only",
-                    "predictions_file": str(path),
-                    "n_rows": n_rows,
-                    "n_domains": len(scores_p),
-                    "score": "-log10(p)",
-                }
-            )
-    methods["naive"] = tb.naive_predictions(eval_proteins, term_freq)
-    provenance.append(
-        {
-            "rung": "naive",
-            "label": "CAFA naive baseline",
-            "adds": "-",
-            "predictions_file": "-",
-            "n_rows": len(term_freq),
-            "n_domains": 0,
-            "score": "propagated t0 term frequency",
-        }
-    )
+    except FileNotFoundError as missing:
+        logger.error(str(missing))
+        return 1
     pd.DataFrame(provenance).to_csv(
         args.output_dir / "ablation_provenance.tsv", sep="\t", index=False
     )
@@ -601,9 +707,10 @@ def main() -> int:  # pragma: no cover - I/O wiring
             observed: dict[str, dict[str, float]] = {}
             rows_here: dict[str, dict] = {}
             for name in methods:
-                pred_f = tb.filter_by_ic(aspect_preds[name][aspect], ic, min_ic)
-                taus = tb._candidate_thresholds(pred_f)
-                panel = rs.build_panel(pred_f, true_a, ic, taus)
+                truth_f, pred_f, taus = floor_cell(
+                    benchmark[aspect], aspect_preds[name][aspect], ic, min_ic
+                )
+                panel = rs.build_panel(pred_f, truth_f, ic, taus)
                 panels[name] = panel
                 observed[name] = rs.panel_metrics(panel)
                 row = {
@@ -682,11 +789,13 @@ def main() -> int:  # pragma: no cover - I/O wiring
             f"of the '{null_rung}' association table..."
         )
         base_scores = rung_scores[null_rung]
+        transfer = TRANSFERS[args.transfer]
+        eval_domains = {p: inputs.protein_domains[p] for p in inputs.eval_proteins}
         null_samples: dict[tuple[str, float, str], list[float]] = defaultdict(list)
         for i in range(args.n_permutations):
             seed = args.seed * 1_000_003 + i
             shuffled = tb.shuffle_domain_go(base_scores, seed=seed)
-            preds = transfer(eval_domains, shuffled, get_ancestors)
+            preds = transfer(eval_domains, shuffled, inputs.get_ancestors)
             for aspect in ("BP", "MF", "CC"):
                 if not benchmark[aspect]:
                     continue
@@ -695,10 +804,10 @@ def main() -> int:  # pragma: no cover - I/O wiring
                     true_a = tb.filter_by_ic(benchmark[aspect], ic, min_ic)
                     if not true_a:
                         continue
-                    pred_f = tb.filter_by_ic(pred_a, ic, min_ic)
-                    panel = rs.build_panel(
-                        pred_f, true_a, ic, tb._candidate_thresholds(pred_f)
+                    truth_f, pred_f, taus = floor_cell(
+                        benchmark[aspect], pred_a, ic, min_ic
                     )
+                    panel = rs.build_panel(pred_f, truth_f, ic, taus)
                     vals = rs.panel_metrics(panel)
                     null_samples[(aspect, min_ic, "f_max")].append(vals["f_max"])
                     null_samples[(aspect, min_ic, "auprc")].append(vals["auprc"])
