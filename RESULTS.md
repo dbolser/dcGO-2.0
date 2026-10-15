@@ -224,3 +224,7 @@ uv run python validation/domain_centric_eval.py \
     --predictions base=results_t0_2021/domain_go_associations_significant.tsv \
     --predictions relative=results_t0_2021/domain_go_associations_relative.tsv
 ```
+
+> Note: `validation/apply_relative_inference.py` was retired on 2026-10-15
+> (superseded by the pipeline's `--enable-relative-inference`); step 4 above
+> no longer runs.

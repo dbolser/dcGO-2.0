@@ -42,6 +42,10 @@ from typing import Callable, Iterable, Mapping, Sequence
 
 import numpy as np
 
+#: Lowest cutoff F_max is read at by default — CAFA-evaluator's grid floor.
+#: Same value as ``temporal_benchmark.CAFA_MIN_TAU`` (the files share no import).
+CAFA_MIN_TAU = 0.001
+
 
 # --------------------------------------------------------------------------- #
 # Panel construction                                                           #
@@ -166,9 +170,10 @@ def build_panel(
 def _auprc_from_curve(precision: np.ndarray, recall: np.ndarray) -> float:
     """Trapezoidal AUPRC over the upper envelope of (recall, precision) points.
 
-    Kept bit-identical in behaviour to ``temporal_benchmark.auprc`` so panel and
-    reference implementations agree — including the (recall 0, precision 0)
-    point a zero-coverage threshold contributes (see that docstring).
+    A pure trapezoid over whatever points it is given: the caller decides
+    whether the zero-coverage (recall 0, precision 0) points are in
+    (:func:`panel_metrics` ``anchor_origin``). Kept bit-identical to
+    ``temporal_benchmark.auprc`` so panel and reference implementations agree.
     """
     dedup: dict[float, float] = {}
     for r, p in zip(recall.tolist(), precision.tolist()):
@@ -240,13 +245,24 @@ def panel_curve(panel: EvaluationPanel, index: np.ndarray | None = None) -> Pane
 
 
 def panel_metrics(
-    panel: EvaluationPanel, index: np.ndarray | None = None
+    panel: EvaluationPanel,
+    index: np.ndarray | None = None,
+    min_tau: float = CAFA_MIN_TAU,
+    anchor_origin: bool = False,
 ) -> dict[str, float]:
     """CAFA metrics for the (possibly resampled) rows in ``index``.
 
     ``index`` is a row-index array into the panel, drawn **with replacement** for
     a bootstrap replicate; ``None`` means the full cohort in order, which
     reproduces the reference evaluator exactly.
+
+    Two CAFA-evaluator conventions are the default (``temporal_benchmark.f_max``
+    / ``auprc`` take the same flags): ``F_max`` is read over the cutoffs
+    ``>= min_tau`` only (its grid starts at its step), and the zero-coverage
+    points — the sweep's predict-nothing sentinel — are left out of the AUPRC
+    trapezoid. ``min_tau=0.0, anchor_origin=True`` is the pre-2026-10-15
+    behaviour the committed §4 tables were computed under. ``S_min`` reads the
+    whole sweep either way.
 
     Returns ``f_max``, ``f_max_tau``, ``s_min``, ``s_min_tau``, ``auprc``,
     ``n_eval_proteins``, plus two coverage figures the review asked to be
@@ -269,21 +285,26 @@ def panel_metrics(
         }
     n = panel.n_proteins if index is None else len(index)
     curve = panel_curve(panel, index)
-    best = int(np.argmax(curve.f))
-    f_max = float(curve.f[best])
+    reachable = np.nonzero(panel.thresholds >= min_tau)[0]
     # Reference implementation starts at best_f = 0.0 / best_tau = 0.0 and only
-    # improves on a strictly greater F, so an all-zero curve reports tau 0.0.
-    f_max_tau = float(panel.thresholds[best]) if f_max > 0 else 0.0
+    # improves on a strictly greater F, so an all-zero (or unreachable) curve
+    # reports F 0 at tau 0.0 and no coverage.
+    if len(reachable):
+        best = int(reachable[np.argmax(curve.f[reachable])])
+        f_max = float(curve.f[best])
+    else:
+        best, f_max = None, 0.0
     s_best = int(np.argmin(curve.s))
+    in_area = np.ones(len(curve.f), dtype=bool) if anchor_origin else curve.coverage > 0
 
     return {
         "n_eval_proteins": n,
         "f_max": f_max,
-        "f_max_tau": f_max_tau,
+        "f_max_tau": float(panel.thresholds[best]) if f_max > 0 else 0.0,
         "s_min": float(curve.s[s_best]),
         "s_min_tau": float(panel.thresholds[s_best]),
-        "auprc": _auprc_from_curve(curve.precision, curve.recall),
-        "coverage_at_fmax": float(curve.coverage[best]),
+        "auprc": _auprc_from_curve(curve.precision[in_area], curve.recall[in_area]),
+        "coverage_at_fmax": float(curve.coverage[best]) if best is not None else 0.0,
         "coverage_any": curve.coverage_any,
     }
 

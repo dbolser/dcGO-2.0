@@ -8,7 +8,8 @@ Evidence Code Categories:
 - Experimental (high confidence): EXP, IDA, IPI, IMP, IGI, IEP
 - Computational analysis: ISS, ISO, ISA, ISM, IGC, IBA, IBD, IKR, IRD, RCA
 - Author statements: TAS, NAS
-- Curator statements: IC, ND
+- Curator statements: IC
+- No biological data: ND (root-only placeholders; only in 'all')
 - Electronic annotation (automated): IEA
 
 Author: dcGO Pipeline
@@ -38,7 +39,12 @@ COMPUTATIONAL_EVIDENCE = {
     "RCA",
 }
 AUTHOR_EVIDENCE = {"TAS", "NAS"}
-CURATOR_EVIDENCE = {"IC", "ND"}
+CURATOR_EVIDENCE = {"IC"}
+# ND = "no biological data available": a placeholder on a root term recording
+# that the curator looked and found nothing. It is not an annotation, so it
+# is excluded from the 'manual' and 'experimental' presets and kept only by
+# 'all'.
+NO_DATA_EVIDENCE = {"ND"}
 ELECTRONIC_EVIDENCE = {"IEA"}
 
 # Common evidence code presets
@@ -53,6 +59,7 @@ ALL_EVIDENCE = (
     | COMPUTATIONAL_EVIDENCE
     | AUTHOR_EVIDENCE
     | CURATOR_EVIDENCE
+    | NO_DATA_EVIDENCE
     | ELECTRONIC_EVIDENCE
 )
 
@@ -189,6 +196,8 @@ class GOAParser:
                     # 2. Filter by evidence code
                     if self.evidence_codes and evidence_code not in self.evidence_codes:
                         self.statistics["filtered_evidence"] += 1
+                        if evidence_code in NO_DATA_EVIDENCE:
+                            self.statistics["filtered_nd"] += 1
                         continue
 
                     # 3. Filter by aspect
@@ -225,6 +234,9 @@ class GOAParser:
         )
         logger.info(f"  Unique proteins: {len(self.protein_go_map):,}")
         logger.info(f"  Filtered by evidence: {self.statistics['filtered_evidence']:,}")
+        logger.info(
+            f"    of which ND (no biological data): {self.statistics['filtered_nd']:,}"
+        )
         logger.info(f"  Filtered by aspect: {self.statistics['filtered_aspect']:,}")
         logger.info(
             f"  Excluded qualifiers: {self.statistics['excluded_qualifiers']:,}"
@@ -265,8 +277,8 @@ def parse_goa(
     Args:
         gaf_path: Path to a ``goa_<species>.gaf.gz`` file
         evidence_filter: Evidence filter preset:
-            'all' - All evidence codes (including IEA)
-            'manual' - Exclude electronic (IEA) annotations
+            'all' - All evidence codes (including IEA and ND)
+            'manual' - Exclude electronic (IEA) and no-data (ND) annotations
             'experimental' - Only experimental evidence
         aspects: GO aspects to include (default: all)
 

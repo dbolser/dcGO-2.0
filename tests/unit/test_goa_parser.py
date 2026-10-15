@@ -315,6 +315,28 @@ class TestParseGoaHuman:
         # Should include IEA
         assert "GO:0005515" in protein_go_map["P12345"]
 
+    def test_nd_placeholders_are_excluded_from_manual_and_experimental(self, tmp_path):
+        """ND ('no biological data') is a root-only placeholder, not evidence."""
+        file_path = tmp_path / "nd.gaf.gz"
+        with gzip.open(file_path, "wt") as f:
+            f.write(
+                "!gaf-version: 2.2\n"
+                "UniProtKB\tP00001\tP1\t\tGO:0008150\tGO_REF:1\tND\t\tP\t\t\tprotein\ttaxon:9606\t20210101\tGOA\n"
+                "UniProtKB\tP00001\tP1\t\tGO:0005515\tPMID:1\tIDA\t\tF\t\t\tprotein\ttaxon:9606\t20210101\tGOA\n"
+            )
+        assert parse_goa_human(file_path, evidence_filter="all")["P00001"] == {
+            "GO:0008150",
+            "GO:0005515",
+        }
+        for preset in ("manual", "experimental"):
+            assert parse_goa_human(file_path, evidence_filter=preset)["P00001"] == {
+                "GO:0005515"
+            }
+
+        parser = GOAParser(evidence_codes=MANUAL_EVIDENCE)
+        parser.parse_gaf_file(file_path)
+        assert parser.statistics["filtered_nd"] == 1
+
     def test_parse_manual(self, sample_gaf_file):
         """Test parsing with 'manual' evidence filter (default)."""
         protein_go_map = parse_goa_human(sample_gaf_file, evidence_filter="manual")

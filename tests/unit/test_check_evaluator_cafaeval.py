@@ -181,7 +181,7 @@ class TestCurveSummary:
     def test_reproduces_panel_metrics_on_our_curve(self):
         taus = tb._candidate_thresholds(PREDS)
         panel = rs.build_panel(PREDS, TRUTH, IC, taus)
-        ours = rs.panel_metrics(panel)
+        ours = rs.panel_metrics(panel, min_tau=0.0, anchor_origin=True)
         got = ck.curve_summary(ck.our_curve(PREDS, TRUTH, IC, taus))
         for key in (
             "f_max",

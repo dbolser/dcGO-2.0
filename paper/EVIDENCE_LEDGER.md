@@ -72,8 +72,8 @@ Source file for B1–B6: `validation/performance_metrics.tsv`. Semantics from
 > are propagated through `OntologyProcessor` (`validate_results.py:164–169`),
 > which at the time traversed the regulates-family edges (K3). B7–B9
 > additionally measured the superseded *post-hoc* relative filter
-> (`validation/apply_relative_inference.py`), replaced by the in-inference
-> combination (K11). All B rows are PROVISIONAL for the manuscript pending
+> (`validation/apply_relative_inference.py`, retired and deleted 2026-10-15),
+> replaced by the in-inference combination (K11). All B rows are PROVISIONAL for the manuscript pending
 > post-#67 regeneration; the row verdicts below stand as records of what the
 > committed files contain.
 
@@ -86,8 +86,8 @@ Source file for B1–B6: `validation/performance_metrics.tsv`. Semantics from
 | B5 | The threshold sweep plateaus at the loose end | Rows `p≤1e-6`, `p≤1e-4`, `p≤1e-2`, `adj_p≤1e-2`, `adj_p≤5e-2`, `adj_p≤1e-1`, `score≥20…60` all give 0.6472 / 30,673 / 137,490 | `validation/performance_metrics.tsv` | The input file is already FDR < 0.01-filtered, so looser cutoffs cannot add predictions | supported |
 | B6 | Reference before propagation; shared-domain count | 30,190 curated pairs; 2,747 shared domains | `VALIDATION_PLAN.md` §1 L121–123 | Pre-propagation InterPro2GO size and shared-domain count for the current-release run | provisional — prose only; the TSV records only the post-propagation figure (47,393) |
 | B7 | Domain-centric metrics, t0 associations, base configuration | 164,549 assoc.; 2,693 shared domains; 134,610 predicted pairs; 29,382 recovered; precision-lb 0.2183; recall 0.6306; F1 0.3243 | `validation/domain_centric_metrics.tsv`, row `base` | Association set scored directly against propagated InterPro2GO on the shared single-domain space | supported |
-| B8 | Domain-centric metrics, t0 associations, + relative (parental-background) inference | 86,772 assoc.; 2,386 shared domains; 69,206 predicted pairs; 17,525 recovered; precision-lb 0.2532; recall 0.4301; F1 0.3188 | `validation/domain_centric_metrics.tsv`, row `relative` | As B7, after post-hoc relative-inference filtering (`validation/apply_relative_inference.py`) | supported |
-| B9 | Relative inference raises domain-level precision-lb from 0.218 to 0.253 while halving the set | +0.035 precision-lb; recall 0.63 → 0.43 | derived from B7, B8 | Difference between two rows of the same file. **No confidence interval and no paired test** were computed for this difference | supported (derived); the *difference* is uncertainty-free and therefore uninterpretable as a significance claim |
+| B8 | Domain-centric metrics, t0 associations, + relative (parental-background) inference | 86,772 assoc.; 2,386 shared domains; 69,206 predicted pairs; 17,525 recovered; precision-lb 0.2532; recall 0.4301; F1 0.3188 | `validation/domain_centric_metrics.tsv`, row `relative` | As B7, after post-hoc relative-inference filtering (`validation/apply_relative_inference.py`, deleted 2026-10-15) | **retired — produced by a superseded post-hoc filter (intersection background); not comparable to the pipeline's relative inference** |
+| B9 | Relative inference raises domain-level precision-lb from 0.218 to 0.253 while halving the set | +0.035 precision-lb; recall 0.63 → 0.43 | derived from B7, B8 | Difference between two rows of the same file. **No confidence interval and no paired test** were computed for this difference | **retired — produced by a superseded post-hoc filter (intersection background); not comparable to the pipeline's relative inference** (B8 retired); also no confidence interval or paired test |
 | B10 | The reference is the **current** InterPro2GO, not a 2021 snapshot | — | `VALIDATION_PLAN.md` L299–302; `RESULTS.md` L74–76 | Means B7–B9 are not a temporal test on the domain side | supported |
 
 ---

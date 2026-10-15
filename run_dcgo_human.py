@@ -35,8 +35,12 @@ Options:
     --subcell PATH           Path to UniProt subcell.txt, used when --ontology subcellular
     --chebi-obo PATH         Path to ChEBI OBO, for --ontology ligand|cofactor --enable-true-path
     --domain-key STR         Which protein2ipr column defines a domain: 'interpro'
-                             (integrated entry, default) or 'ssf' (SUPERFAMILY/SCOP
-                             signature, the published dcGO's domain universe)
+                             (integrated entry, default), 'ssf' (SUPERFAMILY/SCOP
+                             signature, the published dcGO's domain universe) or
+                             'pfam' (Pfam signature)
+    --supra-mode STR         How supra-domains are formed: 'bag' (default; unordered
+                             combinations of a protein's distinct domains, sorted
+                             key) or 'contiguous' (positional windows, N→C key)
     --evidence-filter STR    Evidence code filter: 'all', 'manual', 'experimental' (default: manual)
     --fdr-threshold FLOAT    FDR significance threshold (default: 0.01)
     --num-cores INT          Accepted for compatibility; the Fisher stage is in-process Cython (default: 8)
@@ -113,10 +117,13 @@ from pathlib import Path
 
 import numpy as np
 from loguru import logger
-from scipy.stats import hypergeom
 
 from src.annotation_source import restrict_to_universe
-from src.domain_annotation_parser import DOMAIN_KEYS, DomainAnnotationParser
+from src.domain_annotation_parser import (
+    DOMAIN_KEYS,
+    SUPRA_MODES,
+    DomainAnnotationParser,
+)
 from src.hierarchy import (
     PROPAGATION_RELATIONS,
     iter_propagated_term_sets,
@@ -260,8 +267,21 @@ class AssociationResult:
 
 
 def calculate_hypergeometric_score(a: int, b: int, c: int, d: int) -> float:
-    """
-    Calculate hypergeometric-based association score on 1-100 scale.
+    """The paper's hypergeometric *standard score* (z-score) for one table.
+
+    Fang & Gough 2013 define the h-score as the standardised deviation of the
+    observed overlap from its hypergeometric expectation, ``z = (x - E[X]) /
+    sd(X)``, computed for the overall and the relative test, the smaller of
+    the two being reported (see ``combined_hyper_score``). They introduced it
+    precisely because p-value-derived scores saturate at the top of the
+    ranking. This used to return ``min(100, max(1, -10 log10 p))``, which did
+    exactly that — 37% of significant associations sat at 100.00 — so it is
+    now the z-score, unclipped and unrescaled. The old 1–100 presentation
+    scale is dropped; ``p_value`` is still exported for -log10(p) users.
+
+    With ``n = a+b+c+d``, ``k = a+c`` (domain carriers), ``m = a+b`` (term
+    carriers) and ``x = a`` (both), ``X ~ Hypergeometric(n, k, m)``:
+    ``E[X] = km/n`` and ``Var[X] = km(n-k)(n-m) / (n^2 (n-1))``.
 
     Args:
         a: Proteins with both domain and GO term
@@ -270,19 +290,19 @@ def calculate_hypergeometric_score(a: int, b: int, c: int, d: int) -> float:
         d: Proteins with neither
 
     Returns:
-        float: Association score between 1.0 and 100.0, or NaN when the score
-        could not be computed. NaN is deliberate: this column is exported and
-        read downstream, so a numerical failure must be visibly missing rather
-        than a plausible mid-range number. It used to return 50.0 here, which is
-        indistinguishable from a genuine medium-confidence association.
+        float: The z-score — unbounded, positive for over-representation and
+        negative for under-representation; 0.0 when the null has no variance
+        (an empty or full margin), or NaN when the table is not a contingency
+        table at all. NaN is deliberate: this column is exported and read
+        downstream, so a failure must be visibly missing rather than a
+        plausible mid-range number.
     """
     n = a + b + c + d  # total proteins
     k = a + c  # proteins with domain
     m = a + b  # proteins with GO term
     x = a  # proteins with both
 
-    # A contingency cell cannot be negative. Reject rather than hand the values
-    # to hypergeom, which returns NaN for them without raising — see below.
+    # A contingency cell cannot be negative.
     if min(a, b, c, d) < 0:
         logger.warning(
             f"Hypergeometric score: negative contingency cell "
@@ -290,43 +310,14 @@ def calculate_hypergeometric_score(a: int, b: int, c: int, d: int) -> float:
         )
         return float("nan")
 
-    if k == 0 or m == 0 or x == 0:
+    if k == 0 or m == 0 or n < 2:
         return 0.0
 
-    try:
-        # Calculate hypergeometric survival function (1 - CDF)
-        # P(X ≥ x) where X ~ Hypergeometric(n, k, m)
-        p_hyper = hypergeom.sf(x - 1, n, k, m)
-
-        # NaN and zero must not share a branch. `scipy.stats.hypergeom.sf`
-        # returns NaN for invalid parameters *without raising*, so folding NaN
-        # into the "p is too small to represent" case reported the maximum
-        # score, 100.0, for a table that could not be evaluated at all — the
-        # loudest possible answer to an unanswerable question.
-        if np.isnan(p_hyper):
-            logger.warning(
-                f"Hypergeometric score is NaN for a={a} b={b} c={c} d={d}. "
-                "Reporting NaN."
-            )
-            return float("nan")
-
-        if p_hyper > 0:
-            # Convert to -log10 scale
-            score = -np.log10(p_hyper)
-            # Scale to 1-100 range (typical values 1e-50 to 1e-1 give scores 1-500)
-            return float(min(100.0, max(1.0, score * 10)))
-
-        # A genuine underflow to exactly 0: the association is as strong as this
-        # scale can express.
-        return 100.0
-
-    except (ValueError, OverflowError, ZeroDivisionError) as exc:
-        # Explicitly missing, not "neutral". See the Returns note above.
-        logger.warning(
-            f"Hypergeometric score failed for a={a} b={b} c={c} d={d}: {exc}. "
-            "Reporting NaN."
-        )
-        return float("nan")
+    mean = k * m / n
+    var = k * m * (n - k) * (n - m) / (n**2 * (n - 1))
+    if var == 0:
+        return 0.0
+    return float((x - mean) / math.sqrt(var))
 
 
 def odds_ratio_interval(a: int, b: int, c: int, d: int) -> tuple:
@@ -565,6 +556,7 @@ def start_run_manifest(
                 "ic_source": resolve_ic_source(args, ontology_entry),
                 "min_domain_length": MIN_DOMAIN_LENGTH,
                 "max_supra_domain_length": MAX_SUPRA_DOMAIN_LENGTH,
+                "supra_mode": args.supra_mode,
                 "enable_supra_domains": bool(args.enable_supra_domains),
                 "parental_background_min_size": PARENTAL_MIN_BACKGROUND_SIZE,
                 # The relative p-value is combined with the overall one before
@@ -595,9 +587,19 @@ def build_argument_parser() -> argparse.ArgumentParser:
         default="interpro",
         choices=list(DOMAIN_KEYS),
         help="Which protein2ipr column defines a domain: 'interpro' (the "
-        "integrated entry, default) or 'ssf' (the SUPERFAMILY/SCOP signature, "
-        "i.e. the domain universe the published dcGO used). Only the domain "
-        "axis changes; the ontology and the statistics are unaffected.",
+        "integrated entry, default), 'ssf' (the SUPERFAMILY/SCOP signature, "
+        "i.e. the domain universe the published dcGO used) or 'pfam' (the Pfam "
+        "signature). Only the domain axis changes; the ontology and the "
+        "statistics are unaffected.",
+    )
+    parser.add_argument(
+        "--supra-mode",
+        default="bag",
+        choices=list(SUPRA_MODES),
+        help="How a protein's domains combine into supra-domains: 'bag' "
+        "(default) takes every unordered combination of its distinct domain "
+        "ids, keyed as the sorted ids; 'contiguous' takes positional windows "
+        "of consecutive rows (the historical behaviour), keyed N→C.",
     )
     parser.add_argument(
         "--evidence-filter",
@@ -1036,6 +1038,7 @@ def main(argv: list[str] | None = None) -> int:
     logger.info(f"  Species: {args.species}")
     logger.info(f"  Ontology: {ontology_label.upper()}")
     logger.info(f"  Domain key: {args.domain_key}")
+    logger.info(f"  Supra-domain mode: {args.supra_mode}")
     logger.info(f"  Evidence filter: {args.evidence_filter}")
     logger.info(f"  FDR threshold: {args.fdr_threshold}")
     # Not "CPU cores: N". The Fisher stage is compiled Cython (fisher.pvalue_npy)
@@ -1119,6 +1122,7 @@ def main(argv: list[str] | None = None) -> int:
         max_supra_domain_length=MAX_SUPRA_DOMAIN_LENGTH,
         min_domain_length=MIN_DOMAIN_LENGTH,
         domain_key=args.domain_key,
+        supra_mode=args.supra_mode,
     )
     domain_architectures = parser_obj.parse_protein2ipr_file(interpro_file)
 

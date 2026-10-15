@@ -79,7 +79,6 @@ manuscript-producing programs:
 | `validation/compare_original_dcgo.py` | 31% | Fixture CLI and recomputation |
 | `validation/temporal_benchmark.py` | 52% | CLI outputs and provenance |
 | `validation/validate_results.py` | 33% | Plain-checkout script invocation |
-| `validation/apply_relative_inference.py` | 0% | Fixture CLI and schema failures |
 | `validation/domain_centric_eval.py` | 0% | Fixture CLI and metric contract |
 | `validation/sprint1_validation.py` | 0% | Retire or pin historical behavior |
 

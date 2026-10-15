@@ -50,6 +50,7 @@ def make_args(tmp_path, **overrides):
         enable_relative_inference=False,
         propagate_annotations=False,
         enable_supra_domains=True,
+        supra_mode="bag",
         num_cores=4,
         batch_size=50000,
         output_dir=tmp_path / "out",

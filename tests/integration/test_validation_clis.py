@@ -78,67 +78,6 @@ def _gaf_row(protein: str, term: str) -> str:
     )
 
 
-def test_apply_relative_inference_filters_nonspecific_pair_and_keeps_untestable(
-    tmp_path: Path, go_obo: Path
-) -> None:
-    predictions = tmp_path / "predictions.tsv"
-    pd.DataFrame(
-        [
-            ("IPR_STRONG", CHILD, 0.001),
-            ("IPR_WEAK", CHILD, 0.001),
-            ("IPR_STRONG", ROOT, 0.002),
-            ("IPR_STRONG", UNKNOWN, 0.003),
-        ],
-        columns=["domain", "go_term", "p_value"],
-    ).to_csv(predictions, sep="\t", index=False)
-
-    gaf = tmp_path / "t0.gaf.gz"
-    with gzip.open(gaf, "wt") as handle:
-        handle.write("!gaf-version: 2.2\n")
-        for index in range(10):
-            term = CHILD if index < 5 else PARENT
-            handle.write(_gaf_row(f"P{index}", term) + "\n")
-
-    interpro = tmp_path / "protein2ipr.dat.gz"
-    with gzip.open(interpro, "wt") as handle:
-        for index in range(10):
-            if index < 5:
-                handle.write(f"P{index}\tIPR_STRONG\tStrong\tPF00001\t10\t100\n")
-            if index in {0, 1, 5, 6, 7}:
-                handle.write(f"P{index}\tIPR_WEAK\tWeak\tPF00002\t120\t220\n")
-
-    output = tmp_path / "relative.tsv"
-    result = _run(
-        "apply_relative_inference.py",
-        "--predictions",
-        predictions,
-        "--t0-gaf",
-        gaf,
-        "--interpro",
-        interpro,
-        "--go-ontology",
-        go_obo,
-        "--output",
-        output,
-        "--min-background",
-        10,
-        "--disable-supra-domains",
-    )
-
-    assert result.returncode == 0, result.stderr
-    frame = pd.read_csv(output, sep="\t")
-    assert set(zip(frame["domain"], frame["go_term"])) == {
-        ("IPR_STRONG", CHILD),
-        ("IPR_STRONG", ROOT),
-        ("IPR_STRONG", UNKNOWN),
-    }
-    strong = frame[frame["go_term"] == CHILD].iloc[0]
-    assert strong["overall_p"] == pytest.approx(0.001)
-    assert strong["relative_p"] == pytest.approx(1 / 252)
-    assert strong["p_value"] == pytest.approx(1 / 252)
-    assert frame.loc[frame["go_term"].isin([ROOT, UNKNOWN]), "relative_p"].isna().all()
-
-
 def test_domain_centric_cli_writes_true_path_aware_metrics(
     tmp_path: Path, go_obo: Path
 ) -> None:
@@ -338,32 +277,6 @@ def test_temporal_benchmark_refuses_other_architectures(
     assert result.returncode == 1
     assert "protein2ipr sha256" in result.stderr
     assert not (tmp_path / "metrics").exists()
-
-
-def test_apply_relative_inference_refuses_other_architectures(
-    tmp_path: Path, go_obo: Path, t0_benchmark: dict[str, Path]
-) -> None:
-    # t0-trained predictions, but --interpro left at another (e.g. today's) file.
-    run = tmp_path / "run"
-    _write_run(run, "0" * 64, gaf_sha256=_sha256(t0_benchmark["t0"]))
-
-    result = _run(
-        "apply_relative_inference.py",
-        "--predictions",
-        run / "domain_go_associations_significant.tsv",
-        "--t0-gaf",
-        t0_benchmark["t0"],
-        "--interpro",
-        t0_benchmark["interpro"],
-        "--go-ontology",
-        go_obo,
-        "--output",
-        tmp_path / "relative.tsv",
-    )
-
-    assert result.returncode == 1
-    assert "protein2ipr sha256" in result.stderr
-    assert not (tmp_path / "relative.tsv").exists()
 
 
 def _benchmark(

@@ -81,7 +81,10 @@ def convention_metrics(
 ) -> dict[str, float]:
     """F_max and AUPRC as committed, and under the two alternative conventions.
 
-    ``f_max`` and ``auprc`` are exactly ``resampling.panel_metrics``'s.
+    ``f_max`` and ``auprc`` are exactly ``resampling.panel_metrics``'s under
+    the committed cell's conventions (``min_tau=0.0, anchor_origin=True``, its
+    defaults before 2026-10-15); its current defaults are
+    ``f_max_cafa_floor`` and ``auprc_no_anchor``.
     ``f_max_cafa_floor`` / ``f_max_tau_cafa_floor``: the best F over thresholds
     ``>= th_step`` (0 if there are none). ``auprc_no_anchor``: the same
     trapezoid without the zero-coverage points; ``auprc_anchor`` is what they
@@ -180,7 +183,7 @@ def _score_cell(task: tuple[str, float]) -> tuple[list[dict], list[dict], list[s
             job.benchmark[aspect], preds[aspect], job.ic, min_ic
         )
         panels[name] = panel = rs.build_panel(pred_f, truth_f, job.ic, taus)
-        ours = rs.panel_metrics(panel)
+        ours = rs.panel_metrics(panel, min_tau=0.0, anchor_origin=True)
         observed[name] = convention_metrics(panel)
         committed = job.committed[(aspect, min_ic, name)]
         for key in ("f_max", "auprc", "s_min"):

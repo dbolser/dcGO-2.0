@@ -10,6 +10,7 @@ from pathlib import Path
 
 from src.domain_annotation_parser import (
     DOMAIN_KEYS,
+    SUPRA_MODES,
     DomainAnnotation,
     ProteinDomainArchitecture,
     DomainAnnotationParser,
@@ -115,6 +116,7 @@ class TestDomainAnnotationParser:
         assert parser.max_supra_domain_length == 3
         assert parser.min_domain_length == 10
         assert parser.species_filter is None
+        assert parser.supra_mode == "bag"
 
     def test_parser_custom_parameters(self):
         """Test parser with custom parameters."""
@@ -180,13 +182,15 @@ class TestDomainAnnotationParser:
         domains = ["IPR001", "IPR002", "IPR003"]
         supra_domains = parser._generate_supra_domains(domains)
 
-        # Should generate:
-        # - 2-domain: IPR001,IPR002 | IPR002,IPR003
+        # Bag mode: every unordered combination of the distinct domains.
+        # - 2-domain: IPR001,IPR002 | IPR001,IPR003 | IPR002,IPR003
         # - 3-domain: IPR001,IPR002,IPR003
-        assert len(supra_domains) == 3
-        assert "IPR001,IPR002" in supra_domains
-        assert "IPR002,IPR003" in supra_domains
-        assert "IPR001,IPR002,IPR003" in supra_domains
+        assert supra_domains == [
+            "IPR001,IPR002",
+            "IPR001,IPR003",
+            "IPR002,IPR003",
+            "IPR001,IPR002,IPR003",
+        ]
 
     def test_supra_domain_max_length(self):
         """Test that supra-domain length is limited correctly."""
@@ -197,7 +201,7 @@ class TestDomainAnnotationParser:
 
         # Should only generate 2-domain combinations
         assert all(supra.count(",") == 1 for supra in supra_domains)
-        assert len(supra_domains) == 3  # Adjacent pairs
+        assert len(supra_domains) == 6  # C(4, 2) unordered pairs
 
     def test_supra_domain_single_domain(self):
         """Test supra-domain generation with single domain."""
@@ -344,17 +348,17 @@ class TestSuperfamilyDomainKey:
         return file_path
 
     def test_domain_key_is_validated(self):
-        assert DOMAIN_KEYS == ("interpro", "ssf")
+        assert DOMAIN_KEYS == ("interpro", "pfam", "ssf")
         with pytest.raises(ValueError, match="Unknown domain_key"):
-            DomainAnnotationParser(domain_key="pfam")
+            DomainAnnotationParser(domain_key="cdd")
 
     def test_default_key_is_interpro(self, mixed_member_db_file):
         """The default keying must be untouched by the new option."""
         parser = DomainAnnotationParser()
         architectures = parser.parse_protein2ipr_file(mixed_member_db_file)
 
+        # Bag mode lists each entry once (IPR000100 has two signature rows).
         assert architectures["PROT1"].single_domains == [
-            "IPR000100",
             "IPR000100",
             "IPR000200",
             "IPR000300",
@@ -402,7 +406,7 @@ class TestSuperfamilyDomainKey:
         assert signatures == ["SSF50001", "SSF50003", "SSF50004"]
 
     def test_supra_domains_ignore_dropped_rows(self, mixed_member_db_file):
-        """The drop-before-sort trap.
+        """The drop-before-sort trap, in contiguous mode.
 
         PROT1's architecture is SSF50001 · (Pfam-only) · SSF50003 · SSF50004.
         Keyed by SSF, SSF50001 and SSF50003 *are* adjacent, because the Pfam row
@@ -412,7 +416,9 @@ class TestSuperfamilyDomainKey:
         supra-domains would be wrong (e.g. no ``SSF50001,SSF50003`` pair, or a
         3-mer spanning the discarded Pfam row).
         """
-        parser = DomainAnnotationParser(domain_key="ssf", max_supra_domain_length=3)
+        parser = DomainAnnotationParser(
+            domain_key="ssf", max_supra_domain_length=3, supra_mode="contiguous"
+        )
         architectures = parser.parse_protein2ipr_file(mixed_member_db_file)
 
         supra = architectures["PROT1"].supra_domains
@@ -521,9 +527,148 @@ class TestIntegration:
 
         # Test protein-domain map
         protein_domain_map = parser.get_protein_domain_map()
-        assert len(protein_domain_map["PROT1"]) == 6  # 3 single + 3 supra
+        assert len(protein_domain_map["PROT1"]) == 7  # 3 single + 4 supra
 
         # Test statistics
         stats = parser.get_domain_statistics()
         assert stats["total_proteins"] == 2
         assert stats["total_unique_domains"] == 4
+
+
+class TestSupraMode:
+    """``supra_mode``: bag of distinct domains (default) vs positional windows."""
+
+    @pytest.fixture
+    def repeated_rows_file(self, tmp_path):
+        """A protein whose entries repeat and are listed out of start order.
+
+        Start-sorted the rows read B · A · A · C · B: IPR_A twice (a nested
+        entry, or a fingerprint split into two rows) and IPR_B at both ends.
+        """
+        file_path = tmp_path / "repeats.dat.gz"
+        data = [
+            "PROT1\tIPR_C\tC\tPF0003\t300\t400",
+            "PROT1\tIPR_A\tA\tPF0001\t50\t150",
+            "PROT1\tIPR_B\tB\tPF0002\t10\t40",
+            "PROT1\tIPR_A\tA\tPR0001\t60\t140",
+            "PROT1\tIPR_B\tB\tPF0002\t500\t600",
+        ]
+        with gzip.open(file_path, "wt") as f:
+            f.write("\n".join(data))
+        return file_path
+
+    def test_mode_is_validated_and_recorded(self):
+        assert SUPRA_MODES == ("bag", "contiguous")
+        assert DomainAnnotationParser(supra_mode="contiguous").supra_mode == (
+            "contiguous"
+        )
+        with pytest.raises(ValueError, match="Unknown supra_mode"):
+            DomainAnnotationParser(supra_mode="adjacent")
+
+    def test_bag_single_domains_are_distinct_in_first_occurrence_order(
+        self, repeated_rows_file
+    ):
+        arch = DomainAnnotationParser().parse_protein2ipr_file(repeated_rows_file)[
+            "PROT1"
+        ]
+        assert arch.single_domains == ["IPR_B", "IPR_A", "IPR_C"]
+        # The rows themselves are untouched: the surprise score reads them.
+        assert len(arch.domain_annotations) == 5
+
+    def test_bag_supra_domains_are_sorted_combinations_without_repeats(
+        self, repeated_rows_file
+    ):
+        arch = DomainAnnotationParser().parse_protein2ipr_file(repeated_rows_file)[
+            "PROT1"
+        ]
+        assert arch.supra_domains == [
+            "IPR_A,IPR_B",
+            "IPR_A,IPR_C",
+            "IPR_B,IPR_C",
+            "IPR_A,IPR_B,IPR_C",
+        ]
+        assert not any(
+            len(set(f.split(","))) < f.count(",") + 1 for f in arch.supra_domains
+        )
+
+    def test_bag_key_is_canonical_regardless_of_position(self, tmp_path):
+        """A,B on one protein and B,A on another are the same feature."""
+        file_path = tmp_path / "order.dat.gz"
+        data = [
+            "P1\tIPR_A\tA\tPF0001\t10\t100",
+            "P1\tIPR_B\tB\tPF0002\t200\t300",
+            "P2\tIPR_B\tB\tPF0002\t10\t100",
+            "P2\tIPR_A\tA\tPF0001\t200\t300",
+        ]
+        with gzip.open(file_path, "wt") as f:
+            f.write("\n".join(data))
+        archs = DomainAnnotationParser().parse_protein2ipr_file(file_path)
+        assert archs["P1"].supra_domains == archs["P2"].supra_domains == ["IPR_A,IPR_B"]
+        assert archs["P2"].single_domains == ["IPR_B", "IPR_A"]
+
+    def test_bag_respects_max_length(self):
+        parser = DomainAnnotationParser(max_supra_domain_length=2)
+        assert parser._generate_supra_domains(["C", "A", "B", "A"]) == [
+            "A,B",
+            "A,C",
+            "B,C",
+        ]
+
+    def test_contiguous_keeps_positional_windows_but_drops_repeats(
+        self, repeated_rows_file
+    ):
+        parser = DomainAnnotationParser(supra_mode="contiguous")
+        arch = parser.parse_protein2ipr_file(repeated_rows_file)["PROT1"]
+        # Positional list keeps every row, as before.
+        assert arch.single_domains == ["IPR_B", "IPR_A", "IPR_A", "IPR_C", "IPR_B"]
+        # Windows: B,A | A,A x | A,C | C,B | B,A,A x | A,A,C x | A,C,B
+        assert arch.supra_domains == [
+            "IPR_B,IPR_A",
+            "IPR_A,IPR_C",
+            "IPR_C,IPR_B",
+            "IPR_A,IPR_C,IPR_B",
+        ]
+
+    def test_protein_domain_map_matches_architectures(self, repeated_rows_file):
+        for mode in SUPRA_MODES:
+            parser = DomainAnnotationParser(supra_mode=mode)
+            archs = parser.parse_protein2ipr_file(repeated_rows_file)
+            assert parser.get_protein_domain_map()["PROT1"] == (
+                archs["PROT1"].all_domains
+            )
+
+
+class TestPfamDomainKey:
+    """``--domain-key pfam``: Pfam signatures only, no prefix collisions."""
+
+    @pytest.fixture
+    def member_db_file(self, tmp_path):
+        file_path = tmp_path / "members.dat.gz"
+        data = [
+            "P1\tIPR000100\tA\tPF00001\t10\t110",
+            "P1\tIPR000200\tB\tPIRSF000200\t150\t250",  # PIRSF, not Pfam
+            "P1\tIPR000300\tC\tPS50300\t300\t400",  # ProSite
+            "P1\tIPR000400\tD\tPR00400\t300\t400",  # PRINTS
+            "P1\tIPR000500\tE\tPTHR10500\t300\t400",  # PANTHER
+            "P1\tIPR000600\tF\tPF00006\t450\t550",
+            "P2\tIPR000100\tA\tSSF50001\t10\t110",  # no Pfam row at all
+        ]
+        with gzip.open(file_path, "wt") as f:
+            f.write("\n".join(data))
+        return file_path
+
+    def test_only_pfam_rows_define_domains(self, member_db_file):
+        parser = DomainAnnotationParser(domain_key="pfam")
+        archs = parser.parse_protein2ipr_file(member_db_file)
+        assert set(archs) == {"P1"}
+        assert archs["P1"].single_domains == ["PF00001", "PF00006"]
+        assert archs["P1"].supra_domains == ["PF00001,PF00006"]
+        assert [a.signature_id for a in archs["P1"].domain_annotations] == [
+            "PF00001",
+            "PF00006",
+        ]
+
+    def test_interpro_cross_reference(self, member_db_file):
+        parser = DomainAnnotationParser(domain_key="pfam")
+        parser.parse_protein2ipr_file(member_db_file)
+        assert parser.interpro_for("PF00001,PF00006") == "IPR000100,IPR000600"

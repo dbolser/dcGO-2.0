@@ -65,7 +65,9 @@ def test_rows_name_the_contrast_and_keep_the_observed_values():
         ("t0", "ctrl", "m", "f_max"),
         ("t0", "ctrl", "m", "auprc"),
     ]
-    good, poor = rs.panel_metrics(_panel(GOOD)), rs.panel_metrics(_panel(POOR))
+    legacy = dict(min_tau=0.0, anchor_origin=True)  # the committed conventions
+    good = rs.panel_metrics(_panel(GOOD), **legacy)
+    poor = rs.panel_metrics(_panel(POOR), **legacy)
     for row in rows:
         assert row["observed_a"] == good[row["metric"]]
         assert row["observed_b"] == poor[row["metric"]]

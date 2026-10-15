@@ -130,7 +130,27 @@ class TestParseSp2go:
         supra = compare.parse_sp2go(sp2go, direct_only=False)
 
         assert ("57802",) not in supra
-        assert set(supra) == {("46565", "57938"), ("46565", "57938", "49493")}
+        # Keys are canonical (numeric-sorted) sets, not the file's N→C order.
+        assert set(supra) == {("46565", "57938"), ("46565", "49493", "57938")}
+
+    def test_keys_ignore_positional_order(self, tmp_path):
+        """Their 57938,46565 and our bag-mode 46565,57938 are one architecture."""
+        path = tmp_path / "sp2go.txt"
+        path.write_text(
+            "Type\tSupra-domain\tGO_ID\tGO_name\tGO_namespace\tScore\tOrigin\n"
+            "supra_sf\t57938,46565\tGO:1\tx\tbp\t1.0\t1\n"
+            "supra_sf\t46565,57938\tGO:2\tx\tbp\t1.0\t1\n"
+        )
+        supra = compare.parse_sp2go(path, direct_only=False)
+        assert supra == {("46565", "57938"): {"GO:1", "GO:2"}}
+
+    def test_canonical_sunids_sort_numerically(self):
+        # Lexical order would put "100" before "99".
+        assert compare.canonical_sunids(["100", "99", "46565"]) == (
+            "99",
+            "100",
+            "46565",
+        )
 
     def test_direct_only_filter(self, sp2go):
         direct = compare.parse_sp2go(sp2go, direct_only=True)

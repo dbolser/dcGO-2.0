@@ -183,9 +183,11 @@ class Curve:
 def curve_summary(curve: Curve) -> dict[str, float]:
     """F_max (first max over ascending tau), its tau and coverage, S_min, AUPRC.
 
-    The same conventions ``resampling.panel_metrics`` uses, so that applied to
-    our own curve it returns our numbers and applied to cafaeval's it returns
-    the numbers cafaeval's curve implies.
+    The conventions the committed cell was scored under
+    (``resampling.panel_metrics`` with ``min_tau=0.0, anchor_origin=True``,
+    its defaults before 2026-10-15), so that applied to our own curve it
+    returns the committed numbers and applied to cafaeval's it returns the
+    numbers cafaeval's curve implies.
     """
     if len(curve.tau) == 0:
         return {
@@ -207,7 +209,9 @@ def curve_summary(curve: Curve) -> dict[str, float]:
         "coverage_at_fmax": float(curve.coverage[best]),
         "s_min": float(curve.s[s_best]),
         "s_min_tau": float(curve.tau[s_best]),
-        "auprc": tb.auprc(list(zip(curve.tau, p, r))),
+        "auprc": tb.auprc(
+            list(zip(curve.tau, p, r, curve.coverage)), anchor_origin=True
+        ),
     }
 
 
@@ -514,8 +518,11 @@ def main() -> int:  # pragma: no cover - I/O wiring
                 truth_f, pred_f, taus = cell
                 if not truth_f:
                     continue
+                # The committed cell's conventions (pre-2026-10-15 defaults).
                 observed = rs.panel_metrics(
-                    rs.build_panel(pred_f, truth_f, inputs.ic, taus)
+                    rs.build_panel(pred_f, truth_f, inputs.ic, taus),
+                    min_tau=0.0,
+                    anchor_origin=True,
                 )
                 com = committed_lookup[(aspect, min_ic, name)]
                 for key in ("f_max", "f_max_tau", "s_min", "auprc", "coverage_at_fmax"):
