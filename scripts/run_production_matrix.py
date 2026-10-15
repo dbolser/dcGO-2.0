@@ -122,6 +122,13 @@ def main(argv: list[str] | None = None) -> int:
         "(repeatable; e.g. --extra-arg=--fdr-threshold --extra-arg=0.001)",
     )
     parser.add_argument(
+        "--paperparity-flags",
+        default=None,
+        help="override the hierarchical configuration's flags (one string, "
+        "split on whitespace), e.g. '--propagate-annotations --enable-true-path "
+        "--min-ic 1' when the ablation picks a rung without relative inference",
+    )
+    parser.add_argument(
         "--configs",
         nargs="*",
         choices=["baseline", "paperparity"],
@@ -130,6 +137,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    if args.paperparity_flags is not None:
+        PAPER_PARITY_FLAGS[:] = args.paperparity_flags.split()
     cells = build_matrix()
     if args.only:
         wanted = set(args.only)
