@@ -109,9 +109,21 @@ def selection_hashes() -> tuple[str, ...] | None:
 
 
 def build_steps(
-    source: Path, subset: Path, run_dir: Path, eval_dir: Path
+    source: Path,
+    subset: Path,
+    run_dir: Path,
+    eval_dir: Path,
+    manifests: Path = MANIFESTS,
+    domain_key: str = "interpro",
+    extra_eval_args: tuple[str, ...] = (),
 ) -> list[tuple[str, list[str]]]:
-    """(log name, command) for every step still to run, in order."""
+    """(log name, command) for every step still to run, in order.
+
+    ``manifests`` selects which committed cell's rung commands are replayed
+    (the ``ipr_manual`` manifests by default; a ``--domain-key ssf`` cell's
+    manifests already carry that flag). ``domain_key`` is passed to the
+    evaluator so it reads the rung files the pipeline names after the key.
+    """
     steps = []
     if source == ARCHIVE:
         steps.append(
@@ -153,7 +165,7 @@ def build_steps(
         # A new subset makes every finished rung stale.
         if extracting or not completed(run_dir / rung):
             steps.append(
-                (rung, rung_command(MANIFESTS / f"{rung}.json", run_dir / rung, subset))
+                (rung, rung_command(manifests / f"{rung}.json", run_dir / rung, subset))
             )
     steps.append(
         (
@@ -173,6 +185,9 @@ def build_steps(
                 str(COHORT),
                 "--output-dir",
                 str(eval_dir),
+                "--domain-key",
+                domain_key,
+                *extra_eval_args,
             ],
         )
     )
@@ -199,11 +214,33 @@ def main(argv: list[str] | None = None) -> int:
         default=Path("validation/ablation_cells/ipr_manual_t0interpro"),
     )
     parser.add_argument(
+        "--manifests",
+        type=Path,
+        default=MANIFESTS,
+        help="directory of committed rung manifests whose commands are replayed",
+    )
+    parser.add_argument("--domain-key", default="interpro")
+    parser.add_argument(
+        "--eval-arg",
+        action="append",
+        default=[],
+        help="extra argument appended to the validation/ablation.py command "
+        "(repeatable; e.g. --eval-arg=--interpro2go-t0 --eval-arg=PATH)",
+    )
+    parser.add_argument(
         "--dry-run", action="store_true", help="print the commands and exit"
     )
     args = parser.parse_args(argv)
 
-    steps = build_steps(args.source, args.subset, args.run_dir, args.eval_dir)
+    steps = build_steps(
+        args.source,
+        args.subset,
+        args.run_dir,
+        args.eval_dir,
+        args.manifests,
+        args.domain_key,
+        tuple(args.eval_arg),
+    )
     if args.dry_run:
         for name, cmd in steps:
             print(f"# {name}\n{' '.join(cmd)}")

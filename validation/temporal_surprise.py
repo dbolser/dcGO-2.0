@@ -518,6 +518,73 @@ def pool(
     )
 
 
+def carrier_index(
+    protein_features: Mapping[str, Iterable[str]], wanted: Set[str]
+) -> Dict[str, Set[str]]:
+    """``{feature: proteins carrying it}`` for the features in ``wanted``."""
+    carriers: Dict[str, Set[str]] = {}
+    for protein, features in protein_features.items():
+        for feature in features:
+            if feature in wanted:
+                carriers.setdefault(feature, set()).add(protein)
+    return carriers
+
+
+def emergence_enrichment(
+    associations: Iterable[Tuple[str, str]],
+    protein_features: Mapping[str, Iterable[str]],
+    t0_map: Mapping[str, Set[str]],
+    t1_map: Mapping[str, Set[str]],
+    n_resamples: int = 1000,
+    seed: int = 0,
+    name: str = "all",
+) -> StratumResult:
+    """Pooled emergence enrichment of a whole association set — no ranking.
+
+    The per-rung wrapper for ``validation/ablation.py``: every association in
+    the set (e.g. all supra-domain rows of one rung's table) is scored on the
+    carriers it predicts a term for that lacked it at t0, pooled, and divided
+    by the terms' own acquisition rates. ``protein_features`` is
+    ``{protein: features}`` over the domain universe; both GO maps must already
+    be propagated. Associations that predict nothing are dropped before
+    pooling, as in the main path.
+    """
+    pairs = list(dict.fromkeys(associations))
+    carriers = carrier_index(protein_features, {f for f, _ in pairs})
+    base_rates = acquisition_base_rates(
+        {t for _, t in pairs}, t0_map, t1_map, set(protein_features)
+    )
+    outcomes = [
+        score_association(
+            feature=feature,
+            term=term,
+            carriers=carriers.get(feature, set()),
+            t0_map=t0_map,
+            t1_map=t1_map,
+            base_rate=base_rates.get(term, 0.0),
+            rank_scores={},
+        )
+        for feature, term in pairs
+    ]
+    return pool(name, [o for o in outcomes if o.n_predicted > 0], n_resamples, seed)
+
+
+def supra_associations(path) -> List[Tuple[str, str]]:
+    """The ``(supra-domain, term)`` rows of a rung's association table.
+
+    Supra-domain ids are comma-joined constituent ids; both the significant
+    (``go_term``) and the True-Path-propagated table qualify.
+    """
+    import csv
+
+    out: List[Tuple[str, str]] = []
+    with open(path) as f:
+        for row in csv.DictReader(f, delimiter="\t"):
+            if "," in row["domain"]:
+                out.append((row["domain"], row["go_term"]))
+    return out
+
+
 def top_k(
     outcomes: Sequence[AssociationOutcome], ranking: str, k: int
 ) -> List[AssociationOutcome]:
@@ -1302,6 +1369,15 @@ def main() -> int:  # pragma: no cover - I/O wiring, exercised by running it
         help="Surprise ranking computed on the t0 associations",
     )
     parser.add_argument(
+        "--associations",
+        type=Path,
+        default=None,
+        help="Bypass the surprise ranking: pool the emergence enrichment of "
+        "every supra-domain row of this association table (a rung's "
+        "significant or propagated file) and write that one stratum to "
+        "--output",
+    )
+    parser.add_argument(
         "--t0-gaf",
         type=Path,
         default=Path("data/raw/goa_archive/goa_human.gaf.205.gz"),
@@ -1375,7 +1451,7 @@ def main() -> int:  # pragma: no cover - I/O wiring, exercised by running it
             return 1
     else:
         for path in (
-            args.surprising,
+            args.associations or args.surprising,
             args.t0_gaf,
             args.t1_gaf,
             args.interpro,
@@ -1386,7 +1462,9 @@ def main() -> int:  # pragma: no cover - I/O wiring, exercised by running it
                 return 1
         # Score through the inputs training read (see
         # training_input_mismatches); a ranking without a manifest is not checked.
-        manifest = args.surprising.parent / "run_manifest_go.json"
+        manifest = (
+            args.associations or args.surprising
+        ).parent / "run_manifest_go.json"
         if manifest.exists():
             mismatches = training_input_mismatches(
                 manifest,
@@ -1442,6 +1520,41 @@ def main() -> int:  # pragma: no cover - I/O wiring, exercised by running it
     ).parse_protein2ipr_file(args.interpro)
     universe = set(architectures)
     logger.info(f"  Proteins with domains: {len(universe):,}")
+
+    if args.associations:
+        logger.info(f"Pooling all supra-domain rows of {args.associations}...")
+        protein_features = {
+            p: list(a.single_domains) + list(a.supra_domains)
+            for p, a in architectures.items()
+        }
+        result = emergence_enrichment(
+            supra_associations(args.associations),
+            protein_features,
+            t0_map,
+            t1_map,
+            n_resamples=args.bootstrap,
+            seed=args.seed,
+            name="all_supra",
+        )
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        with open(args.output, "w") as f:
+            f.write(
+                "stratum\tn_associations\tn_predictions\tn_hits\thit_rate\t"
+                "expected_rate\tenrichment\tenrichment_ci_low\tenrichment_ci_high\t"
+                "mean_per_association_enrichment\n"
+            )
+            f.write(
+                f"{result.name}\t{result.n_associations}\t{result.n_predicted}\t"
+                f"{result.n_hit}\t{result.hit_rate:.4f}\t{result.expected_rate:.4f}\t"
+                f"{result.enrichment:.2f}\t{result.ci_low:.2f}\t{result.ci_high:.2f}\t"
+                f"{result.mean_per_association_enrichment:.2f}\n"
+            )
+        logger.info(
+            f"  {result.n_associations:,} associations, {result.n_predicted:,} "
+            f"predictions, enrichment {result.enrichment:.2f} "
+            f"[{result.ci_low:.2f}, {result.ci_high:.2f}] → {args.output}"
+        )
+        return 0
 
     logger.info(f"Reading the t0 surprise ranking from {args.surprising}...")
     rows = []

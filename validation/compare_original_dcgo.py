@@ -191,6 +191,11 @@ def parse_sp2go(path: Path, direct_only: bool) -> Dict[Tuple[str, ...], Set[str]
     out — those are single domains wearing a supra-domain label, and comparing
     them here would double-count the single-domain table.
 
+    The published keys are comma-joined sunids in N→C order; ours are bags of
+    domains with no positional claim, so every tuple here is canonicalised by
+    sorting (numerically, see ``canonical_sunids``) and both sides of the join
+    compare as unordered sets.
+
     ``direct_only`` keeps ``Annotation_origin == 1``. A run made without
     ``--enable-true-path`` produces direct associations only, so mixing their
     inherited rows in would inflate their side of every count.
@@ -205,7 +210,7 @@ def parse_sp2go(path: Path, direct_only: bool) -> Dict[Tuple[str, ...], Set[str]
                 continue
             if direct_only and fields[6] != "1":
                 continue
-            parts = tuple(fields[1].split(","))
+            parts = canonical_sunids(fields[1].split(","))
             if len(parts) < 2:
                 continue
             supra[parts].add(fields[2])
@@ -215,6 +220,16 @@ def parse_sp2go(path: Path, direct_only: bool) -> Dict[Tuple[str, ...], Set[str]
         f"{sum(len(v) for v in supra.values()):,} associations"
     )
     return supra
+
+
+def canonical_sunids(parts: Iterable[str]) -> Tuple[str, ...]:
+    """Spell a supra-domain of sunids as an unordered set: numeric sort.
+
+    Our bag-mode keys are sorted *strings* (``SSF46565,SSF57938``); after
+    stripping ``SSF`` the numeric and lexical orders can disagree (``SSF100``
+    vs ``SSF99``), so both sides are re-sorted here on the same rule.
+    """
+    return tuple(sorted(parts, key=lambda s: (len(s), s)))
 
 
 def parse_scop_des(path: Path) -> Dict[int, Tuple[str, str, str]]:
@@ -303,7 +318,7 @@ def parse_our_associations(
             if fields[idx["domain_type"]] == "single":
                 singles[(domain, term)] = (p_value, q_value)
             else:
-                supra[tuple(domain.split(","))].add(term)
+                supra[tuple(sorted(domain.split(",")))].add(term)
     logger.info(
         f"Our run: {len(singles):,} significant single-domain associations, "
         f"{sum(len(v) for v in supra.values()):,} supra-domain associations "
@@ -340,7 +355,7 @@ def build_universe(
         for domain in arch.single_domains:
             domain_proteins[domain].add(protein)
         for feature in arch.supra_domains:
-            supra_proteins[tuple(feature.split(","))].add(protein)
+            supra_proteins[tuple(sorted(feature.split(",")))].add(protein)
         for term in annotations[protein]:
             term_proteins[term].add(protein)
     return domain_proteins, term_proteins, len(universe), supra_proteins
@@ -880,7 +895,8 @@ def main() -> int:
     their_supra = parse_sp2go(args.dcgo_supra, direct_only=True)
     their_supra_all = parse_sp2go(args.dcgo_supra, direct_only=False)
 
-    # Their tuples are bare sunids; ours are SSF accessions in N→C order.
+    # Their tuples are bare sunids; ours are SSF accessions. Both are compared
+    # as unordered sets, canonicalised by numeric sunid order.
     def to_sunids(feature: Tuple[str, ...]) -> Optional[Tuple[str, ...]]:
         out = []
         for part in feature:
@@ -888,7 +904,7 @@ def main() -> int:
             if sunid is None:
                 return None
             out.append(str(sunid))
-        return tuple(out)
+        return canonical_sunids(out)
 
     our_arch = {
         key: value
@@ -908,7 +924,7 @@ def main() -> int:
     record("their_supra_architectures", len(their_supra))
 
     n_arch, prec_arch, rec_arch, jac_arch = agreement(our_all_arch, set(their_supra))
-    record("shared_supra_architectures_exact_order", n_arch)
+    record("shared_supra_architectures_unordered", n_arch)
     record("supra_architecture_precision_ours_in_theirs", prec_arch)
 
     # Order convention is not documented on their side, so report the
@@ -1044,11 +1060,11 @@ def main() -> int:
         [
             ["our_architectures_observed", len(our_all_arch)],
             ["their_architectures", len(their_supra)],
-            ["shared_architectures_exact_order", n_arch],
+            ["shared_architectures_unordered", n_arch],
             ["shared_architectures_order_insensitive", n_arch_c],
-            ["architecture_precision_exact_order", prec_arch],
-            ["architecture_recall_exact_order", rec_arch],
-            ["architecture_jaccard_exact_order", jac_arch],
+            ["architecture_precision_unordered", prec_arch],
+            ["architecture_recall_unordered", rec_arch],
+            ["architecture_jaccard_unordered", jac_arch],
             ["architecture_precision_order_insensitive", prec_arch_c],
             ["architecture_recall_order_insensitive", rec_arch_c],
             ["architecture_jaccard_order_insensitive", jac_arch_c],

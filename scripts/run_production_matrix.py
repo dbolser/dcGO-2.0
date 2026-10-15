@@ -108,6 +108,26 @@ def main(argv: list[str] | None = None) -> int:
         "--only", nargs="*", default=None, help="run only these cell names"
     )
     parser.add_argument("--list", action="store_true", help="print the matrix and exit")
+    parser.add_argument(
+        "--domain-key",
+        default="interpro",
+        help="passed to every cell (interpro | ssf | pfam); use a separate "
+        "--output-root per key",
+    )
+    parser.add_argument(
+        "--extra-arg",
+        action="append",
+        default=[],
+        help="extra run_dcgo_human.py argument appended to every cell "
+        "(repeatable; e.g. --extra-arg=--fdr-threshold --extra-arg=0.001)",
+    )
+    parser.add_argument(
+        "--configs",
+        nargs="*",
+        choices=["baseline", "paperparity"],
+        default=None,
+        help="run only cells of these configurations",
+    )
     args = parser.parse_args(argv)
 
     cells = build_matrix()
@@ -117,6 +137,12 @@ def main(argv: list[str] | None = None) -> int:
         if unknown:
             parser.error(f"unknown cell names: {sorted(unknown)}")
         cells = [(name, extra) for name, extra in cells if name in wanted]
+    if args.configs:
+        cells = [
+            (name, extra)
+            for name, extra in cells
+            if name.rsplit("_", 1)[-1] in set(args.configs)
+        ]
     if args.list:
         for name, extra in cells:
             print(f"{name}\t{' '.join(extra)}")
@@ -140,6 +166,9 @@ def main(argv: list[str] | None = None) -> int:
             str(args.num_cores),
             "--output-dir",
             str(out_dir),
+            "--domain-key",
+            args.domain_key,
+            *args.extra_arg,
         ]
         log_path = args.output_root / f"{name}.log"
         print(f"[{i}/{len(cells)}] {name}: running", flush=True)

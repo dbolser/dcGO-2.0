@@ -107,6 +107,45 @@ class TestPanelMatchesReferenceEvaluator:
         assert got["n_eval_proteins"] == 0
         assert got["f_max"] == 0.0
 
+    @pytest.mark.parametrize("pred", [PRED_A, PRED_B])
+    def test_legacy_flags_reproduce_the_legacy_reference(self, pred):
+        legacy = dict(min_tau=0.0, anchor_origin=True)
+        reference = tb.evaluate_aspect(pred, TRUE_SETS, IC, **legacy)
+        got = rs.panel_metrics(_panel(pred), **legacy)
+        for key in ("f_max", "f_max_tau", "auprc"):
+            assert got[key] == pytest.approx(reference[key]), key
+
+
+class TestCafaConventions:
+    def test_the_floor_is_one_constant_in_both_modules(self):
+        assert rs.CAFA_MIN_TAU == tb.CAFA_MIN_TAU == 0.001
+
+    def test_f_max_ignores_cutoffs_below_the_floor(self):
+        # P1's best cutoff is 0 (predict a and z: P 1/2, R 1/2); at 0.4 only the
+        # wrong term z is left (F 0). CAFA's grid cannot reach 0.
+        panel = _panel({"P1": {"GO:a": 0.0, "GO:z": 0.4}})
+        legacy = rs.panel_metrics(panel, min_tau=0.0, anchor_origin=True)
+        assert legacy["f_max"] > 0 and legacy["f_max_tau"] == 0.0
+        got = rs.panel_metrics(panel)
+        assert got["f_max"] == 0.0 and got["f_max_tau"] == 0.0
+
+    def test_no_reachable_cutoff_scores_zero(self):
+        panel = rs.build_panel(PRED_A, TRUE_SETS, IC, [0.0, 0.0005])
+        got = rs.panel_metrics(panel)
+        assert got["f_max"] == 0.0 and got["coverage_at_fmax"] == 0.0
+
+    def test_auprc_drops_the_zero_coverage_anchor(self):
+        panel = _panel(PRED_A)
+        curve = rs.panel_curve(panel)
+        covered = curve.coverage > 0
+        assert not covered[-1]  # the sentinel
+        r_top = curve.recall[covered].min()
+        p_top = curve.precision[covered & (curve.recall == r_top)].max()
+        with_anchor = rs.panel_metrics(panel, anchor_origin=True)["auprc"]
+        without = rs.panel_metrics(panel)["auprc"]
+        assert with_anchor - without == pytest.approx(r_top * p_top / 2)
+        assert without > 0
+
 
 class TestPanelStructure:
     def test_row_order_is_sorted_and_drops_empty_truth(self):

@@ -12,9 +12,19 @@ averaged over only the proteins with ≥1 prediction at that cutoff, sensitivity
 averaged over the whole cohort, exactly as ``resampling.panel_metrics``
 maximises F.
 
+Two fixed-operating-point columns make rungs comparable off their own F_max:
+``ppv_at_ref_sensitivity`` is the rung's PPV, read off its own curve by linear
+interpolation, at the sensitivity the reference rung (``--reference-rung``,
+default ``supra_input_relative``) reaches at *its* F_max; ``f_at_budget`` is the
+rung's F at the number of (protein, term) predictions the reference rung makes
+at its F_max. Both are NaN when the rung's curve never reaches that point.
+
 Hard sanity gate: the recomputed ``f_max``/``auprc``/``n_eval_proteins`` must
 match the committed ``ablation_metrics.tsv`` to within ``--tolerance`` in every
-cell, or nothing is written.
+cell, or nothing is written. ``--min-tau``/``--anchor-origin`` select the
+scoring convention; the defaults are ``resampling.panel_metrics``'s CAFA
+conventions (F_max at tau >= 0.001, no origin point in the AUPRC). Tables
+scored before 2026-10-15 need ``--min-tau 0 --anchor-origin``.
 
 Regeneration command (rung outputs are the byte-identical re-runs of the §4
 factorial — one pipeline run per sub-directory of ``--run-dir``)::
@@ -28,6 +38,7 @@ factorial — one pipeline run per sub-directory of ``--run-dir``)::
 from __future__ import annotations
 
 import importlib.util
+import inspect
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -54,44 +65,90 @@ tb = abl.tb
 rs = abl.rs
 
 
-def pr_at_fmax(panel) -> dict[str, float]:
+MIN_TAU = getattr(rs, "CAFA_MIN_TAU", 0.0)
+
+
+def _metric_kwargs(min_tau: float, anchor_origin: bool) -> dict:
+    """Convention kwargs ``resampling.panel_metrics`` accepts (none, if older)."""
+    params = inspect.signature(rs.panel_metrics).parameters
+    wanted = {"min_tau": min_tau, "anchor_origin": anchor_origin}
+    return {k: v for k, v in wanted.items() if k in params}
+
+
+def f_max_index(panel, min_tau: float = MIN_TAU) -> int | None:
+    """Index of the F_max cutoff among the thresholds ``>= min_tau``.
+
+    The same rule ``resampling.panel_metrics`` applies; ``None`` when no cutoff
+    is reachable.
+    """
+    reachable = np.nonzero(panel.thresholds >= min_tau)[0]
+    if not len(reachable):
+        return None
+    return int(reachable[np.argmax(rs.panel_curve(panel).f[reachable])])
+
+
+def pr_at_fmax(panel, min_tau: float = MIN_TAU) -> dict[str, float]:
     """Precision/recall/coverage at the F_max operating point of a panel.
 
-    Recomputes the full CAFA precision and recall vectors with the identical
-    row-sum formulas ``resampling.panel_metrics`` uses (full cohort, no
-    resample), takes ``argmax F`` — the exact quantity ``panel_metrics``
-    maximises — and reads PPV and sensitivity off that index.
+    Reads the full-cohort CAFA curves off ``resampling.panel_curve`` — the
+    exact vectors ``panel_metrics`` maximises — takes ``argmax F`` over the
+    cutoffs ``>= min_tau`` and reports PPV and sensitivity at that index.
     """
+    empty = {
+        "f_max": 0.0,
+        "f_max_tau": 0.0,
+        "ppv_at_fmax": 0.0,
+        "sensitivity_at_fmax": 0.0,
+        "coverage_at_fmax": 0.0,
+    }
     if panel.n_proteins == 0:
-        return {
-            "f_max": 0.0,
-            "f_max_tau": 0.0,
-            "ppv_at_fmax": 0.0,
-            "sensitivity_at_fmax": 0.0,
-            "coverage_at_fmax": 0.0,
-        }
-    n = panel.n_proteins
-    n_pred = panel.n_pred
-    has_pred = n_pred > 0
-    with np.errstate(divide="ignore", invalid="ignore"):
-        prec_contrib = np.where(has_pred, panel.tp / np.maximum(n_pred, 1), 0.0)
-    rec_contrib = panel.tp / panel.n_true[:, None]
-
-    m = has_pred.sum(axis=0).astype(np.float64)  # proteins with >=1 prediction
-    precision = np.where(m > 0, prec_contrib.sum(axis=0) / np.maximum(m, 1), 0.0)
-    recall = rec_contrib.sum(axis=0) / n
-
-    denom = precision + recall
-    f = np.where(denom > 0, 2 * precision * recall / np.maximum(denom, 1e-300), 0.0)
-    best = int(np.argmax(f))
-    f_max = float(f[best])
+        return empty
+    best = f_max_index(panel, min_tau)
+    if best is None:
+        return empty
+    curve = rs.panel_curve(panel)
+    f_max = float(curve.f[best])
     return {
         "f_max": f_max,
         "f_max_tau": float(panel.thresholds[best]) if f_max > 0 else 0.0,
-        "ppv_at_fmax": float(precision[best]),
-        "sensitivity_at_fmax": float(recall[best]),
-        "coverage_at_fmax": float(m[best] / n),
+        "ppv_at_fmax": float(curve.precision[best]),
+        "sensitivity_at_fmax": float(curve.recall[best]),
+        "coverage_at_fmax": float(curve.coverage[best]),
     }
+
+
+def _interp_upper(x: np.ndarray, y: np.ndarray, at: float) -> float:
+    """``y`` at ``x = at`` on the upper envelope of the points, NaN outside."""
+    best: dict[float, float] = {}
+    for xi, yi in zip(x.tolist(), y.tolist()):
+        if xi not in best or yi > best[xi]:
+            best[xi] = yi
+    xs = np.array(sorted(best))
+    if xs.size == 0 or at < xs[0] or at > xs[-1]:
+        return float("nan")
+    return float(np.interp(at, xs, np.array([best[v] for v in xs])))
+
+
+def reference_operating_point(panel, min_tau: float = MIN_TAU) -> tuple[float, float]:
+    """``(sensitivity, n_predictions)`` of a panel at its F_max threshold."""
+    best = f_max_index(panel, min_tau)
+    if best is None:
+        return float("nan"), float("nan")
+    curve = rs.panel_curve(panel)
+    return float(curve.recall[best]), float(panel.n_pred[:, best].sum())
+
+
+def ppv_at_sensitivity(panel, sensitivity: float) -> float:
+    """PPV of a panel's own curve at ``sensitivity`` (upper envelope, interpolated)."""
+    curve = rs.panel_curve(panel)
+    return _interp_upper(curve.recall, curve.precision, sensitivity)
+
+
+def f_at_budget(panel, n_predictions: float) -> float:
+    """F of a panel's own curve at ``n_predictions`` total predictions."""
+    curve = rs.panel_curve(panel)
+    totals = panel.n_pred.sum(axis=0)
+    return _interp_upper(totals, curve.f, n_predictions)
 
 
 def main() -> int:  # pragma: no cover - I/O wiring
@@ -144,6 +201,26 @@ def main() -> int:  # pragma: no cover - I/O wiring
         default=_HERE / "ablation_pr_decomposition.tsv",
     )
     parser.add_argument(
+        "--reference-rung",
+        default="supra_input_relative",
+        help="Rung whose F_max operating point fixes the sensitivity and the "
+        "prediction budget the other rungs are read at "
+        "(default: supra_input_relative)",
+    )
+    parser.add_argument(
+        "--min-tau",
+        type=float,
+        default=MIN_TAU,
+        help="Lowest cutoff F_max is read at (default: %(default)s, the CAFA "
+        "convention). Tables scored before 2026-10-15 used the whole sweep: 0",
+    )
+    parser.add_argument(
+        "--anchor-origin",
+        action="store_true",
+        help="Keep the zero-coverage points in the AUPRC trapezoid (the "
+        "pre-2026-10-15 convention; default: leave them out, as CAFA does)",
+    )
+    parser.add_argument(
         "--tolerance",
         type=float,
         default=1e-6,
@@ -151,6 +228,8 @@ def main() -> int:  # pragma: no cover - I/O wiring
     )
     args = parser.parse_args()
     ic_floors = [0.0, 2.0, 4.0]
+    if args.reference_rung not in {r.name for r in abl.LADDER}:
+        parser.error(f"--reference-rung {args.reference_rung} is not a ladder rung")
 
     for path in (
         args.t0_gaf,
@@ -266,12 +345,19 @@ def main() -> int:  # pragma: no cover - I/O wiring
             true_a = tb.filter_by_ic(benchmark[aspect], ic, min_ic)
             if not true_a:
                 continue
+            panels = {}
             for name in methods:
                 pred_f = tb.filter_by_ic(aspect_preds[name][aspect], ic, min_ic)
                 taus = tb._candidate_thresholds(pred_f)
-                panel = rs.build_panel(pred_f, true_a, ic, taus)
-                observed = rs.panel_metrics(panel)
-                decomp = pr_at_fmax(panel)
+                panels[name] = rs.build_panel(pred_f, true_a, ic, taus)
+            ref_sensitivity, ref_budget = reference_operating_point(
+                panels[args.reference_rung], args.min_tau
+            )
+            for name, panel in panels.items():
+                observed = rs.panel_metrics(
+                    panel, **_metric_kwargs(args.min_tau, args.anchor_origin)
+                )
+                decomp = pr_at_fmax(panel, args.min_tau)
                 if abs(decomp["f_max"] - observed["f_max"]) > 1e-12:
                     logger.error(
                         f"[{aspect} IC>={min_ic:g}] {name}: pr_at_fmax disagrees "
@@ -313,6 +399,13 @@ def main() -> int:  # pragma: no cover - I/O wiring
                         "ppv_at_fmax": decomp["ppv_at_fmax"],
                         "sensitivity_at_fmax": decomp["sensitivity_at_fmax"],
                         "coverage_at_fmax": decomp["coverage_at_fmax"],
+                        "reference_rung": args.reference_rung,
+                        "ref_sensitivity": ref_sensitivity,
+                        "ref_n_predictions": ref_budget,
+                        "ppv_at_ref_sensitivity": ppv_at_sensitivity(
+                            panel, ref_sensitivity
+                        ),
+                        "f_at_budget": f_at_budget(panel, ref_budget),
                         "committed_f_max": com["f_max"],
                         "f_max_delta": observed["f_max"] - com["f_max"],
                     }

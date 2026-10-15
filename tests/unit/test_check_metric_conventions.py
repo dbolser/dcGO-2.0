@@ -51,9 +51,17 @@ def _panel(pred=PREDS):
 class TestConventionMetrics:
     def test_committed_metrics_come_back_unchanged(self):
         panel = _panel()
-        got, ref = cm.convention_metrics(panel), rs.panel_metrics(panel)
+        got = cm.convention_metrics(panel)
+        ref = rs.panel_metrics(panel, min_tau=0.0, anchor_origin=True)
         assert got["f_max"] == ref["f_max"]
         assert got["auprc"] == ref["auprc"]
+
+    def test_the_alternatives_are_panel_metrics_current_defaults(self):
+        panel = _panel()
+        got, ref = cm.convention_metrics(panel, th_step=0.001), rs.panel_metrics(panel)
+        assert got["f_max_cafa_floor"] == ref["f_max"]
+        assert got["f_max_tau_cafa_floor"] == ref["f_max_tau"]
+        assert got["auprc_no_anchor"] == ref["auprc"]
 
     def test_anchor_is_the_triangle_to_the_strictest_cutoff(self):
         panel = _panel()
@@ -86,7 +94,8 @@ class TestConventionMetrics:
     def test_resampled_rows(self):
         panel = _panel()
         idx = np.array([0, 0, 2])
-        got, ref = cm.convention_metrics(panel, idx), rs.panel_metrics(panel, idx)
+        got = cm.convention_metrics(panel, idx)
+        ref = rs.panel_metrics(panel, idx, min_tau=0.0, anchor_origin=True)
         assert got["f_max"] == ref["f_max"] and got["auprc"] == ref["auprc"]
 
 
@@ -105,7 +114,9 @@ class TestSweeps:
 
     def test_chunked_curve_equals_one_panel(self):
         taus = cm.exact_thresholds(PREDS)
-        ref = rs.panel_metrics(rs.build_panel(PREDS, TRUTH, IC, taus))
+        ref = rs.panel_metrics(
+            rs.build_panel(PREDS, TRUTH, IC, taus), min_tau=0.0, anchor_origin=True
+        )
         got = cm.sweep_metrics(PREDS, TRUTH, IC, taus, chunk=2)
         for key in ("f_max", "auprc", "s_min"):
             assert got[key] == pytest.approx(ref[key], abs=1e-15), key
@@ -123,13 +134,20 @@ class TestSameResamples:
 
     def test_another_evaluate_scores_the_same_resamples(self):
         panels = {"a": _panel(), "b": _panel({"P1": {"GO:a": 0.9}})}
+        # panel_metrics' defaults are the conventions convention_metrics calls
+        # f_max_cafa_floor / auprc_no_anchor, so the same resamples must agree.
         ref = rs.paired_bootstrap(panels, ("f_max", "auprc"), n_replicates=25, seed=5)
         got = rs.paired_bootstrap(
             panels,
-            ("f_max", "auprc", "auprc_no_anchor"),
+            ("f_max_cafa_floor", "auprc_no_anchor"),
             n_replicates=25,
             seed=5,
             evaluate=cm.convention_metrics,
         )
-        for key, values in ref.items():
-            np.testing.assert_array_equal(got[key], values)
+        for name in panels:
+            np.testing.assert_array_equal(
+                got[f"{name}::f_max_cafa_floor"], ref[f"{name}::f_max"]
+            )
+            np.testing.assert_array_equal(
+                got[f"{name}::auprc_no_anchor"], ref[f"{name}::auprc"]
+            )

@@ -613,7 +613,7 @@ class TestAnnotationValidation:
                 domain="IPR001",
                 go_term="GO:0006812",
                 q_value=0.001,
-                association_score=150.0,  # Invalid (>100)
+                association_score=float("nan"),  # Invalid (missing)
                 annotation_type="direct",
                 direct_source_term="GO:0006812",
             )

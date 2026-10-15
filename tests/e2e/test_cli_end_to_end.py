@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import csv
 import gzip
+import math
 import subprocess
 import sys
 from pathlib import Path
@@ -221,7 +222,9 @@ class TestOutputSchema:
             assert 0.0 <= float(row["p_value"]) <= 1.0
             assert 0.0 <= float(row["adj_p_value"]) <= 1.0
             float(row["odds_ratio"])
-            assert 0.0 <= float(row["hyper_score"]) <= 100.0
+            # A hypergeometric z-score: unbounded, positive for enrichment.
+            assert math.isfinite(float(row["hyper_score"]))
+            assert float(row["hyper_score"]) > 0.0
             assert row["domain_type"] in {"single", "supra_pair", "supra_triple"}
             assert int(row["n_observations"]) > 0
             for cell in ("a", "b", "c", "d"):

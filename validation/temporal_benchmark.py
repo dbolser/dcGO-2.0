@@ -48,7 +48,7 @@ import math
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import Callable, Container, Iterable, Mapping
+from typing import Callable, Container, Iterable, Mapping, Sequence
 
 # Runnable both as a package module and as a bare script (repo convention).
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -65,6 +65,11 @@ BP_ROOT = "GO:0008150"
 MF_ROOT = "GO:0003674"
 CC_ROOT = "GO:0005575"
 ASPECT_ROOTS = frozenset({BP_ROOT, MF_ROOT, CC_ROOT})
+
+#: Lowest cutoff F_max is read at: CAFA-evaluator's threshold grid starts at
+#: its step (0.001 as the §4 cross-check ran it) and cannot reach below. The
+#: same value is ``resampling.CAFA_MIN_TAU`` (the two files share no import).
+CAFA_MIN_TAU = 0.001
 
 # namespace (obonet) -> short aspect code
 NAMESPACE_TO_ASPECT = {
@@ -248,6 +253,25 @@ def transfer_predictions(
     return predictions
 
 
+def propagate_domain_profile(
+    scores: Mapping[str, float], get_ancestors: GetAncestors
+) -> dict[str, float]:
+    """One domain's associations propagated up the DAG: ``{term: max score}``.
+
+    The paper's output-propagation rule — an ancestor is scored by the best of
+    the domain's significant descendants, never by their number. Aspect roots
+    are dropped.
+    """
+    profile: dict[str, float] = {}
+    for go, s in scores.items():
+        for term in (go, *get_ancestors(go)):
+            if term in ASPECT_ROOTS:
+                continue
+            if s > profile.get(term, float("-inf")):
+                profile[term] = s
+    return profile
+
+
 def transfer_predictions_pscore(
     protein_domains: Mapping[str, Iterable[str]],
     domain_go_scores: Mapping[str, Mapping[str, float]],
@@ -255,22 +279,31 @@ def transfer_predictions_pscore(
 ) -> dict[str, dict[str, float]]:
     """Transfer via the original dcGO Predictor **p-score** (Fang & Gough 2013).
 
-    Two differences from :func:`transfer_predictions`: the per-(protein, term)
-    score is the **sum** of contributing association scores (additive evidence
-    across the protein's domains, propagated to ancestors), and each protein's
-    scores are then **min-max normalised to [0, 1]** — a per-protein calibration
-    so the threshold sweep ranks each protein's own predictions relative to each
-    other. Aspect roots are dropped. Constant vectors normalise to all-1.
+    Each of the protein's domains contributes **one** score per term — the term's
+    score in that domain's propagated profile
+    (:func:`propagate_domain_profile`: an ancestor takes the max over the
+    domain's significant descendants). Those are **summed across the protein's
+    domains** (additive evidence), then each protein's scores are **min-max
+    normalised to [0, 1]** — a per-protein calibration so the threshold sweep
+    ranks each protein's own predictions relative to each other. Aspect roots
+    are dropped. Constant vectors normalise to all-1.
+
+    Before 2026-10-15 every association of a domain added its score to every
+    ancestor, so a domain with ``k`` significant descendants of ``T`` added
+    ``k`` scores to ``T`` and general terms were inflated. A domain listed twice
+    in an architecture (a repeat) still counts twice, as it did.
     """
+    profiles: dict[str, dict[str, float]] = {}
     predictions: dict[str, dict[str, float]] = {}
     for protein, domains in protein_domains.items():
         sums: dict[str, float] = defaultdict(float)
         for domain in domains:
-            for go, s in domain_go_scores.get(domain, {}).items():
-                for term in (go, *get_ancestors(go)):
-                    if term in ASPECT_ROOTS:
-                        continue
-                    sums[term] += s
+            if domain not in profiles:
+                profiles[domain] = propagate_domain_profile(
+                    domain_go_scores.get(domain, {}), get_ancestors
+                )
+            for term, s in profiles[domain].items():
+                sums[term] += s
         if not sums:
             continue
         lo, hi = min(sums.values()), max(sums.values())
@@ -294,6 +327,21 @@ def naive_predictions(
     """
     base = {t: f for t, f in term_frequency.items() if t not in ASPECT_ROOTS}
     return {p: dict(base) for p in eval_proteins}
+
+
+def restrict_to_covered_proteins(
+    predictions: PredScores, reference: PredScores
+) -> dict[str, dict[str, float]]:
+    """Keep ``predictions`` only for proteins ``reference`` predicts at least one term for.
+
+    The naive baseline predicts for every protein; a domain-based method only
+    for proteins with a scored domain. Because CAFA averages precision over the
+    predicted proteins but recall over the whole cohort, the two are not scored
+    on the same footing. Scoring naive on the method's *covered* proteins —
+    same truth, same cohort, the uncovered proteins staying as misses for both
+    — gives the fair comparison; report it beside the full-coverage naive.
+    """
+    return {p: dict(terms) for p, terms in predictions.items() if reference.get(p)}
 
 
 def shuffle_domain_go(
@@ -435,17 +483,21 @@ def pr_curve(
     pred_scores: PredScores,
     true_sets: TrueSets,
     thresholds: Iterable[float] | None = None,
-) -> list[tuple[float, float, float]]:
-    """(threshold, precision, recall) points across the score sweep."""
+) -> list[tuple[float, float, float, float]]:
+    """(threshold, precision, recall, coverage) points across the score sweep.
+
+    ``coverage`` is the fraction of the cohort with a prediction at the cutoff.
+    """
     taus = (
         list(thresholds)
         if thresholds is not None
         else _candidate_thresholds(pred_scores)
     )
+    n_eval = len(true_sets)
     curve = []
     for tau in taus:
-        p, r, _ = precision_recall_at_threshold(pred_scores, true_sets, tau)
-        curve.append((tau, p, r))
+        p, r, m = precision_recall_at_threshold(pred_scores, true_sets, tau)
+        curve.append((tau, p, r, m / n_eval if n_eval else 0.0))
     return curve
 
 
@@ -453,14 +505,22 @@ def f_max(
     pred_scores: PredScores,
     true_sets: TrueSets,
     thresholds: Iterable[float] | None = None,
+    min_tau: float = CAFA_MIN_TAU,
 ) -> tuple[float, float]:
     """CAFA ``F_max``: the best harmonic mean of precision/recall over the sweep.
 
-    Returns ``(f_max, tau_star)``.
+    Only cutoffs ``tau >= min_tau`` are read (:data:`CAFA_MIN_TAU` by default —
+    CAFA-evaluator's grid starts at its step and cannot reach below; the
+    p-score's min-max scaling gives every protein's weakest term exactly 0, so
+    "predict every transferred term" is an operating point our sweep sees and
+    CAFA's does not). ``min_tau=0.0`` restores the pre-2026-10-15 reading over
+    the whole sweep. Returns ``(f_max, tau_star)``.
     """
     best_f = 0.0
     best_tau = 0.0
-    for tau, p, r in pr_curve(pred_scores, true_sets, thresholds):
+    for tau, p, r, _cov in pr_curve(pred_scores, true_sets, thresholds):
+        if tau < min_tau:
+            continue
         if p + r > 0:
             f = 2 * p * r / (p + r)
             if f > best_f:
@@ -507,19 +567,23 @@ def s_min(
     return best_s, best_tau
 
 
-def auprc(curve: list[tuple[float, float, float]]) -> float:
+def auprc(curve: Sequence[tuple[float, ...]], anchor_origin: bool = False) -> float:
     """Area under the precision-recall curve via trapezoidal integration.
 
-    ``curve`` is a list of ``(threshold, precision, recall)`` points. Points are
-    sorted by increasing recall and integrated; precision is treated as a
-    function of recall. No point is invented, but the sweep's predict-nothing
-    sentinel (:func:`_candidate_thresholds`) is a point of its own at recall 0,
-    precision 0, so on a sweep's curve the area runs to the origin: a triangle
-    of ``r_top * p_top / 2`` below the strictest real cutoff. It is up to 0.13
-    for the naive baseline in §4 (``check_metric_conventions.py`` measures it).
-    Nothing is extrapolated towards recall 1.
+    ``curve`` is a list of ``(threshold, precision, recall, coverage)`` points
+    (:func:`pr_curve`). Points are sorted by increasing recall and integrated;
+    precision is treated as a function of recall. Nothing is extrapolated
+    towards recall 1.
+
+    By default the zero-coverage points are dropped first, as CAFA-evaluator
+    drops zero-coverage rows: the sweep's predict-nothing sentinel
+    (:func:`_candidate_thresholds`) is a point of its own at recall 0,
+    precision 0, and with it kept (``anchor_origin=True``, the pre-2026-10-15
+    behaviour) the area runs to the origin — a triangle of ``r_top * p_top / 2``
+    below the strictest real cutoff, worth up to 0.13 for the naive baseline in
+    §4 (``check_metric_conventions.py`` measures it).
     """
-    pts = sorted(((r, p) for _t, p, r in curve))
+    pts = sorted((r, p) for _t, p, r, cov in curve if anchor_origin or cov > 0)
     # collapse duplicate recall values to their max precision (upper envelope)
     dedup: dict[float, float] = {}
     for r, p in pts:
@@ -581,9 +645,15 @@ def evaluate_aspect(
     pred_scores: PredScores,
     true_sets: TrueSets,
     ic: Mapping[str, float],
+    min_tau: float = CAFA_MIN_TAU,
+    anchor_origin: bool = False,
 ) -> dict[str, float]:
-    """All three metrics for one already-aspect-restricted (pred, true) pair."""
-    fmax, fmax_tau = f_max(pred_scores, true_sets, None)
+    """All three metrics for one already-aspect-restricted (pred, true) pair.
+
+    ``min_tau`` and ``anchor_origin`` are the CAFA-evaluator conventions of
+    :func:`f_max` and :func:`auprc`; ``S_min`` reads the whole sweep either way.
+    """
+    fmax, fmax_tau = f_max(pred_scores, true_sets, None, min_tau=min_tau)
     smin, smin_tau = s_min(pred_scores, true_sets, ic, None)
     curve = pr_curve(pred_scores, true_sets, None)
     return {
@@ -592,7 +662,7 @@ def evaluate_aspect(
         "f_max_tau": fmax_tau,
         "s_min": smin,
         "s_min_tau": smin_tau,
-        "auprc": auprc(curve),
+        "auprc": auprc(curve, anchor_origin=anchor_origin),
     }
 
 
@@ -606,10 +676,10 @@ def load_domain_go_scores(
 
     With ``neg_log10`` (the default, for a p-value column) the score becomes
     ``-log10(p)`` so that higher = more confident and the confidence ordering has
-    real dynamic range. This matters because ``hyper_score`` saturates — ~37% of
-    significant associations sit at exactly 100 — which would collapse the
-    threshold sweep. Set ``neg_log10=False`` to use a column (e.g. ``hyper_score``)
-    verbatim.
+    real dynamic range. (The old 1-100 ``hyper_score`` saturated — ~37% of
+    significant associations sat at exactly 100 — which collapsed the threshold
+    sweep; it is now the paper's unbounded hypergeometric z-score.) Set
+    ``neg_log10=False`` to use a column (e.g. ``hyper_score``) verbatim.
     """
     import pandas as pd
 
@@ -845,6 +915,12 @@ def main() -> int:
     logger.info("Parsing t1 (test) GOA — experimental evidence only...")
     t1_parser = GOAParser(evidence_codes=EXPERIMENTAL_EVIDENCE, aspects={"P", "F", "C"})
     t1_exp_map = t1_parser.parse_gaf_file(args.t1_gaf)
+    # Score on the vocabulary training used: retired ids (merged / obsoleted
+    # with a successor) onto the live term, as the pipeline's input cleanup does.
+    t0_map = remap_retired_ids(t0_map, processor.alt_id_map, processor.replaced_by_map)
+    t1_exp_map = remap_retired_ids(
+        t1_exp_map, processor.alt_id_map, processor.replaced_by_map
+    )
 
     logger.info("Parsing domain architectures...")
     dom_parser = DomainAnnotationParser(max_supra_domain_length=3, min_domain_length=10)
@@ -878,6 +954,19 @@ def main() -> int:
     logger.info(f"Loading t0 domain->GO associations ({args.score_column})...")
     domain_go_scores = load_domain_go_scores(
         args.predictions, args.score_column, neg_log10=args.neg_log10
+    )
+    # A run trained without the hierarchy skips the pipeline's input cleanup and
+    # can still name retired ids; put them on the scoring vocabulary (ids the
+    # ontology does not know are dropped) before transfer, or they would be
+    # silently lost after taking part in the p-score's per-protein scaling.
+    n_raw = sum(len(t) for t in domain_go_scores.values())
+    domain_go_scores = remap_retired_scores(
+        domain_go_scores, processor.alt_id_map, processor.replaced_by_map, term_aspect
+    )
+    n_live = sum(len(t) for t in domain_go_scores.values())
+    logger.info(
+        f"  {n_raw:,} associations -> {n_live:,} on live GO ids "
+        f"({n_raw - n_live:,} merged into a successor or dropped as unknown)"
     )
 
     logger.info("Computing information content from t0 (propagated frequencies)...")
@@ -922,8 +1011,16 @@ def main() -> int:
             true_a = filter_by_ic(benchmark[aspect], ic, min_ic)
             if not true_a:
                 continue
-            for method, pred_a in aspect_preds.items():
-                pred_f = filter_by_ic(pred_a, ic, min_ic)
+            cell_preds = {
+                method: filter_by_ic(pred_a, ic, min_ic)
+                for method, pred_a in aspect_preds.items()
+            }
+            # The fair naive comparison: same truth and cohort, naive scored
+            # only where dcGO has a prediction in this cell.
+            cell_preds["naive_covered"] = restrict_to_covered_proteins(
+                cell_preds["naive"], cell_preds["dcGO"]
+            )
+            for method, pred_f in cell_preds.items():
                 metrics = evaluate_aspect(pred_f, true_a, ic)
                 metrics.update({"aspect": aspect, "method": method, "min_ic": min_ic})
                 rows.append(metrics)
@@ -1015,10 +1112,12 @@ def main() -> int:
             if "dcGO" in sub.index and "naive" in sub.index:
                 d = sub.loc["dcGO", "f_max"]
                 nf = sub.loc["naive", "f_max"]
+                nc = sub.loc["naive_covered", "f_max"]
                 verdict = "✓ above" if d > nf else "✗ below"
                 logger.info(
                     f"  {aspect} IC≥{min_ic:g}: dcGO {d:.3f} vs naive {nf:.3f} "
-                    f"[{verdict} floor]  (n={int(sub.loc['dcGO', 'n_eval_proteins'])})"
+                    f"[{verdict} floor; naive on covered proteins {nc:.3f}]  "
+                    f"(n={int(sub.loc['dcGO', 'n_eval_proteins'])})"
                 )
     return 0
 

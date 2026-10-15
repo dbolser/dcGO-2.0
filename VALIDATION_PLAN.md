@@ -72,7 +72,8 @@ Done this round: temporal CAFA benchmark (`temporal_benchmark.py`), the paper's
 two missing pieces — relative inference (`apply_relative_inference.py`) and the
 per-target p-score (`--transfer pscore`, now default) — and a domain-centric
 evaluation (`domain_centric_eval.py`). Both baselines cleared on informative
-terms. Remaining, in rough priority:
+terms. (`apply_relative_inference.py` was retired on 2026-10-15; superseded by
+the pipeline's `--enable-relative-inference`.) Remaining, in rough priority:
 
 1. **Temporal domain-centric test.** The domain-centric eval currently scores
    against the *current* InterPro2GO. Fetch a dated (~2021) `interpro2go` and pass
@@ -387,7 +388,8 @@ gap to naive — and two of them are *method*, not metric:
 | Score saturation | **explicitly noted**: FDR-based p-scores "collapse to FDR=0" for top hits → switched to h-score | we hit the same with `hyper_score` (37% at 100) → switched to −log10(p) | corroborates our fix |
 
 **Method-piece experiment (2026-07-09, leak-free gate).** We restored both
-missing pieces and measured each (`apply_relative_inference.py`;
+missing pieces and measured each (`apply_relative_inference.py` — retired
+2026-10-15, superseded by `--enable-relative-inference`;
 `temporal_benchmark.py --transfer`). dcGO F_max / AUPRC at IC≥0 (naive: BP
 0.115/0.314, MF 0.464/0.325, CC 0.343/0.513):
 

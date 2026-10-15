@@ -59,6 +59,13 @@ cells trained on different architectures be scored on the same proteins: a
 cohort protein with no domain in ``--interpro`` gets no dcGO prediction and
 counts as a miss, rather than leaving the denominator.
 
+With ``--interpro2go-t0``/``--interpro2go-t1`` the rungs are also scored on
+what they actually produce: ``ablation_domain_centric.tsv`` holds each rung's
+single-domain precision/recall against the (domain, GO) pairs curators added to
+InterPro2GO between the two releases (``validation/temporal_domain_centric.py``,
+paired bootstrap over domains) and the pooled emergence enrichment of its
+supra-domain associations (``temporal_surprise.emergence_enrichment``).
+
 Honest caveat, stated once here and again in ``VALIDATION_PLAN.md``: the True
 Path rungs are scored on ``q_value`` because the propagated output carries no
 ``p_value`` column. To keep the ladder comparable, **every** rung's primary score
@@ -93,6 +100,8 @@ def _load_sibling(name: str):
 
 tb = _load_sibling("temporal_benchmark")
 rs = _load_sibling("resampling")
+tdc = _load_sibling("temporal_domain_centric")
+ts = _load_sibling("temporal_surprise")
 
 
 # --------------------------------------------------------------------------- #
@@ -657,6 +666,116 @@ def bootstrap_seed(seed: int, aspect: str, min_ic: float) -> int:
 
 
 # --------------------------------------------------------------------------- #
+# Association-level temporal metrics                                           #
+# --------------------------------------------------------------------------- #
+def domain_centric_rows(
+    run_root: Path,
+    inputs: BenchmarkInputs,
+    interpro2go_t0: Path,
+    interpro2go_t1: Path,
+    interpro: Path,
+    domain_key: str = "interpro",
+    budget: int | None = None,
+    reference: str = "supra_input_relative",
+    n_bootstrap: int = 1000,
+    seed: int = 0,
+    level: float = 0.95,
+) -> list[dict]:  # pragma: no cover - I/O wiring
+    """Every rung scored on its associations, not on transferred proteins.
+
+    Single-domain rows come from ``temporal_domain_centric.evaluate_rungs``
+    (curated InterPro2GO pairs added t0 → t1, paired bootstrap over domains,
+    ``budget`` defaulting to the smallest rung's eligible count). The
+    ``emergence_enrichment`` rows pool every supra-domain association of the
+    rung through ``temporal_surprise`` on the cell's own t0/t1 maps; rungs
+    without supra-domains get an empty row.
+    """
+    from loguru import logger
+
+    delta = tdc.curated_delta(
+        tdc.read_interpro2go(interpro2go_t0),
+        tdc.read_interpro2go(interpro2go_t1),
+        inputs.get_ancestors,
+    )
+    universe, sig_map = tdc.read_protein2ipr_universe(interpro, domain_key)
+    if domain_key == "interpro":
+        sig_map = None
+    logger.info(
+        f"Domain-centric: {len(delta.shared_domains):,} shared InterPro2GO domains, "
+        f"{len(delta.added):,} added propagated pairs; universe {len(universe):,}"
+    )
+    rungs = [
+        tdc.load_rung(r.name, rung_prediction_file(run_root, r, domain_key), sig_map)
+        for r in LADDER
+    ]
+    rows = tdc.evaluate_rungs(
+        rungs,
+        delta,
+        inputs.get_ancestors,
+        universe=universe,
+        budget=budget,
+        reference=reference,
+        n_bootstrap=n_bootstrap,
+        seed=seed,
+        level=level,
+    )
+    used_budget = rows[0]["budget"] if rows else budget
+
+    t0_prop = {
+        p: tb.propagate_terms(t, inputs.get_ancestors) for p, t in inputs.t0_map.items()
+    }
+    t1_prop = {
+        p: tb.propagate_terms(t, inputs.get_ancestors)
+        for p, t in inputs.t1_exp_map.items()
+    }
+    blank = {
+        "ci_lo": float("nan"),
+        "ci_hi": float("nan"),
+        "reference": reference,
+        "delta": float("nan"),
+        "delta_ci_lo": float("nan"),
+        "delta_ci_hi": float("nan"),
+        "budget": used_budget,
+        "n_replicates": 0,
+    }
+    for rung in LADDER:
+        pairs = ts.supra_associations(rung_prediction_file(run_root, rung, domain_key))
+        result = ts.emergence_enrichment(
+            pairs,
+            inputs.protein_domains,
+            t0_prop,
+            t1_prop,
+            n_resamples=n_bootstrap,
+            seed=seed,
+            name=rung.name,
+        )
+        logger.info(
+            f"  [{rung.name}] emergence: {result.n_associations:,} supra associations, "
+            f"{result.n_predicted:,} predictions, enrichment {result.enrichment:.2f} "
+            f"[{result.ci_low:.2f}, {result.ci_high:.2f}]"
+        )
+        rows.append(
+            {
+                **blank,
+                "rung": rung.name,
+                "metric": "emergence_enrichment",
+                "value": result.enrichment,
+                "ci_lo": result.ci_low,
+                "ci_hi": result.ci_high,
+                "n_replicates": n_bootstrap,
+            }
+        )
+        for metric, value in (
+            ("emergence_n_associations", result.n_associations),
+            ("emergence_n_predictions", result.n_predicted),
+            ("emergence_n_hits", result.n_hit),
+            ("emergence_expected_rate", result.expected_rate),
+        ):
+            rows.append({**blank, "rung": rung.name, "metric": metric, "value": value})
+    return rows
+
+
+# --------------------------------------------------------------------------- #
 # Driver                                                                       #
 # --------------------------------------------------------------------------- #
 def main() -> int:  # pragma: no cover - I/O wiring
@@ -752,8 +871,38 @@ def main() -> int:  # pragma: no cover - I/O wiring
         help="Which rung the permutation null is computed against (default: supra, "
         "the configuration reported in §2)",
     )
+    parser.add_argument(
+        "--interpro2go-t0",
+        type=Path,
+        default=None,
+        help="InterPro2GO of the training release (e.g. "
+        "data/raw/interpro_archive/85.0/interpro2go). With --interpro2go-t1, "
+        "adds the association-level temporal metrics "
+        "(ablation_domain_centric.tsv)",
+    )
+    parser.add_argument(
+        "--interpro2go-t1",
+        type=Path,
+        default=None,
+        help="Current InterPro2GO (e.g. data/raw/interpro2go/interpro2go)",
+    )
+    parser.add_argument(
+        "--domain-centric-budget",
+        type=int,
+        default=None,
+        help="Top-N direct single-domain associations by q for the "
+        "precision_at_budget rows (default: the smallest rung's eligible count)",
+    )
+    parser.add_argument(
+        "--domain-centric-reference",
+        default="supra_input_relative",
+        help="Rung the domain-centric deltas are taken against "
+        "(default: supra_input_relative)",
+    )
     args = parser.parse_args()
     ic_floors = sorted(set(args.min_ic)) if args.min_ic else [0.0, 2.0, 4.0]
+    if (args.interpro2go_t0 is None) != (args.interpro2go_t1 is None):
+        parser.error("--interpro2go-t0 and --interpro2go-t1 go together")
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     cohort_interpro = args.cohort_interpro or args.interpro
@@ -763,6 +912,7 @@ def main() -> int:  # pragma: no cover - I/O wiring
         args.interpro,
         cohort_interpro,
         args.go_ontology,
+        *filter(None, (args.interpro2go_t0, args.interpro2go_t1)),
     ):
         if not path.exists():
             logger.error(f"Missing required input: {path}")
@@ -927,6 +1077,32 @@ def main() -> int:  # pragma: no cover - I/O wiring
     paired_file = args.output_dir / "ablation_paired_bootstrap.tsv"
     pd.DataFrame(paired_rows).to_csv(paired_file, sep="\t", index=False)
     logger.info(f"✓ Paired bootstrap: {paired_file}")
+
+    # ------------------------------------------- association-level metrics --
+    if args.interpro2go_t0 is not None:
+        if args.domain_centric_reference not in {r.name for r in LADDER}:
+            logger.error(
+                f"--domain-centric-reference {args.domain_centric_reference} "
+                "is not a rung of the ladder"
+            )
+            return 1
+        logger.info("Association-level temporal metrics (domain-centric)...")
+        dc_rows = domain_centric_rows(
+            args.run_dir,
+            inputs,
+            args.interpro2go_t0,
+            args.interpro2go_t1,
+            args.interpro,
+            domain_key=args.domain_key,
+            budget=args.domain_centric_budget,
+            reference=args.domain_centric_reference,
+            n_bootstrap=args.n_bootstrap,
+            seed=args.seed,
+            level=args.ci_level,
+        )
+        dc_file = args.output_dir / "ablation_domain_centric.tsv"
+        pd.DataFrame(dc_rows).to_csv(dc_file, sep="\t", index=False)
+        logger.info(f"✓ Domain-centric metrics: {dc_file}")
 
     # ------------------------------------------------------ permutation null --
     if args.n_permutations > 0:

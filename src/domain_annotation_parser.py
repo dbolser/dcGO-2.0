@@ -13,7 +13,20 @@ The protein2ipr.dat file format:
 
 A "domain" can be keyed either by the integrated InterPro entry (field 2, the
 default) or by a member-database signature (field 4) via ``domain_key``; the
-``ssf`` key reproduces the SCOP superfamily universe the published dcGO used.
+``ssf`` key reproduces the SCOP superfamily universe the published dcGO used,
+and ``pfam`` keys on Pfam families.
+
+Supra-domains (``supra_mode``):
+
+* ``bag`` (default) — a protein is a bag of *distinct* domain ids. Every
+  unordered combination of 2..``max_supra_domain_length`` of them is a
+  supra-domain, keyed canonically as the sorted ids joined by ``,``, regardless
+  of position or adjacency. Nested/overlapping entries and fingerprints split
+  across several rows therefore cannot produce ``IPRx,IPRx`` features, and
+  ``single_domains`` lists each id once (first occurrence by start).
+* ``contiguous`` — the historical behaviour: windows of 2..max consecutive
+  rows in start order, keyed in N→C order. Windows containing a repeated id are
+  dropped (that part is new); ``single_domains`` keeps every row.
 
 Author: dcGO Pipeline
 """
@@ -21,6 +34,7 @@ Author: dcGO Pipeline
 import gzip
 from collections import defaultdict
 from dataclasses import dataclass
+from itertools import combinations
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
@@ -29,18 +43,26 @@ from loguru import logger
 # Which column of ``protein2ipr`` names a "domain".
 #
 # ``interpro`` (the default, and the only behaviour before this option existed)
-# keys on the integrated InterPro entry in column 2. ``ssf`` keys on the
-# SUPERFAMILY member-database signature in column 4 — ``SSFnnnnn``, whose numeric
-# part is the SCOP sunid. That is the domain universe the published dcGO (Fang &
-# Gough 2013) used, so it is what makes VALIDATION_PLAN §3 an apples-to-apples
-# comparison rather than a cross-namespace one.
+# keys on the integrated InterPro entry in column 2. The others key on a
+# member-database signature in column 4, selected by accession prefix:
 #
-# Note the prefix test must not confuse SUPERFAMILY with the Structure-Function
-# Linkage Database, whose signatures are ``SFLDF``/``SFLDS``/``SFLDG`` — they
-# start with ``SF`` but not with ``SSF``, so an exact ``SSF`` prefix is safe.
-SIGNATURE_PREFIXES: Dict[str, str] = {"ssf": "SSF"}
+# * ``ssf`` — SUPERFAMILY, ``SSFnnnnn``, whose numeric part is the SCOP sunid.
+#   That is the domain universe the published dcGO (Fang & Gough 2013) used, so
+#   it is what makes VALIDATION_PLAN §3 an apples-to-apples comparison rather
+#   than a cross-namespace one.
+# * ``pfam`` — Pfam, ``PFnnnnn``.
+#
+# The prefix test must be exact enough not to catch a neighbouring database:
+# SUPERFAMILY vs the Structure-Function Linkage Database (``SFLDF``/``SFLDS``/
+# ``SFLDG`` start with ``SF`` but not ``SSF``), and Pfam vs PIRSF (``PIRSF``),
+# PRINTS (``PR``), ProSite (``PS``) and PANTHER (``PTHR``) — over the human
+# protein2ipr the only two-letter signature prefix starting ``PF`` is Pfam's.
+SIGNATURE_PREFIXES: Dict[str, str] = {"ssf": "SSF", "pfam": "PF"}
 
 DOMAIN_KEYS = ("interpro", *sorted(SIGNATURE_PREFIXES))
+
+# How a protein's domains are combined into supra-domains; see module docstring.
+SUPRA_MODES = ("bag", "contiguous")
 
 
 def superfamily_sunid(signature_id: str) -> Optional[int]:
@@ -83,7 +105,7 @@ class ProteinDomainArchitecture:
 
     protein_id: str
     single_domains: List[str]  # Individual domain IDs
-    supra_domains: List[str]  # Contiguous domain combinations
+    supra_domains: List[str]  # Domain combinations (see DomainAnnotationParser)
     domain_annotations: List[DomainAnnotation]
 
     @property
@@ -106,6 +128,7 @@ class DomainAnnotationParser:
         min_domain_length: int = 10,
         species_filter: Optional[Set[str]] = None,
         domain_key: str = "interpro",
+        supra_mode: str = "bag",
     ):
         """
         Initialize the domain annotation parser.
@@ -117,13 +140,22 @@ class DomainAnnotationParser:
                            (e.g., human proteins typically start with specific patterns)
             domain_key: Which ``protein2ipr`` column defines a domain —
                         ``interpro`` (column 2, the integrated entry; the
-                        default and historical behaviour) or ``ssf`` (column 4's
-                        SUPERFAMILY/SCOP signature). See ``DOMAIN_KEYS``.
+                        default and historical behaviour), ``ssf`` (column 4's
+                        SUPERFAMILY/SCOP signature) or ``pfam`` (column 4's
+                        Pfam signature). See ``DOMAIN_KEYS``.
+            supra_mode: ``bag`` (default: unordered combinations of distinct
+                        ids, canonically sorted) or ``contiguous`` (positional
+                        windows). See ``SUPRA_MODES`` and the module docstring.
         """
         if domain_key not in DOMAIN_KEYS:
             raise ValueError(
                 f"Unknown domain_key {domain_key!r}; expected one of "
                 + ", ".join(DOMAIN_KEYS)
+            )
+        if supra_mode not in SUPRA_MODES:
+            raise ValueError(
+                f"Unknown supra_mode {supra_mode!r}; expected one of "
+                + ", ".join(SUPRA_MODES)
             )
 
         self.max_supra_domain_length = max_supra_domain_length
@@ -131,6 +163,7 @@ class DomainAnnotationParser:
         self.species_filter = species_filter
         self.domain_key = domain_key
         self.signature_prefix = SIGNATURE_PREFIXES.get(domain_key)
+        self.supra_mode = supra_mode
 
         # Storage for parsed annotations
         self.protein_domains: Dict[str, List[DomainAnnotation]] = defaultdict(list)
@@ -142,6 +175,7 @@ class DomainAnnotationParser:
 
         logger.info("DomainAnnotationParser initialized:")
         logger.info(f"  Domain key: {domain_key}")
+        logger.info(f"  Supra-domain mode: {supra_mode}")
         logger.info(f"  Max supra-domain length: {max_supra_domain_length}")
         logger.info(f"  Min domain length: {min_domain_length}")
         if species_filter:
@@ -322,10 +356,7 @@ class DomainAnnotationParser:
             # Sort annotations by start position
             sorted_annotations = sorted(annotations, key=lambda x: x.start)
 
-            # Extract single domain IDs
-            single_domains = [self.domain_key_of(ann) for ann in sorted_annotations]
-
-            # Generate supra-domains (contiguous domain combinations)
+            single_domains = self._single_domains(sorted_annotations)
             supra_domains = self._generate_supra_domains(single_domains)
 
             # Create architecture
@@ -347,29 +378,53 @@ class DomainAnnotationParser:
 
         return architectures
 
+    def _single_domains(self, sorted_annotations: List[DomainAnnotation]) -> List[str]:
+        """Domain ids of a protein's start-sorted rows, as this mode sees them.
+
+        ``bag``: each id once, in order of first occurrence. ``contiguous``:
+        one id per row, repeats included (the positional list the windows run
+        over).
+        """
+        ids = [self.domain_key_of(ann) for ann in sorted_annotations]
+        if self.supra_mode == "bag":
+            return list(dict.fromkeys(ids))
+        return ids
+
     def _generate_supra_domains(self, domain_ids: List[str]) -> List[str]:
         """
         Generate supra-domains from a list of domain IDs.
 
-        Supra-domains are contiguous combinations of domains, representing
-        domain architectures that occur together in proteins.
-
         Args:
-            domain_ids: List of domain IDs in positional order
+            domain_ids: List of domain IDs in positional order (``bag`` mode
+                        ignores the order and any repeats)
 
         Returns:
-            List of supra-domain strings (comma-separated domain IDs)
+            List of supra-domain strings (comma-separated domain IDs). ``bag``
+            keys are sorted ids — the canonical spelling of an unordered
+            combination — so the same set of domains on two proteins always
+            yields the same feature. ``contiguous`` keys are in N→C order.
         """
-        supra_domains = []
+        if self.supra_mode == "bag":
+            distinct = sorted(set(domain_ids))
+            return [
+                ",".join(combo)
+                for length in range(
+                    2, min(len(distinct), self.max_supra_domain_length) + 1
+                )
+                for combo in combinations(distinct, length)
+            ]
 
-        # Generate all contiguous combinations up to max length
+        supra_domains = []
         for length in range(
             2, min(len(domain_ids) + 1, self.max_supra_domain_length + 1)
         ):
             for i in range(len(domain_ids) - length + 1):
-                # Create supra-domain from contiguous domains
-                supra_domain = ",".join(domain_ids[i : i + length])
-                supra_domains.append(supra_domain)
+                window = domain_ids[i : i + length]
+                # A repeated id in a window is a nested/overlapping entry or a
+                # fingerprint split across rows, not a domain combination.
+                if len(set(window)) < length:
+                    continue
+                supra_domains.append(",".join(window))
 
         return supra_domains
 
@@ -383,7 +438,9 @@ class DomainAnnotationParser:
         protein_domain_map = {}
 
         for protein_id, annotations in self.protein_domains.items():
-            single_domains = [self.domain_key_of(ann) for ann in annotations]
+            single_domains = self._single_domains(
+                sorted(annotations, key=lambda x: x.start)
+            )
             supra_domains = self._generate_supra_domains(single_domains)
             protein_domain_map[protein_id] = single_domains + supra_domains
 

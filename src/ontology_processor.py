@@ -16,6 +16,7 @@ from typing import Dict, List, Set, Union
 from loguru import logger
 from dataclasses import dataclass
 import gzip
+import math
 
 from src.hierarchy import PROPAGATION_RELATIONS
 from src.relative_inference import (
@@ -51,7 +52,7 @@ class Annotation:
         domain: Domain identifier (e.g., Pfam ID or supra-domain combination)
         go_term: GO term identifier (e.g., GO:0008150)
         q_value: FDR-corrected p-value from statistical testing
-        association_score: Hypergeometric-based association score (1-100 scale)
+        association_score: Hypergeometric standard score (z-score; unbounded)
         annotation_type: Either 'direct' (from statistical inference) or 'propagated'
         direct_source_term: Original GO term that generated this annotation (for propagated terms)
     """
@@ -71,10 +72,10 @@ class Annotation:
             )
         if not (0.0 <= self.q_value <= 1.0):
             raise ValueError(f"q_value must be between 0 and 1, got: {self.q_value}")
-        if not (1.0 <= self.association_score <= 100.0):
-            raise ValueError(
-                f"association_score must be between 1 and 100, got: {self.association_score}"
-            )
+        # The score is the paper's hypergeometric z-score: unbounded, so the
+        # only invalid value is a missing one.
+        if math.isnan(self.association_score):
+            raise ValueError("association_score must not be NaN")
 
 
 class OntologyProcessor:

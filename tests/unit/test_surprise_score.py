@@ -139,9 +139,21 @@ class TestLocateFeatureRegions:
             self.domains, self.intervals, ["IPR002", "IPR003"]
         ) == [(60, 120), (130, 200)]
 
-    def test_non_adjacent_pair_is_not_a_supra_domain(self):
+    def test_non_adjacent_pair_is_located(self):
+        # Bag-mode supra-domains carry no adjacency claim: each part is found
+        # wherever it sits on the protein.
+        assert locate_feature_regions(
+            self.domains, self.intervals, ["IPR001", "IPR003"]
+        ) == [(1, 50), (130, 200)]
+
+    def test_parts_order_does_not_matter(self):
+        assert locate_feature_regions(
+            self.domains, self.intervals, ["IPR003", "IPR001"]
+        ) == [(130, 200), (1, 50)]
+
+    def test_one_missing_part_yields_nothing(self):
         assert (
-            locate_feature_regions(self.domains, self.intervals, ["IPR001", "IPR003"])
+            locate_feature_regions(self.domains, self.intervals, ["IPR001", "IPR999"])
             == []
         )
 
@@ -156,8 +168,14 @@ class TestProperSubfeatures:
     def test_pair_has_no_sub_combinations(self):
         assert proper_subfeatures(("A", "B")) == []
 
-    def test_triple_yields_its_contained_pairs(self):
-        assert proper_subfeatures(("A", "B", "C")) == ["A,B", "B,C"]
+    def test_triple_yields_every_contained_pair(self):
+        # Bag mode: A,C is a real feature too, not just the adjacent pairs.
+        assert proper_subfeatures(("A", "B", "C")) == ["A,B", "A,C", "B,C"]
+
+    def test_subfeatures_are_spelled_canonically(self):
+        # Keys are sorted ids, so they match the parser's bag-mode features
+        # whatever order the parts arrived in.
+        assert proper_subfeatures(("C", "A", "B")) == ["A,B", "A,C", "B,C"]
 
 
 class TestNoveltyFactor:

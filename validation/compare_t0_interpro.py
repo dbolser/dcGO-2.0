@@ -96,7 +96,11 @@ def compare_cell(
         for arm, by_method in panels.items()
         for method, panel in by_method.items()
     }
-    observed = {name: rs.panel_metrics(panel) for name, panel in flat.items()}
+    # The committed cell's conventions (panel_metrics' pre-2026-10-15 defaults).
+    observed = {
+        name: rs.panel_metrics(panel, min_tau=0.0, anchor_origin=True)
+        for name, panel in flat.items()
+    }
     reps = rs.paired_bootstrap(
         flat, metrics=METRICS, n_replicates=n_replicates, seed=seed, level=level
     )
@@ -151,7 +155,7 @@ def _score_cell(task: tuple[str, float]) -> tuple[list[dict], list[str]]:
             )
             panel = rs.build_panel(pred_f, truth_f, job.ic, taus)
             panels[arm][method] = panel
-            ours = rs.panel_metrics(panel)
+            ours = rs.panel_metrics(panel, min_tau=0.0, anchor_origin=True)
             committed = job.committed[(arm, aspect, min_ic, method)]
             for key in METRICS:
                 if abs(ours[key] - committed[key]) > 1e-9:

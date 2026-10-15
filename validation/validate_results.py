@@ -351,7 +351,8 @@ def main() -> None:
     thresholds = {
         "p_value": [1e-10, 1e-8, 1e-6, 1e-4, 1e-2],
         "adj_p_value": [1e-6, 1e-4, 1e-2, 0.05, 0.1],
-        "hyper_score": [90, 80, 70, 60, 50, 40, 30, 20],
+        # hyper_score is the hypergeometric z-score (unbounded), not 1-100.
+        "hyper_score": [50, 30, 20, 10, 5, 3, 2],
     }
     metrics_df = calculate_overlap_at_thresholds(
         predictions, reference, thresholds, get_ancestors

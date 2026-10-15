@@ -8,7 +8,7 @@ an `--fdr-threshold 5` accepted every test as significant and a
 and an hour into a run.
 
 Also covers `calculate_hypergeometric_score`'s failure value. It used to return
-50.0, which is a plausible medium-confidence score in the same 1–100 range the
+50.0, which was a plausible medium-confidence score on the 1–100 scale the
 function reports genuine results on, so a numerical failure was
 indistinguishable from a real answer in the exported column.
 """
@@ -109,13 +109,25 @@ class TestHypergeometricScoreFailureValue:
         score = calculate_hypergeometric_score(-1, -1, -1, -1)
         assert math.isnan(score), f"expected NaN for an unusable table, got {score}"
 
-    def test_empty_margins_are_zero_not_nan(self) -> None:
-        """A legitimately empty overlap is a real answer of zero, not a failure."""
-        assert calculate_hypergeometric_score(0, 10, 10, 100) == 0.0
+    def test_empty_margin_is_zero_not_nan(self) -> None:
+        """A null with no variance is a real answer of zero, not a failure."""
+        assert calculate_hypergeometric_score(0, 0, 10, 100) == 0.0
+        assert calculate_hypergeometric_score(0, 10, 0, 100) == 0.0
 
-    def test_a_real_table_scores_in_range(self) -> None:
-        score = calculate_hypergeometric_score(30, 5, 5, 200)
-        assert 1.0 <= score <= 100.0
+    def test_is_the_hypergeometric_z_score(self) -> None:
+        """(observed - expected) / sd under Hypergeometric(n, k, m)."""
+        a, b, c, d = 30, 5, 5, 200
+        n, k, m = a + b + c + d, a + c, a + b
+        mean = k * m / n
+        var = k * m * (n - k) * (n - m) / (n**2 * (n - 1))
+        expected = (a - mean) / math.sqrt(var)
+        assert calculate_hypergeometric_score(a, b, c, d) == pytest.approx(expected)
+        assert expected > 1.0
+
+    def test_is_unbounded_and_signed(self) -> None:
+        """No 1-100 clipping: strong tables exceed 100, depletion goes negative."""
+        assert calculate_hypergeometric_score(2000, 10, 10, 50000) > 100.0
+        assert calculate_hypergeometric_score(0, 10, 10, 100) < 0.0
 
 
 class TestOddsRatioInterval:

@@ -257,6 +257,55 @@ class TestTransferPscore:
         assert pred["P1"]["GO:leaf"] == pytest.approx(1.0)
         assert pred["P1"]["GO:mid"] == pytest.approx(1.0)
 
+    # mid has two children, leaf and leaf2.
+    TWO_CHILDREN = {
+        "GO:leaf": {"GO:mid", tb.BP_ROOT},
+        "GO:leaf2": {"GO:mid", tb.BP_ROOT},
+        "GO:mid": {tb.BP_ROOT},
+    }
+
+    def test_a_domain_scores_an_ancestor_by_its_best_child_not_their_sum(self):
+        # D1 has two significant children of mid (4 and 2): mid takes max 4,
+        # so raw leaf 4, mid 4, leaf2 2 -> min-max leaf 1, mid 1, leaf2 0.
+        # (Summing gave mid 6 and read leaf at 0.5 below it.)
+        pred = tb.transfer_predictions_pscore(
+            {"P1": ["D1"]},
+            {"D1": {"GO:leaf": 4.0, "GO:leaf2": 2.0}},
+            lambda t: self.TWO_CHILDREN.get(t, set()),
+        )
+        assert pred["P1"] == pytest.approx(
+            {"GO:leaf": 1.0, "GO:mid": 1.0, "GO:leaf2": 0.0}
+        )
+
+    def test_two_domains_still_sum(self):
+        # D1 leaf@4 (-> mid 4) and D2 leaf2@2 (-> mid 2): mid = 4 + 2 = 6,
+        # so raw leaf 4, leaf2 2, mid 6 -> min-max leaf 0.5, leaf2 0, mid 1.
+        pred = tb.transfer_predictions_pscore(
+            {"P1": ["D1", "D2"]},
+            {"D1": {"GO:leaf": 4.0}, "D2": {"GO:leaf2": 2.0}},
+            lambda t: self.TWO_CHILDREN.get(t, set()),
+        )
+        assert pred["P1"] == pytest.approx(
+            {"GO:leaf": 0.5, "GO:leaf2": 0.0, "GO:mid": 1.0}
+        )
+
+    def test_domain_profile_is_max_propagated_without_roots(self):
+        profile = tb.propagate_domain_profile(
+            {"GO:leaf": 4.0, "GO:leaf2": 2.0, "GO:mid": 1.0},
+            lambda t: self.TWO_CHILDREN.get(t, set()),
+        )
+        assert profile == {"GO:leaf": 4.0, "GO:leaf2": 2.0, "GO:mid": 4.0}
+
+
+class TestRestrictToCoveredProteins:
+    def test_keeps_only_proteins_the_reference_predicts_for(self):
+        naive = {p: {"GO:leaf": 0.5} for p in ("P1", "P2", "P3")}
+        reference = {"P1": {"GO:other": 1.0}, "P2": {}}
+        got = tb.restrict_to_covered_proteins(naive, reference)
+        assert got == {"P1": {"GO:leaf": 0.5}}
+        got["P1"]["GO:leaf"] = 9.0  # a copy, not a view of the naive table
+        assert naive["P1"]["GO:leaf"] == 0.5
+
 
 class TestPrecisionRecall:
     def test_cafa_averaging_conventions(self):
@@ -292,6 +341,17 @@ class TestFmax:
         fmax, _ = tb.f_max(pred, true)
         # best F: precision 0.5, recall 1.0 -> F = 2*.5*1/(1.5) = 0.667
         assert fmax == pytest.approx(2 / 3, abs=1e-6)
+
+    def test_reads_only_cutoffs_at_or_above_the_cafa_floor(self):
+        # The p-score's min-max scaling puts a protein's weakest term at 0.
+        # Predicting it (tau = 0) is the best operating point here (P 1/2,
+        # R 1 -> F 2/3); CAFA-evaluator's grid starts at 0.001 and cannot see
+        # it, and at 0.4 only the wrong term is predicted (F 0).
+        pred = {"P1": {"GO:leaf": 0.0, "GO:other": 0.4}}
+        true = {"P1": {"GO:leaf"}}
+        assert tb.CAFA_MIN_TAU == 0.001
+        assert tb.f_max(pred, true) == (0.0, 0.0)
+        assert tb.f_max(pred, true, min_tau=0.0) == (pytest.approx(2 / 3), 0.0)
 
 
 class TestSmin:
@@ -345,22 +405,36 @@ class TestCandidateThresholds:
 
 
 class TestAUPRC:
+    # points are (threshold, precision, recall, coverage)
     def test_constant_precision(self):
         # precision 1.0 across recall 0->1 => area 1.0
-        curve = [(0.0, 1.0, 1.0), (1.0, 1.0, 0.0)]
+        curve = [(0.0, 1.0, 1.0, 1.0), (1.0, 1.0, 0.0, 1.0)]
         assert tb.auprc(curve) == pytest.approx(1.0)
 
     def test_single_point_is_zero(self):
-        assert tb.auprc([(0.0, 0.5, 0.5)]) == 0.0
+        assert tb.auprc([(0.0, 0.5, 0.5, 1.0)]) == 0.0
 
-    def test_predict_nothing_point_anchors_the_area_at_the_origin(self):
-        # The sweep's sentinel predicts nothing: recall 0, precision 0. The
-        # trapezoid then runs to it from the strictest real cutoff.
+    def test_predict_nothing_point_is_out_unless_anchored(self):
+        # The sweep's sentinel predicts nothing: recall 0, precision 0,
+        # coverage 0. Both real cutoffs sit at recall 1 (precision 1/2 and 1).
         pred = {"P1": {"GO:a": 0.9, "GO:b": 0.5}}
         true = {"P1": {"GO:a"}}
         curve = tb.pr_curve(pred, true)
-        assert curve[-1][1:] == (0.0, 0.0)
-        assert tb.auprc(curve) == pytest.approx(1.0 * 1.0 / 2)
+        assert curve[-1][1:] == (0.0, 0.0, 0.0)
+        # Default (CAFA-evaluator drops zero-coverage rows): one recall value
+        # left, no area.
+        assert tb.auprc(curve) == 0.0
+        # Pre-2026-10-15: the trapezoid runs from the strictest real cutoff
+        # to the sentinel at the origin, a triangle of r_top * p_top / 2.
+        assert tb.auprc(curve, anchor_origin=True) == pytest.approx(1.0 * 1.0 / 2)
+
+    def test_evaluate_aspect_takes_both_conventions(self):
+        pred = {"P1": {"GO:a": 0.9, "GO:b": 0.5}}
+        true = {"P1": {"GO:a"}}
+        ic = {"GO:a": 1.0, "GO:b": 1.0}
+        assert tb.evaluate_aspect(pred, true, ic)["auprc"] == 0.0
+        legacy = tb.evaluate_aspect(pred, true, ic, min_tau=0.0, anchor_origin=True)
+        assert legacy["auprc"] == pytest.approx(0.5)
 
 
 class TestShuffleDeterminism:

@@ -55,6 +55,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from itertools import combinations
 from typing import Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from scipy.stats import binom
@@ -236,19 +237,23 @@ def locate_feature_regions(
     intervals: Sequence[Tuple[int, int]],
     parts: Sequence[str],
 ) -> List[Tuple[int, int]]:
-    """Matched regions of the first occurrence of a contiguous domain run.
+    """Matched regions of a domain combination on one protein.
 
-    Supra-domains are built from a protein's positionally sorted domain list, so
-    the combination ``("IPR1", "IPR2")`` corresponds to *adjacent* entries in
-    that list. Returns the intervals of the first match, or ``[]`` if the run
-    does not occur (possible when the run came from a different protein).
+    Supra-domains are bags of distinct domains (``DomainAnnotationParser``
+    ``supra_mode="bag"``), so the parts carry no positional claim: each part is
+    located by its first occurrence in the protein's start-sorted domain list,
+    wherever that is. Returns one interval per part, or ``[]`` if any part is
+    absent (possible when the combination came from a different protein).
     """
-    if not parts or len(parts) > len(domain_ids):
+    if not parts:
         return []
-    for start in range(len(domain_ids) - len(parts) + 1):
-        if list(domain_ids[start : start + len(parts)]) == list(parts):
-            return list(intervals[start : start + len(parts)])
-    return []
+    regions: List[Tuple[int, int]] = []
+    for part in parts:
+        try:
+            regions.append(intervals[list(domain_ids).index(part)])
+        except ValueError:
+            return []
+    return regions
 
 
 def novelty_factor(
@@ -343,16 +348,19 @@ def apply_fdr(
 
 
 def proper_subfeatures(parts: Sequence[str]) -> List[str]:
-    """Contiguous proper sub-combinations of a supra-domain, longest first.
+    """Proper sub-combinations of a supra-domain, longest first.
 
-    ``("A", "B", "C")`` → ``["A,B", "B,C"]``. Single domains are handled
-    separately (they are the noisy-OR inputs), so they are not returned here.
+    ``("A", "B", "C")`` → ``["A,B", "A,C", "B,C"]``, each spelled canonically
+    (sorted ids) to match the bag-mode supra-domain keys. Single domains are
+    handled separately (they are the noisy-OR inputs), so they are not returned
+    here.
     """
-    subfeatures: List[str] = []
-    for length in range(len(parts) - 1, 1, -1):
-        for start in range(len(parts) - length + 1):
-            subfeatures.append(",".join(parts[start : start + length]))
-    return subfeatures
+    distinct = sorted(set(parts))
+    return [
+        ",".join(combo)
+        for length in range(len(distinct) - 1, 1, -1)
+        for combo in combinations(distinct, length)
+    ]
 
 
 def parse_interpro2go(lines: Iterable[str]) -> Dict[str, Set[str]]:

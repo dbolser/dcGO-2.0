@@ -1,5 +1,28 @@
 # TODO
 
+## Pre-registered evaluation (fixed 2026-10-15, before the SSF ablation rerun)
+
+Written before any run under the 2026-10-15 fixes (z-score h-score, one
+score per domain in the p-score transfer, bag-of-domains supra-domains, ND
+excluded, CAFA-evaluator curve conventions). See `REVIEW_2026-10-15.md`.
+
+- **Primary endpoint:** association-level temporal precision at a fixed
+  association budget, single domains, BP and MF, against InterPro2GO pairs
+  added between InterPro 85.0 and the current release; paired bootstrap over
+  domains. Supra-domains: temporal enrichment on carriers unannotated at t0.
+- **Secondary endpoint:** protein-level F_max at IC >= 2, BP and MF, CAFA
+  conventions (tau >= 0.001, AUPRC without origin anchor), naive at full
+  and at matched coverage, paired bootstrap over proteins. CC and IC 0/4
+  are reported as sensitivity, not tallied.
+- **Decision rule for the production configuration:** the rung with the
+  best primary endpoint; the secondary endpoint breaks ties and must not
+  contradict it by more than its bootstrap interval. No "N of 9 cells".
+- **Fixed in advance:** training GOA 205 + InterPro 85.0; one GO release;
+  evidence filter `manual` (no IEA, no ND); FDR 0.01 for the ablation, with
+  1e-3 reported as sensitivity; min-ic 1 production floor, IC 2 evaluation
+  floor; transfer = p-score as corrected.
+- **Not to be changed after reading results:** any of the above.
+
 Last reviewed against `main` (`d166013`) on 2026-08-31. This is the short,
 prioritized project queue. Detailed experiment designs and results live in
 [VALIDATION_PLAN.md](VALIDATION_PLAN.md), [MULTISPECIES_BACKGROUND.md](MULTISPECIES_BACKGROUND.md),
