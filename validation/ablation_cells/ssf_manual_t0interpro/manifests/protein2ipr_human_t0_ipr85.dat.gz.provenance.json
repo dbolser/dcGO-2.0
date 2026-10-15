@@ -1,0 +1,17 @@
+{
+  "selection_rule": "goa",
+  "selection_sources": [
+    "data/raw/goa_archive/goa_human.gaf.205.gz",
+    "data/raw/goa_annotations/goa_human.gaf.gz"
+  ],
+  "interpro_source": "data/raw/interpro_archive/85.0/protein2ipr.dat.gz",
+  "n_accessions": 19871,
+  "n_matched_lines": 232836,
+  "tool": "extract_human_interpro.py",
+  "created": "2026-10-15T22:45:47+00:00",
+  "evidence_filter": "all",
+  "selection_sha256": [
+    "69ae7d90743400c6519a6bfe3a1b1578476585f151de39323bfd890cbae13d86",
+    "14a33b8d5fcf7bddcdd1710e154f9642e33412ef9c962901ee76891d6ea82d7d"
+  ]
+}
