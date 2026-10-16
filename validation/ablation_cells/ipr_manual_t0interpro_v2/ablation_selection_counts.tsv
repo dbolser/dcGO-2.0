@@ -1,0 +1,23 @@
+stage	aspect	min_ic	n_proteins	n_dropped_vs_ic0	pct_of_ic0	note
+t0_annotated_proteins	-	-	18629	-	-	proteins with >=1 GO annotation at t0 under the training evidence filter (the training universe)
+t1_experimental_proteins	-	-	16362	-	-	proteins with >=1 experimental GO annotation at t1 (the gold standard)
+proteins_with_domains	-	-	18908	-	-	proteins with >=1 InterPro domain in --cohort-interpro (the file that selects the scored cohort)
+transfer_proteins_with_domains	-	-	19393	-	-	proteins with >=1 InterPro domain in --interpro (predictable at all by this run's transfer step)
+no_knowledge_candidates	BP	-	330	-	-	no t0 knowledge in this aspect, gained t1 experimental terms
+no_knowledge_with_domains	BP	-	318	-	-	the scored cohort before any IC floor
+no_knowledge_without_transfer_architectures	BP	-	19	-	-	cohort proteins with no domain in --interpro: no dcGO prediction, scored as misses
+no_knowledge_candidates	MF	-	453	-	-	no t0 knowledge in this aspect, gained t1 experimental terms
+no_knowledge_with_domains	MF	-	441	-	-	the scored cohort before any IC floor
+no_knowledge_without_transfer_architectures	MF	-	16	-	-	cohort proteins with no domain in --interpro: no dcGO prediction, scored as misses
+no_knowledge_candidates	CC	-	483	-	-	no t0 knowledge in this aspect, gained t1 experimental terms
+no_knowledge_with_domains	CC	-	466	-	-	the scored cohort before any IC floor
+no_knowledge_without_transfer_architectures	CC	-	15	-	-	cohort proteins with no domain in --interpro: no dcGO prediction, scored as misses
+cohort_at_ic_floor	BP	0	318	0	100.0	proteins whose truth is non-empty at this IC floor
+cohort_at_ic_floor	BP	2	318	0	100.0	proteins whose truth is non-empty at this IC floor
+cohort_at_ic_floor	BP	4	312	6	98.1	proteins whose truth is non-empty at this IC floor
+cohort_at_ic_floor	MF	0	441	0	100.0	proteins whose truth is non-empty at this IC floor
+cohort_at_ic_floor	MF	2	173	268	39.2	proteins whose truth is non-empty at this IC floor
+cohort_at_ic_floor	MF	4	162	279	36.7	proteins whose truth is non-empty at this IC floor
+cohort_at_ic_floor	CC	0	466	0	100.0	proteins whose truth is non-empty at this IC floor
+cohort_at_ic_floor	CC	2	322	144	69.1	proteins whose truth is non-empty at this IC floor
+cohort_at_ic_floor	CC	4	230	236	49.4	proteins whose truth is non-empty at this IC floor
