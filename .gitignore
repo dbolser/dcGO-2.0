@@ -142,3 +142,9 @@ results/ablation/
 # from a completed run, so the summary statistics go in the write-up instead.
 scratch_allspecies/out/
 scratch_allspecies/*.log
+
+# Production matrices and scratch: multi-GB, never committed (archived by DOI)
+results/production*/
+results/*-verify/
+results/verify*/
+temp/
