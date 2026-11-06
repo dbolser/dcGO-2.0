@@ -59,6 +59,18 @@ Key `src/` modules:
 - `hierarchy.py` - Shared, ontology-agnostic True Path engine: `closure_ancestors` (child→parents map → transitive-ancestors fn) and `propagate_via_ancestors`, plus the hierarchy *loaders* — `dotted_ancestors` (TCDB), `alpha_prefix_ancestors` (MEROPS/CAZy) and `parse_obo_child_parents` (a light OBO reader used for ChEBI). Everything except GO propagates through this engine (GO keeps its obonet `OntologyProcessor` path, which also does parental-background filtering).
 - `run_manifest.py` - Machine-readable run provenance (`run_manifest_<ontology>.json`): input/output SHA-256s and release headers, Git state, `uv.lock` hash, command line, every parameter and threshold, timestamps and summary counts. Written by `start_run_manifest`/`manifest.complete` in `run_dcgo_human.py`; checklist in `REPRODUCIBILITY.md`.
 - `surprise_score.py` - Ranks *emergent* supra-domain associations: a binomial test of the combination against what its parts already predict, times a redundant-signature penalty, times a novelty discount vs InterPro2GO. Driver: `scripts/rank_surprising_associations.py`; method and results in `SURPRISE_SCORE.md`.
+- `knowledge_projection.py` - Calibrated knowledge projection
+  (`KNOWLEDGE_PROJECTION.md`): per aspect, a Beta-shrunk
+  `θ(u,t) = P(term | protein carries unit)` on aspect-annotated proteins,
+  max over a protein's units, so scores are comparable across proteins and
+  can be pooled. Also the sequence (UniProt ProtT5) and literature (BioEmbed
+  MedEmbed, papers before t0) neighbour votes, LR-InterPro, the restricted
+  all-species unit reader, and the weighted-mean combination. Driver:
+  `validation/projection_benchmark.py` (runbook
+  `scripts/run_projection_benchmark.sh dev|final OUT`); metric:
+  `validation/knowledge_yield.py` (pooled yield at fixed precision, KY50).
+  `projection_stacker.py` is a learned combiner that lost to the fixed rule
+  on dev and is not used.
 - `goa_parser.py` - Parses GOA GAF files (protein → GO), with evidence-code filtering. `parse_goa` is the species-agnostic API (`parse_goa_human` is a kept alias).
 - `domain_annotation_parser.py` - Parses `protein2ipr` domain mappings and builds domain architectures. `--domain-key` chooses *which column is a domain*: `interpro` (the integrated entry, default) or `ssf` (the SUPERFAMILY signature, whose numeric part is the SCOP sunid — the published dcGO's domain universe, used by VALIDATION_PLAN §3). Non-matching member-database rows are dropped **at parse time**, before the sort-by-start, so supra-domain contiguity is computed over the chosen universe only.
 - `sparse_fisher.py` - Sparse contingency-table construction for domain × GO.

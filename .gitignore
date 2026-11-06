@@ -148,3 +148,7 @@ results/production*/
 results/*-verify/
 results/verify*/
 temp/
+
+# Knowledge-projection runs (KNOWLEDGE_PROJECTION.md): large run outputs and stack rows
+results/projection-*/
+results/ablation-t0ipr-2026-10-15

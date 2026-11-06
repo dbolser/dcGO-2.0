@@ -196,3 +196,7 @@ dev = [
     "pytest-cov>=7.0.0",
     "ruff>=0.14.0",
 ]
+projection = [
+    "h5py>=3.10",
+    "scikit-learn>=1.5",
+]
