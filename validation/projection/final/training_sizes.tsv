@@ -1,0 +1,4 @@
+split	aspect	human_training_proteins	training_proteins_with_background	training_terms_with_background	cohort_proteins_ic0
+final	BP	16128	88547	18686	318
+final	MF	16872	75106	6635	441
+final	CC	16756	79558	2700	466

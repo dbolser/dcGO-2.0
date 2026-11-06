@@ -1,0 +1,13 @@
+fact	value	log_line
+background_annotated_proteins	125970	Background: 125,970 annotated proteins (135 same-gene human accessions dropped), 61,075 with a cohort unit (19,016 units) in 12s
+same_gene_accessions_dropped	135	Background: 125,970 annotated proteins (135 same-gene human accessions dropped), 61,075 with a cohort unit (19,016 units) in 12s
+background_proteins_with_cohort_unit	61075	Background: 125,970 annotated proteins (135 same-gene human accessions dropped), 61,075 with a cohort unit (19,016 units) in 12s
+cohort_proteins_without_t0_record	13	Cohort proteins with no t0 record (no embedding used): 13
+sequence_embedding_proteins	82699	Sequence embeddings: 82,699 proteins
+literature_vector_accessions	33736	Unit families: ipr=19,393 proteins, supra=16,378 proteins, arch=9,996 proteins, sig=19,393 proteins; literature 33,736 proteins
+cohort_BP	318	[BP] 318 cohort proteins
+cohort_MF	441	[MF] 441 cohort proteins
+cohort_CC	466	[CC] 466 cohort proteins
+literature_papers_up_to_cutoff	5520671	medembed_protein_y2020.json: counts.papers_le_cutoff
+t0_gaf_accessions	19597	medembed_protein_y2020.json: coverage.goa_human.gaf.205.gz
+t0_gaf_accessions_with_papers	18566	medembed_protein_y2020.json: coverage.goa_human.gaf.205.gz

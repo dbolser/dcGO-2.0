@@ -1,0 +1,4 @@
+aspect	proteins	clusters	singletons	largest	proteins_in_shared_clusters
+BP	318	286	263	5	55
+MF	173	128	113	25	60
+CC	322	281	271	17	51

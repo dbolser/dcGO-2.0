@@ -1,0 +1,4 @@
+split	aspect	human_training_proteins	training_proteins_with_background	training_terms_with_background	cohort_proteins_ic0
+dev	BP	14703	83263	18032	337
+dev	MF	15379	69157	6326	1296
+dev	CC	15324	72974	2549	285

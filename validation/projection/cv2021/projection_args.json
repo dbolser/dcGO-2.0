@@ -1,0 +1,22 @@
+{
+  "mode": "cv",
+  "t0_gaf": "data/raw/goa_archive/goa_human.gaf.205.gz",
+  "t1_gaf": "None",
+  "interpro": "data/interim/protein2ipr_human_t0_ipr85.dat.gz",
+  "cohort_interpro": "None",
+  "go_ontology": "data/raw/go_ontology/go-basic.obo",
+  "evidence_filter": "manual",
+  "old_run_dir": "None",
+  "literature": "None",
+  "strength": "[0.5, 1.0, 2.0, 5.0]",
+  "unit_sets": "['ipr', 'ipr+supra', 'ipr+sig', 'ipr+supra+arch+sig']",
+  "knn_k": "[25]",
+  "knn_temperature": "[0.05]",
+  "min_ic": "[0.0, 2.0]",
+  "aspects": "['BP', 'MF']",
+  "n_folds": "5",
+  "n_bootstrap": "0",
+  "seed": "0",
+  "no_protein_metrics": "True",
+  "output_dir": "validation/projection/cv2021"
+}

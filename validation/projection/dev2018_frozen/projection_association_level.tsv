@@ -1,0 +1,155 @@
+rung	metric	value	ci_lo	ci_hi	reference	delta	delta_ci_lo	delta_ci_hi	budget	n_replicates
+single	precision	0.08413672217353199	0.06537928347118672	0.10624414866918934	supra_input_relative	0.00182251709356962	-0.02299267149791262	0.02826782381805118	3329	1000
+single	precision_novel	0.10484164543137969	0.08037386012995384	0.1352363703641913	supra_input_relative	0.005579024898197615	-0.025959605697742756	0.03757812917394773	3329	1000
+single	recall	0.1350210970464135	0.10326786701100608	0.17077655434750927	supra_input_relative	0.09399906235349273	0.0651118532674735	0.12822207777339906	3329	1000
+single	precision_at_budget	0.08924611973392461	0.06269121721530278	0.12576228422647423	supra_input_relative	-0.00686372008300902	-0.04121210169373813	0.02231145668630977	3329	1000
+single	recall_at_budget	0.037740271917487106	0.024690940073608295	0.05431581149879877	supra_input_relative	0.018049695264885136	0.007824715150760636	0.03025495954496939	3329	1000
+single	n_eligible_domains	8015.0			supra_input_relative				3329	0
+single	n_gained_domains	494.0			supra_input_relative				3329	0
+single	n_added_pairs	4266.0			supra_input_relative				3329	0
+single	n_direct_eligible	14405.0			supra_input_relative				3329	0
+single	n_pred_pairs	96028.0			supra_input_relative				3329	0
+single	n_pred_on_gained	6846.0			supra_input_relative				3329	0
+single	n_hit	576.0			supra_input_relative				3329	0
+single	n_hit_at_budget	161.0			supra_input_relative				3329	0
+single	n_unmapped_signatures	0.0			supra_input_relative				3329	0
+supra	precision	0.08413672217353199	0.06537928347118672	0.10624414866918934	supra_input_relative	0.00182251709356962	-0.02299267149791262	0.02826782381805118	3329	1000
+supra	precision_novel	0.10484164543137969	0.08037386012995384	0.1352363703641913	supra_input_relative	0.005579024898197615	-0.025959605697742756	0.03757812917394773	3329	1000
+supra	recall	0.1350210970464135	0.10326786701100608	0.17077655434750927	supra_input_relative	0.09399906235349273	0.0651118532674735	0.12822207777339906	3329	1000
+supra	precision_at_budget	0.08924611973392461	0.06269121721530278	0.12576228422647423	supra_input_relative	-0.00686372008300902	-0.04121210169373813	0.02231145668630977	3329	1000
+supra	recall_at_budget	0.037740271917487106	0.024690940073608295	0.05431581149879877	supra_input_relative	0.018049695264885136	0.007824715150760636	0.03025495954496939	3329	1000
+supra	n_eligible_domains	8015.0			supra_input_relative				3329	0
+supra	n_gained_domains	494.0			supra_input_relative				3329	0
+supra	n_added_pairs	4266.0			supra_input_relative				3329	0
+supra	n_direct_eligible	14405.0			supra_input_relative				3329	0
+supra	n_pred_pairs	96028.0			supra_input_relative				3329	0
+supra	n_pred_on_gained	6846.0			supra_input_relative				3329	0
+supra	n_hit	576.0			supra_input_relative				3329	0
+supra	n_hit_at_budget	161.0			supra_input_relative				3329	0
+supra	n_unmapped_signatures	0.0			supra_input_relative				3329	0
+supra_input	precision	0.08592200925313946	0.06730328230863425	0.10777757820897955	supra_input_relative	0.00360780417317709	-0.020249543688149515	0.029378729011868204	3329	1000
+supra_input	precision_novel	0.10563952543474728	0.08154163346654657	0.13445453742395838	supra_input_relative	0.0063769049015652	-0.023404150785663765	0.03719840164298258	3329	1000
+supra_input	recall	0.15236755743084857	0.11746356895358481	0.19002826750288582	supra_input_relative	0.1113455227379278	0.07863709847937554	0.1479493730396143	3329	1000
+supra_input	precision_at_budget	0.14947683109118087	0.08871842859841007	0.2405699082246757	supra_input_relative	0.05336699127424724	0.012044720969080542	0.11983510867306545	3329	1000
+supra_input	recall_at_budget	0.02344116268166901	0.01263843812683094	0.03638085891323926	supra_input_relative	0.0037505860290670406	-0.0028422590068159686	0.010666976543684425	3329	1000
+supra_input	n_eligible_domains	8015.0			supra_input_relative				3329	0
+supra_input	n_gained_domains	494.0			supra_input_relative				3329	0
+supra_input	n_added_pairs	4266.0			supra_input_relative				3329	0
+supra_input	n_direct_eligible	47611.0			supra_input_relative				3329	0
+supra_input	n_pred_pairs	108495.0			supra_input_relative				3329	0
+supra_input	n_pred_on_gained	7565.0			supra_input_relative				3329	0
+supra_input	n_hit	650.0			supra_input_relative				3329	0
+supra_input	n_hit_at_budget	100.0			supra_input_relative				3329	0
+supra_input	n_unmapped_signatures	0.0			supra_input_relative				3329	0
+supra_relative	precision	0.08685800604229607	0.06006913580246915	0.12342871316853143	supra_input_relative	0.0045438009623336995	-0.017270469351443184	0.024980473044162926	3329	1000
+supra_relative	precision_novel	0.10407239819004525	0.07239039660930692	0.14863747645951034	supra_input_relative	0.004809777656863176	-0.021012590523882886	0.029732814637231052	3329	1000
+supra_relative	recall	0.026957337083919362	0.015890233201013328	0.04007518475161691	supra_input_relative	-0.014064697609001406	-0.02364871598279119	-0.0065201824938818315	3329	1000
+supra_relative	precision_at_budget	0.08685800604229607	0.06006913580246915	0.12342871316853143	supra_input_relative	-0.009251833774637563	-0.042140560490320375	0.017597578826589154	3329	1000
+supra_relative	recall_at_budget	0.026957337083919362	0.015890233201013328	0.04007518475161691	supra_input_relative	0.007266760431317392	-0.0002409349641215961	0.016170415333838048	3329	1000
+supra_relative	n_eligible_domains	8015.0			supra_input_relative				3329	0
+supra_relative	n_gained_domains	494.0			supra_input_relative				3329	0
+supra_relative	n_added_pairs	4266.0			supra_input_relative				3329	0
+supra_relative	n_direct_eligible	3329.0			supra_input_relative				3329	0
+supra_relative	n_pred_pairs	16667.0			supra_input_relative				3329	0
+supra_relative	n_pred_on_gained	1324.0			supra_input_relative				3329	0
+supra_relative	n_hit	115.0			supra_input_relative				3329	0
+supra_relative	n_hit_at_budget	115.0			supra_input_relative				3329	0
+supra_relative	n_unmapped_signatures	0.0			supra_input_relative				3329	0
+supra_output	precision	0.08413672217353199	0.06537928347118672	0.10624414866918934	supra_input_relative	0.00182251709356962	-0.02299267149791262	0.02826782381805118	3329	1000
+supra_output	precision_novel	0.10484164543137969	0.08037386012995384	0.1352363703641913	supra_input_relative	0.005579024898197615	-0.025959605697742756	0.03757812917394773	3329	1000
+supra_output	recall	0.1350210970464135	0.10326786701100608	0.17077655434750927	supra_input_relative	0.09399906235349273	0.0651118532674735	0.12822207777339906	3329	1000
+supra_output	precision_at_budget	0.14555256064690028	0.07067089798740206	0.26264282691493857	supra_input_relative	0.049442720829966647	-0.0029020248580506865	0.127082312074704	3329	1000
+supra_output	recall_at_budget	0.012658227848101266	0.005130135845044857	0.022746347240562972	supra_input_relative	-0.007032348804500705	-0.012789701227201229	-0.0028483869916697733	3329	1000
+supra_output	n_eligible_domains	8015.0			supra_input_relative				3329	0
+supra_output	n_gained_domains	494.0			supra_input_relative				3329	0
+supra_output	n_added_pairs	4266.0			supra_input_relative				3329	0
+supra_output	n_direct_eligible	96028.0			supra_input_relative				3329	0
+supra_output	n_pred_pairs	96028.0			supra_input_relative				3329	0
+supra_output	n_pred_on_gained	6846.0			supra_input_relative				3329	0
+supra_output	n_hit	576.0			supra_input_relative				3329	0
+supra_output	n_hit_at_budget	54.0			supra_input_relative				3329	0
+supra_output	n_unmapped_signatures	0.0			supra_input_relative				3329	0
+supra_input_relative	precision	0.08231420507996237	0.05933067009909151	0.10958535689718485	supra_input_relative	0.0	0.0	0.0	3329	1000
+supra_input_relative	precision_novel	0.09926262053318208	0.07118382433711117	0.13494373311266333	supra_input_relative	0.0	0.0	0.0	3329	1000
+supra_input_relative	recall	0.04102203469292077	0.027289927512026472	0.057998333617943765	supra_input_relative	0.0	0.0	0.0	3329	1000
+supra_input_relative	precision_at_budget	0.09610983981693363	0.059292199839520256	0.15126563654777872	supra_input_relative	0.0	0.0	0.0	3329	1000
+supra_input_relative	recall_at_budget	0.01969057665260197	0.010283630806632154	0.03097852485367798	supra_input_relative	0.0	0.0	0.0	3329	1000
+supra_input_relative	n_eligible_domains	8015.0			supra_input_relative				3329	0
+supra_input_relative	n_gained_domains	494.0			supra_input_relative				3329	0
+supra_input_relative	n_added_pairs	4266.0			supra_input_relative				3329	0
+supra_input_relative	n_direct_eligible	9661.0			supra_input_relative				3329	0
+supra_input_relative	n_pred_pairs	27834.0			supra_input_relative				3329	0
+supra_input_relative	n_pred_on_gained	2126.0			supra_input_relative				3329	0
+supra_input_relative	n_hit	175.0			supra_input_relative				3329	0
+supra_input_relative	n_hit_at_budget	84.0			supra_input_relative				3329	0
+supra_input_relative	n_unmapped_signatures	0.0			supra_input_relative				3329	0
+supra_input_output	precision	0.08592200925313946	0.06730328230863425	0.10777757820897955	supra_input_relative	0.00360780417317709	-0.020249543688149515	0.029378729011868204	3329	1000
+supra_input_output	precision_novel	0.10563952543474728	0.08154163346654657	0.13445453742395838	supra_input_relative	0.0063769049015652	-0.023404150785663765	0.03719840164298258	3329	1000
+supra_input_output	recall	0.15236755743084857	0.11746356895358481	0.19002826750288582	supra_input_relative	0.1113455227379278	0.07863709847937554	0.1479493730396143	3329	1000
+supra_input_output	precision_at_budget	0.15989159891598917	0.08047765298728675	0.28581780538302265	supra_input_relative	0.06378175909905553	0.010260172521806428	0.15639531571090504	3329	1000
+supra_input_output	recall_at_budget	0.013830285982184717	0.006217193424578267	0.024341357941812275	supra_input_relative	-0.005860290670417254	-0.011179157906305304	-0.0019623798109507334	3329	1000
+supra_input_output	n_eligible_domains	8015.0			supra_input_relative				3329	0
+supra_input_output	n_gained_domains	494.0			supra_input_relative				3329	0
+supra_input_output	n_added_pairs	4266.0			supra_input_relative				3329	0
+supra_input_output	n_direct_eligible	108495.0			supra_input_relative				3329	0
+supra_input_output	n_pred_pairs	108495.0			supra_input_relative				3329	0
+supra_input_output	n_pred_on_gained	7565.0			supra_input_relative				3329	0
+supra_input_output	n_hit	650.0			supra_input_relative				3329	0
+supra_input_output	n_hit_at_budget	59.0			supra_input_relative				3329	0
+supra_input_output	n_unmapped_signatures	0.0			supra_input_relative				3329	0
+supra_relative_output	precision	0.08685800604229607	0.06006913580246915	0.12342871316853143	supra_input_relative	0.0045438009623336995	-0.017270469351443184	0.024980473044162926	3329	1000
+supra_relative_output	precision_novel	0.10407239819004525	0.07239039660930692	0.14863747645951034	supra_input_relative	0.004809777656863176	-0.021012590523882886	0.029732814637231052	3329	1000
+supra_relative_output	recall	0.026957337083919362	0.015890233201013328	0.04007518475161691	supra_input_relative	-0.014064697609001406	-0.02364871598279119	-0.0065201824938818315	3329	1000
+supra_relative_output	precision_at_budget	0.06005221932114883	0.017680862128741478	0.11747430900070871	supra_input_relative	-0.03605762049578481	-0.09258682207509553	0.00816209850688917	3329	1000
+supra_relative_output	recall_at_budget	0.005391467416783873	0.0012097646982996476	0.010961804627719314	supra_input_relative	-0.014299109235818099	-0.02434110358309008	-0.006365585167770525	3329	1000
+supra_relative_output	n_eligible_domains	8015.0			supra_input_relative				3329	0
+supra_relative_output	n_gained_domains	494.0			supra_input_relative				3329	0
+supra_relative_output	n_added_pairs	4266.0			supra_input_relative				3329	0
+supra_relative_output	n_direct_eligible	16667.0			supra_input_relative				3329	0
+supra_relative_output	n_pred_pairs	16667.0			supra_input_relative				3329	0
+supra_relative_output	n_pred_on_gained	1324.0			supra_input_relative				3329	0
+supra_relative_output	n_hit	115.0			supra_input_relative				3329	0
+supra_relative_output	n_hit_at_budget	23.0			supra_input_relative				3329	0
+supra_relative_output	n_unmapped_signatures	0.0			supra_input_relative				3329	0
+full	precision	0.08231420507996237	0.05933067009909151	0.10958535689718485	supra_input_relative	0.0	0.0	0.0	3329	1000
+full	precision_novel	0.09926262053318208	0.07118382433711117	0.13494373311266333	supra_input_relative	0.0	0.0	0.0	3329	1000
+full	recall	0.04102203469292077	0.027289927512026472	0.057998333617943765	supra_input_relative	0.0	0.0	0.0	3329	1000
+full	precision_at_budget	0.11037527593818984	0.0585589578716276	0.19437005595215126	supra_input_relative	0.014265436121256206	-0.014289617593380653	0.05719818717809705	3329	1000
+full	recall_at_budget	0.011720581340834505	0.005354324913954983	0.02019410343725101	supra_input_relative	-0.007969995311767465	-0.01344186179110388	-0.0036634671649388747	3329	1000
+full	n_eligible_domains	8015.0			supra_input_relative				3329	0
+full	n_gained_domains	494.0			supra_input_relative				3329	0
+full	n_added_pairs	4266.0			supra_input_relative				3329	0
+full	n_direct_eligible	27834.0			supra_input_relative				3329	0
+full	n_pred_pairs	27834.0			supra_input_relative				3329	0
+full	n_pred_on_gained	2126.0			supra_input_relative				3329	0
+full	n_hit	175.0			supra_input_relative				3329	0
+full	n_hit_at_budget	50.0			supra_input_relative				3329	0
+full	n_unmapped_signatures	0.0			supra_input_relative				3329	0
+proj[ipr|s=0.5]	precision	0.04815654574132492	0.03928940054347334	0.05854696313974856	supra_input_relative	-0.03415765933863745	-0.06101117616720056	-0.009550377894158645	3329	1000
+proj[ipr|s=0.5]	precision_novel	0.05425667795857167	0.04376728652169262	0.066768249658651	supra_input_relative	-0.04500594257461041	-0.07927359744123416	-0.016020313919932624	3329	1000
+proj[ipr|s=0.5]	recall	0.22902015939990625	0.18548248823862676	0.2759408696786347	supra_input_relative	0.1879981247069855	0.1485032149646822	0.23210562007834315	3329	1000
+proj[ipr|s=0.5]	precision_at_budget	0.023454157782515993	0.008046683293373014	0.04219744156453017	supra_input_relative	-0.07265568203441763	-0.12697058329708846	-0.03587810835330715	3329	1000
+proj[ipr|s=0.5]	recall_at_budget	0.0025785278949835913	0.0008991050523400153	0.004902443260768874	supra_input_relative	-0.01711204875761838	-0.02797300732741005	-0.008438249482362069	3329	1000
+proj[ipr|s=0.5]	n_eligible_domains	8015.0			supra_input_relative				3329	0
+proj[ipr|s=0.5]	n_gained_domains	494.0			supra_input_relative				3329	0
+proj[ipr|s=0.5]	n_added_pairs	4266.0			supra_input_relative				3329	0
+proj[ipr|s=0.5]	n_direct_eligible	296196.0			supra_input_relative				3329	0
+proj[ipr|s=0.5]	n_pred_pairs	304413.0			supra_input_relative				3329	0
+proj[ipr|s=0.5]	n_pred_on_gained	20288.0			supra_input_relative				3329	0
+proj[ipr|s=0.5]	n_hit	977.0			supra_input_relative				3329	0
+proj[ipr|s=0.5]	n_hit_at_budget	11.0			supra_input_relative				3329	0
+proj[ipr|s=0.5]	n_unmapped_signatures	0.0			supra_input_relative				3329	0
+proj[ipr|s=0.5,q=0.1,leaf]	precision	0.09108063907409737	0.08022307226314916	0.10299885835753397	supra_input_relative	0.008766433994135	-0.01944322299603134	0.0326660959044358	3329	1000
+proj[ipr|s=0.5,q=0.1,leaf]	precision_novel	0.12337053761608588	0.10830114407266862	0.1395215237110687	supra_input_relative	0.0241079170829038	-0.012914463914925945	0.0538198569257044	3329	1000
+proj[ipr|s=0.5,q=0.1,leaf]	recall	0.3394280356305673	0.29813201150662116	0.37865994580341034	supra_input_relative	0.2984060009376465	0.2619319093602182	0.3352295392301197	3329	1000
+proj[ipr|s=0.5,q=0.1,leaf]	precision_at_budget	0.11547714514835605	0.07973816694167188	0.15814213598967264	supra_input_relative	0.01936730533142242	-0.02927000812797352	0.06288205761258812	3329	1000
+proj[ipr|s=0.5,q=0.1,leaf]	recall_at_budget	0.03375527426160337	0.021110238074062686	0.04904259676747382	supra_input_relative	0.014064697609001402	0.0038057590892111456	0.0269182476333494	3329	1000
+proj[ipr|s=0.5,q=0.1,leaf]	n_eligible_domains	8015.0			supra_input_relative				3329	0
+proj[ipr|s=0.5,q=0.1,leaf]	n_gained_domains	494.0			supra_input_relative				3329	0
+proj[ipr|s=0.5,q=0.1,leaf]	n_added_pairs	4266.0			supra_input_relative				3329	0
+proj[ipr|s=0.5,q=0.1,leaf]	n_direct_eligible	53014.0			supra_input_relative				3329	0
+proj[ipr|s=0.5,q=0.1,leaf]	n_pred_pairs	230297.0			supra_input_relative				3329	0
+proj[ipr|s=0.5,q=0.1,leaf]	n_pred_on_gained	15898.0			supra_input_relative				3329	0
+proj[ipr|s=0.5,q=0.1,leaf]	n_hit	1448.0			supra_input_relative				3329	0
+proj[ipr|s=0.5,q=0.1,leaf]	n_hit_at_budget	144.0			supra_input_relative				3329	0
+proj[ipr|s=0.5,q=0.1,leaf]	n_unmapped_signatures	0.0			supra_input_relative				3329	0

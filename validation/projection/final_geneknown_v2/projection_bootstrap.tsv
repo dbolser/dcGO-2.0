@@ -1,0 +1,344 @@
+aspect	min_ic	resampling	method	reference	metric	ci_lo	ci_hi	ratio_ci_lo	ratio_ci_hi	diff_ci_lo	diff_ci_hi	ratio_naive_ci_lo	ratio_naive_ci_hi	diff_reselect_ci_lo	diff_reselect_ci_hi	ratio_reselect_ci_lo	ratio_reselect_ci_hi	p_ratio_reselect_ge10
+BP	0.0	proteins	proj[ipr|s=0.5]@allsp-experimental	old[supra_input_relative|q|pscore]	ky30	627.975	1590.025	1.6127320954907163	5.448888888888889	265.975	1135.025							
+BP	0.0	proteins	proj[ipr|s=0.5]@allsp-experimental	old[supra_input_relative|p|max]	ky50	61.975	696.1249999999999	0.5112359550561798	inf	-75.07499999999999	602.0999999999999							
+BP	0.0	proteins	proj[ipr|s=0.5]@allsp-experimental	old[supra_input_relative|p|max]	ky70	21.0	124.0	0.24166666666666667	inf	-89.025	108.0							
+BP	0.0	proteins	proj[ipr|s=0.5]@allsp-experimental	old[supra_input|p|pscore]	pooled_auprc	0.11161218419742618	0.17050083852446254	1.6886050280580833	3.146559448793102	0.05144182431090955	0.1064002917279565	0.765648834584309	1.1575390019445708					
+BP	0.0	proteins	seq[k=25,T=0.1]@allsp-experimental	old[supra_input_relative|q|pscore]	ky30	1462.95	2152.05	2.8857142857142857	7.881818181818182	1039.975	1700.025							
+BP	0.0	proteins	seq[k=25,T=0.1]@allsp-experimental	old[supra_input_relative|p|max]	ky50	298.95	1133.0749999999998	3.0824175824175826	inf	206.975	1028.025							
+BP	0.0	proteins	seq[k=25,T=0.1]@allsp-experimental	old[supra_input_relative|p|max]	ky70	69.975	392.0	1.04	inf	3.9750000000000014	337.17499999999984							
+BP	0.0	proteins	seq[k=25,T=0.1]@allsp-experimental	old[supra_input|p|pscore]	pooled_auprc	0.1808923537757226	0.24245746416572259	2.6024906516954123	4.742237870887001	0.12244477987682048	0.17951206167172065	1.2222446555315578	1.671246906380245					
+BP	0.0	proteins	lit[k=25,T=0.1]@allsp-experimental	old[supra_input_relative|q|pscore]	ky30	1050.95	1732.025	2.188148148148148	6.052631578947368	618.975	1276.1499999999999							
+BP	0.0	proteins	lit[k=25,T=0.1]@allsp-experimental	old[supra_input_relative|p|max]	ky50	66.0	845.0999999999999	0.6796875	inf	-26.074999999999996	753.0999999999999							
+BP	0.0	proteins	lit[k=25,T=0.1]@allsp-experimental	old[supra_input_relative|p|max]	ky70	0.0	281.025	0.0	inf	-121.025	225.04999999999995							
+BP	0.0	proteins	lit[k=25,T=0.1]@allsp-experimental	old[supra_input|p|pscore]	pooled_auprc	0.13777379012026622	0.20021965394630886	2.0207031165008273	3.8562762648670077	0.07600399717536853	0.13730556516657527	0.9544697773371763	1.3647147736474385					
+BP	0.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental	old[supra_input_relative|q|pscore]	ky30	1347.875	2196.1	2.9805825242718447	8.008888888888889	990.95	1761.1							
+BP	0.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental	old[supra_input_relative|p|max]	ky50	255.85000000000002	1003.4249999999996	2.63	inf	161.95	901.1749999999998							
+BP	0.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental	old[supra_input_relative|p|max]	ky70	31.0	306.0999999999999	0.367816091954023	inf	-70.025	241.04999999999995							
+BP	0.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	pooled_auprc	0.1795632219814591	0.2416030098841069	2.5911148451472332	4.7027856548062665	0.12190796226117794	0.1771666079455878	1.2149207670232935	1.6527596282623205					
+BP	0.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input_relative|q|pscore]	ky30	1330.9	2080.0	2.8234165067178503	7.552884615384615	940.9	1621.0749999999998							
+BP	0.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input_relative|p|max]	ky50	572.0	1092.025	4.469512195121951	inf	481.95	975.0749999999999							
+BP	0.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input_relative|p|max]	ky70	125.75000000000001	640.0999999999999	2.010204081632653	inf	70.95	579.025							
+BP	0.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	pooled_auprc	0.1870705463619968	0.2523200779554129	2.7471111435886666	4.879004959223268	0.12883052450583385	0.18728066361347193	1.2870218527328094	1.7168496725935734					
+BP	0.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input_relative|q|pscore]	ky30	1665.925	2428.05	3.4100346020761245	9.247899159663865	1270.95	1968.1							
+BP	0.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input_relative|p|max]	ky50	635.85	1317.025	5.680672268907563	inf	557.0	1198.125							
+BP	0.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input_relative|p|max]	ky70	38.0	587.025	0.7142857142857143	inf	-16.049999999999997	522.0							
+BP	0.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	pooled_auprc	0.21400844927134086	0.27791400725428966	3.0414176324410818	5.478479363522936	0.15618645986760823	0.2130632680142298	1.4514085247805717	1.8975076207332078					
+BP	0.0	proteins	comparator[interpro2go_t0]	old[supra_input_relative|q|pscore]	ky30	206.975	422.07499999999993	0.47	1.4110169491525424	-298.2	93.09999999999991							
+BP	0.0	proteins	comparator[interpro2go_t0]	old[supra_input_relative|p|max]	ky50	0.0	422.07499999999993	0.0	32.8	-126.025	336.04999999999995							
+BP	0.0	proteins	comparator[interpro2go_t0]	old[supra_input_relative|p|max]	ky70	0.0	377.07499999999993	0.0	inf	-139.05	323.025							
+BP	0.0	proteins	comparator[interpro2go_t0]	old[supra_input|p|pscore]	pooled_auprc	0.016254441962665414	0.05148113212028116	0.2689819416302956	0.8822266623830565	-0.054164646136997244	-0.005710403939649707	0.11165655527765549	0.34948271126337327					
+BP	0.0	proteins	comparator[iea_t0]	old[supra_input_relative|q|pscore]	ky30	479.95	825.0749999999999	1.0089686098654709	2.888888888888889	3.9750000000000014	433.025							
+BP	0.0	proteins	comparator[iea_t0]	old[supra_input_relative|p|max]	ky50	0.0	0.0	0.0	0.0	-178.05	0.0							
+BP	0.0	proteins	comparator[iea_t0]	old[supra_input_relative|p|max]	ky70	0.0	0.0	0.0	0.0	-145.025	0.0							
+BP	0.0	proteins	comparator[iea_t0]	old[supra_input|p|pscore]	pooled_auprc	0.027120908575473824	0.06384789036632274	0.4566594824583289	1.1151181403056065	-0.04026860367280076	0.005925614391370227	0.19200826368018176	0.4341562734307363					
+BP	0.0	proteins	naive	old[supra_input_relative|q|pscore]	ky30	720.975	965.025	1.3605313092979128	3.8254716981132075	218.975	631.025							
+BP	0.0	proteins	naive	old[supra_input_relative|p|max]	ky50	299.0	606.025	2.160377358490566	inf	167.975	536.0749999999999							
+BP	0.0	proteins	naive	old[supra_input_relative|p|max]	ky70	0.0	0.0	0.0	2.0792079207920793	-145.025	0.0							
+BP	0.0	proteins	naive	old[supra_input|p|pscore]	pooled_auprc	0.13513348906150097	0.15954443471123975	1.7614928307265623	3.3859531138169787	0.061914500021984405	0.10542555518680384	1.0	1.0					
+BP	0.0	proteins	old[supra_input_relative|p|max]	old[supra_input_relative|q|pscore]	ky30	56.95	366.025	0.14522821576763487	0.7054263565891473	-451.05	-105.0							
+BP	0.0	proteins	old[supra_input_relative|p|max]	old[supra_input_relative|p|max]	ky50	0.0	178.04999999999995	1.0	1.0	0.0	0.0							
+BP	0.0	proteins	old[supra_input_relative|p|max]	old[supra_input_relative|p|max]	ky70	0.0	145.02499999999998	1.0	1.0	0.0	0.0							
+BP	0.0	proteins	old[supra_input_relative|p|max]	old[supra_input|p|pscore]	pooled_auprc	0.02591526725194949	0.05843474661898557	0.493862122082498	0.8776647813055872	-0.0356118432056359	-0.006681271586607254	0.1793153695828222	0.3931972617908081					
+BP	0.0	proteins	old[supra_input_relative|q|pscore]	old[supra_input_relative|q|pscore]	ky30	210.95	613.025	1.0	1.0	0.0	0.0							
+BP	0.0	proteins	old[supra_input_relative|q|pscore]	old[supra_input_relative|p|max]	ky50	0.0	301.0	0.0	13.571428571428571	-121.0	211.0							
+BP	0.0	proteins	old[supra_input_relative|q|pscore]	old[supra_input_relative|p|max]	ky70	0.0	145.02499999999998	0.0	inf	-141.025	102.0							
+BP	0.0	proteins	old[supra_input_relative|q|pscore]	old[supra_input|p|pscore]	pooled_auprc	0.036693848907474964	0.0736588899336026	0.7058058842677569	1.075397274793561	-0.02159779610808597	0.004477137609250092	0.25094301040701933	0.5010513121597658					
+BP	0.0	proteins	old[supra_input|p|pscore]	old[supra_input_relative|q|pscore]	ky30	106.95	715.0	0.3475609756097561	1.6	-250.05	182.07499999999993							
+BP	0.0	proteins	old[supra_input|p|pscore]	old[supra_input_relative|p|max]	ky50	0.0	331.17499999999984	0.0	3.6956521739130435	-157.025	212.07499999999993							
+BP	0.0	proteins	old[supra_input|p|pscore]	old[supra_input_relative|p|max]	ky70	0.0	0.0	0.0	0.0	-145.025	0.0							
+BP	0.0	proteins	old[supra_input|p|pscore]	old[supra_input|p|pscore]	pooled_auprc	0.042375725903023416	0.08398703357206905	1.0	1.0	0.0	0.0	0.2953378166754063	0.5677002952021839					
+BP	0.0	proteins	proj[ipr|s=0.5]@allsp-experimental		precision_at_frozen	0.3502995857089466	0.5468083863969602											
+BP	0.0	proteins	seq[k=25,T=0.1]@allsp-experimental		precision_at_frozen	0.37737019516147	0.4899018341116158											
+BP	0.0	proteins	lit[k=25,T=0.1]@allsp-experimental		precision_at_frozen	0.3825588796944621	0.5094363597132651											
+BP	0.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental		precision_at_frozen	0.3963856992889528	0.524147193510913											
+BP	0.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental		precision_at_frozen	0.4073507400775681	0.5162649485582252											
+BP	0.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental		precision_at_frozen	0.4012313452992571	0.5019620906699522											
+BP	0.0	proteins	comparator[interpro2go_t0]		precision_at_frozen	0.4244178515007899	0.7711320410274439											
+BP	0.0	proteins	naive		precision_at_frozen	0.44673539518900346	0.5206400343642612											
+BP	0.0	proteins	old[supra_input_relative|p|max]		precision_at_frozen	0.0	0.0											
+BP	2.0	proteins	proj[ipr|s=0.5]@allsp-experimental	old[supra_input|q|pscore]	ky30	5.975000000000001	739.1499999999999	0.04150943396226415	inf	-168.05	593.05			-181.05	562.0749999999999	0.036036036036036036	6.39	0.008
+BP	2.0	proteins	proj[ipr|s=0.5]@allsp-experimental	old[supra_input_relative|q|pscore]	ky50	0.0	203.0	0.0	inf	-112.1	159.02499999999998			-162.0	135.27499999999975	0.0	4.647058823529412	0.01006036217303823
+BP	2.0	proteins	proj[ipr|s=0.5]@allsp-experimental	old[supra_input_relative|p|max]	ky70	0.0	40.02499999999998	0.0	inf	-44.0	36.0			-96.025	32.0	0.0	inf	0.10807600950118765
+BP	2.0	proteins	proj[ipr|s=0.5]@allsp-experimental	old[supra_input|p|pscore]	pooled_auprc	0.0641860184591396	0.11270459893267801	1.5302447286134286	3.4959212160729765	0.025883683992758064	0.07230352118444218	1.3111194510141095	2.3708528754933615	0.025883683992758064	0.07211434193121605	1.5258953916252072	3.4739129418010646	0.0
+BP	2.0	proteins	seq[k=25,T=0.1]@allsp-experimental	old[supra_input|q|pscore]	ky30	354.925	1064.05	2.116915422885572	inf	216.9	912.0			192.975	879.0	1.8027210884353742	10.648148148148149	0.035
+BP	2.0	proteins	seq[k=25,T=0.1]@allsp-experimental	old[supra_input_relative|q|pscore]	ky50	27.0	367.0999999999999	0.7627118644067796	inf	-14.0	314.5249999999995			-44.025	283.025	0.5528846153846154	9.791666666666666	0.024
+BP	2.0	proteins	seq[k=25,T=0.1]@allsp-experimental	old[supra_input_relative|p|max]	ky70	17.0	141.02499999999998	0.8076923076923077	inf	-6.0	132.02499999999998			-36.0	115.07499999999993	0.4925373134328358	inf	0.261
+BP	2.0	proteins	seq[k=25,T=0.1]@allsp-experimental	old[supra_input|p|pscore]	pooled_auprc	0.1034873152338111	0.16521166038538085	2.4362628986354227	5.292589636683552	0.06881649565054508	0.1227018131632189	2.0938384389540614	3.408856084539328	0.0686949395398723	0.1226348649786447	2.428890719345581	5.292589636683552	0.0
+BP	2.0	proteins	lit[k=25,T=0.1]@allsp-experimental	old[supra_input|q|pscore]	ky30	226.975	685.0	1.1923076923076923	inf	45.95	553.1249999999999			21.750000000000014	501.025	1.0982456140350878	5.920353982300885	0.004
+BP	2.0	proteins	lit[k=25,T=0.1]@allsp-experimental	old[supra_input_relative|q|pscore]	ky50	0.0	342.0	0.0	inf	-62.0	288.025			-99.025	272.025	0.0	13.5	0.0321285140562249
+BP	2.0	proteins	lit[k=25,T=0.1]@allsp-experimental	old[supra_input_relative|p|max]	ky70	0.0	125.0	0.0	inf	-37.0	116.0			-87.025	101.02499999999998	0.0	inf	0.20846560846560847
+BP	2.0	proteins	lit[k=25,T=0.1]@allsp-experimental	old[supra_input|p|pscore]	pooled_auprc	0.07390958007154107	0.12507943037110722	1.7143440526721396	4.0651680899703075	0.03453792073564683	0.08874048086932128	1.480337091454227	2.641090896816996	0.03415203758998647	0.08873179858406847	1.7143440526721396	4.040361721068315	0.0
+BP	2.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental	old[supra_input|q|pscore]	ky30	365.95	1117.025	1.863905325443787	inf	196.925	976.05			185.975	937.025	1.7780748663101604	10.486842105263158	0.029
+BP	2.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental	old[supra_input_relative|q|pscore]	ky50	0.0	375.1999999999998	0.0	inf	-67.025	318.07499999999993			-101.05	307.04999999999995	0.0	7.409090909090909	0.017034068136272545
+BP	2.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental	old[supra_input_relative|p|max]	ky70	0.0	96.04999999999995	0.0	inf	-42.0	86.0			-92.0	67.0	0.0	inf	0.1154299175500589
+BP	2.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	pooled_auprc	0.10444964606433882	0.16390194263443877	2.4713708442978986	5.281805093430249	0.07031811536906195	0.12256325011717853	2.1416329369773144	3.4443906804042363	0.07031811536906195	0.1224371642313922	2.4655288423507034	5.230844823273635	0.0
+BP	2.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input|q|pscore]	ky30	357.95	936.025	2.0659722222222223	inf	217.95	789.025			199.8	747.05	1.94980694980695	9.45	0.019
+BP	2.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input_relative|q|pscore]	ky50	186.0	448.0	2.49618320610687	inf	142.975	410.04999999999995			114.975	385.0	1.837696335078534	25.0	0.082
+BP	2.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input_relative|p|max]	ky70	119.975	336.04999999999995	4.45	inf	107.0	322.0			74.975	300.04999999999995	2.0	inf	0.419
+BP	2.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	pooled_auprc	0.1196424640775927	0.1819204906117585	2.7784544748440747	6.04847275169667	0.08504757107909126	0.14198440646207997	2.412392662162722	3.8329918703823997	0.08493365599636038	0.1418339736107867	2.7784544748440747	5.997047910611173	0.0
+BP	2.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input|q|pscore]	ky30	529.9	1165.05	2.829113924050633	inf	384.925	1005.3499999999997			361.0	962.0999999999999	2.656050955414013	12.2125	0.044
+BP	2.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input_relative|q|pscore]	ky50	165.0	528.0999999999999	2.5584415584415585	inf	119.0	489.1249999999999			94.0	461.025	1.8571428571428572	25.0	0.108
+BP	2.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input_relative|p|max]	ky70	16.975	294.0	1.25	inf	5.950000000000003	278.025			-16.025	263.025	0.625	inf	0.34734734734734735
+BP	2.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	pooled_auprc	0.136859063938571	0.202893795255064	3.174024548645879	6.739284736978719	0.10333985598703377	0.16277890135404097	2.7693861969103875	4.290606028391392	0.10310418805299688	0.16246453756666482	3.1692141274873347	6.677271591210097	0.0
+BP	2.0	proteins	comparator[interpro2go_t0]	old[supra_input|q|pscore]	ky30	131.0	290.0	0.6222222222222222	inf	-100.07499999999999	216.02499999999998			-125.05	151.04999999999995	0.5762081784386617	3.1176470588235294	0.0
+BP	2.0	proteins	comparator[interpro2go_t0]	old[supra_input_relative|q|pscore]	ky50	0.0	290.0	0.0	inf	-93.025	256.0			-143.025	226.0	0.0	13.25	0.035246727089627394
+BP	2.0	proteins	comparator[interpro2go_t0]	old[supra_input_relative|p|max]	ky70	0.0	252.04999999999995	0.0	inf	-49.025	236.02499999999998			-97.0	226.0	0.0	30.625	0.049479166666666664
+BP	2.0	proteins	comparator[interpro2go_t0]	old[supra_input|p|pscore]	pooled_auprc	0.011252163585086105	0.04328739127915704	0.2978097396600823	1.2883368669815578	-0.03464127446901043	0.007956612989764345	0.2321940053601505	0.9039158324237625	-0.03479277697197582	0.007956612989764345	0.2978097396600823	1.2883368669815578	0.0
+BP	2.0	proteins	comparator[iea_t0]	old[supra_input|q|pscore]	ky30	0.0	573.0	0.0	inf	-208.025	460.0			-231.025	402.0	0.0	5.9375	0.009
+BP	2.0	proteins	comparator[iea_t0]	old[supra_input_relative|q|pscore]	ky50	0.0	0.0	0.0	0.0	-133.025	0.0			-173.05	-12.0	0.0	0.0	0.0010141987829614604
+BP	2.0	proteins	comparator[iea_t0]	old[supra_input_relative|p|max]	ky70	0.0	0.0	0.0	0.0	-51.025	0.0			-98.025	0.0	0.0	0.0	0.0
+BP	2.0	proteins	comparator[iea_t0]	old[supra_input|p|pscore]	pooled_auprc	0.018584917775570645	0.05087682664779803	0.47603904234824906	1.4668287069687798	-0.02482947844183038	0.0138182248377499	0.3731743224576608	1.044734385420698	-0.024882796375508814	0.013396977784718505	0.47603904234824906	1.4668287069687798	0.0
+BP	2.0	proteins	naive	old[supra_input|q|pscore]	ky30	0.0	0.0	0.0	0.0	-306.025	0.0			-329.025	-65.0	0.0	0.0	0.0
+BP	2.0	proteins	naive	old[supra_input_relative|q|pscore]	ky50	0.0	0.0	0.0	0.0	-133.025	0.0			-173.05	-12.0	0.0	0.0	0.0
+BP	2.0	proteins	naive	old[supra_input_relative|p|max]	ky70	0.0	0.0	0.0	0.0	-51.025	0.0			-98.025	0.0	0.0	0.0	0.0
+BP	2.0	proteins	naive	old[supra_input|p|pscore]	pooled_auprc	0.04354049236847461	0.054921351167245974	0.8724987869270419	2.01860583424963	-0.007091461412063704	0.025198365062129986	1.0	1.0	-0.007121441856102727	0.02517846739057033	0.8675307781752893	2.013267518109196	0.0
+BP	2.0	proteins	old[supra_input_relative|p|max]	old[supra_input|q|pscore]	ky30	8.0	83.02499999999998	0.08040201005025126	inf	-256.0	36.0			-275.0	-26.925000000000068	0.05970149253731343	0.6133333333333333	0.0
+BP	2.0	proteins	old[supra_input_relative|p|max]	old[supra_input_relative|q|pscore]	ky50	0.0	71.0	0.0	inf	-103.025	57.049999999999955			-134.025	0.0	0.0	1.0	0.0
+BP	2.0	proteins	old[supra_input_relative|p|max]	old[supra_input_relative|p|max]	ky70	0.0	51.02499999999998	1.0	1.0	0.0	0.0			-89.025	0.0	0.0	1.0	0.0
+BP	2.0	proteins	old[supra_input_relative|p|max]	old[supra_input|p|pscore]	pooled_auprc	0.011221453383952085	0.03010815247166162	0.3435147221979436	0.7074304710578411	-0.032124257521191364	-0.008179602680926362	0.23104186769941912	0.6072971288005581	-0.032287666149126905	-0.008348741092449034	0.34345030323569714	0.7074304710578411	0.0
+BP	2.0	proteins	old[supra_input_relative|q|pscore]	old[supra_input|q|pscore]	ky30	8.925000000000004	307.025	0.16666666666666666	inf	-134.0	108.07499999999993			-141.1	0.0	0.09045226130653267	1.0	0.0
+BP	2.0	proteins	old[supra_input_relative|q|pscore]	old[supra_input_relative|q|pscore]	ky50	0.0	133.02499999999998	1.0	1.0	0.0	0.0			-103.025	0.0	0.0	1.0	0.0
+BP	2.0	proteins	old[supra_input_relative|q|pscore]	old[supra_input_relative|p|max]	ky70	0.0	97.04999999999995	0.0	inf	-49.025	89.0			-79.0	0.0	0.0	1.0	0.0
+BP	2.0	proteins	old[supra_input_relative|q|pscore]	old[supra_input|p|pscore]	pooled_auprc	0.016403047313695407	0.047311374009849416	0.5271039371329543	1.0180488632004288	-0.020600566200037355	0.0006352085392926757	0.3369349122760619	0.9731187973748063	-0.020600566200037355	-0.0005847060270319208	0.5271039371329543	0.9849679601742777	0.0
+BP	2.0	proteins	old[supra_input|p|pscore]	old[supra_input|q|pscore]	ky30	0.0	312.025	0.75	1.508108108108108	-54.05	55.0			-119.05	0.0	0.0	1.0	0.0
+BP	2.0	proteins	old[supra_input|p|pscore]	old[supra_input_relative|q|pscore]	ky50	0.0	162.0	0.0	inf	-105.025	102.02499999999998			-118.05	0.0	0.0	1.0	0.0
+BP	2.0	proteins	old[supra_input|p|pscore]	old[supra_input_relative|p|max]	ky70	0.0	0.0	0.0	0.0	-51.025	0.0			-98.025	0.0	0.0	0.0	0.0
+BP	2.0	proteins	old[supra_input|p|pscore]	old[supra_input|p|pscore]	pooled_auprc	0.023483196585286678	0.05611854412458308	1.0	1.0	0.0	0.0	0.49539141472447346	1.1461333986744209	-0.0013048641493173983	0.0	0.9602353562663412	1.0	0.0
+BP	2.0	proteins	old[supra_input|q|pscore]	old[supra_input|q|pscore]	ky30	0.0	306.025	1.0	1.0	0.0	0.0			-118.025	0.0	0.0	1.0	0.0
+BP	2.0	proteins	old[supra_input|q|pscore]	old[supra_input_relative|q|pscore]	ky50	0.0	158.02499999999998	0.0	inf	-105.025	99.04999999999995			-118.05	0.0	0.0	1.0	0.0
+BP	2.0	proteins	old[supra_input|q|pscore]	old[supra_input_relative|p|max]	ky70	0.0	0.0	0.0	0.0	-51.025	0.0			-98.025	0.0	0.0	0.0	0.0
+BP	2.0	proteins	old[supra_input|q|pscore]	old[supra_input|p|pscore]	pooled_auprc	0.02318143786685126	0.055675013278092295	0.9660397316759824	1.0128926911949527	-0.0013164589919932189	0.0005009650981101145	0.48694634258756037	1.1394171613971087	-0.0017876408266565254	0.0	0.9543795185860983	1.0	0.0
+BP	2.0	proteins	proj[ipr|s=0.5]@allsp-experimental		precision_at_frozen	0.10180555555555555	0.4782608695652174											
+BP	2.0	proteins	seq[k=25,T=0.1]@allsp-experimental		precision_at_frozen	0.296738583192798	0.5154794174897267											
+BP	2.0	proteins	lit[k=25,T=0.1]@allsp-experimental		precision_at_frozen	0.35413245133819954	0.6255517843674329											
+BP	2.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental		precision_at_frozen	0.2741000644537544	0.5351531414452574											
+BP	2.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental		precision_at_frozen	0.44749316594107524	0.6609237483768576											
+BP	2.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental		precision_at_frozen	0.3635415529475982	0.5224982202183199											
+BP	2.0	proteins	old[supra_input_relative|q|max]		precision_at_frozen	0.0	0.0											
+BP	2.0	proteins	old[supra_input_relative|p|max]		precision_at_frozen	0.0	0.0											
+BP	2.0	proteins	old[full|q|max]		precision_at_frozen	0.0	0.0											
+MF	0.0	proteins	proj[ipr|s=0.5]@allsp-experimental	old[supra_input_relative|p|pscore]	ky30	717.975	929.0	1.9513888888888888	3.418410041841004	390.0	588.05							
+MF	0.0	proteins	proj[ipr|s=0.5]@allsp-experimental	old[supra_input|p|pscore]	ky50	596.975	807.025	2.9607843137254903	inf	458.85	780.0							
+MF	0.0	proteins	proj[ipr|s=0.5]@allsp-experimental	old[supra_input|p|pscore]	ky70	463.975	634.025	inf	inf	463.975	634.025							
+MF	0.0	proteins	proj[ipr|s=0.5]@allsp-experimental	old[supra_input|p|pscore]	pooled_auprc	0.41319682327738305	0.5107831611638429	2.6129464367258066	4.466216813335692	0.2746608859499463	0.37089581986252107	1.1043320377201382	1.4674095040108968					
+MF	0.0	proteins	seq[k=25,T=0.1]@allsp-experimental	old[supra_input_relative|p|pscore]	ky30	795.0	969.025	2.0527426160337554	3.7148936170212767	449.0	653.025							
+MF	0.0	proteins	seq[k=25,T=0.1]@allsp-experimental	old[supra_input|p|pscore]	ky50	720.975	881.025	3.25	inf	559.9	869.025							
+MF	0.0	proteins	seq[k=25,T=0.1]@allsp-experimental	old[supra_input|p|pscore]	ky70	577.0	734.025	inf	inf	577.0	734.025							
+MF	0.0	proteins	seq[k=25,T=0.1]@allsp-experimental	old[supra_input|p|pscore]	pooled_auprc	0.47459286002124645	0.5792204959114152	2.884677103467276	5.1414471608702	0.328330629168137	0.4447046920859681	1.2960043671563641	1.6426860850530958					
+MF	0.0	proteins	lit[k=25,T=0.1]@allsp-experimental	old[supra_input_relative|p|pscore]	ky30	676.975	817.0	1.7371794871794872	3.1134453781512605	313.975	511.0							
+MF	0.0	proteins	lit[k=25,T=0.1]@allsp-experimental	old[supra_input|p|pscore]	ky50	618.975	769.0	2.8054474708171204	inf	437.0	759.025							
+MF	0.0	proteins	lit[k=25,T=0.1]@allsp-experimental	old[supra_input|p|pscore]	ky70	464.975	669.025	inf	inf	464.975	669.025							
+MF	0.0	proteins	lit[k=25,T=0.1]@allsp-experimental	old[supra_input|p|pscore]	pooled_auprc	0.37332737849850467	0.4869765514931177	2.3264235742762702	4.265616971370628	0.2254775480013712	0.352157905748896	1.0701129499073103	1.316083150136853					
+MF	0.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental	old[supra_input_relative|p|pscore]	ky30	872.975	1073.05	2.282511210762332	4.072340425531915	541.95	738.0999999999999							
+MF	0.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	ky50	726.975	925.0	3.4537444933920707	inf	592.95	906.025							
+MF	0.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	ky70	474.0	666.0	inf	inf	474.0	666.0							
+MF	0.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	pooled_auprc	0.489670808986832	0.5885776250760605	3.0066782366713523	5.1828339755423025	0.3482820372710678	0.44856925521447766	1.3056980467011883	1.7009329097540191					
+MF	0.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input_relative|p|pscore]	ky30	815.975	1001.025	2.1373873873873874	3.7701612903225805	482.975	669.0							
+MF	0.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	ky50	732.975	896.0	3.4147286821705425	inf	586.975	876.025							
+MF	0.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	ky70	502.0	724.05	inf	inf	502.0	724.05							
+MF	0.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	pooled_auprc	0.4670224103720866	0.569708304599421	2.9119013351904295	5.006986776704898	0.32423311032684415	0.4300770857562722	1.2729813185144583	1.6120546916169818					
+MF	0.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input_relative|p|pscore]	ky30	859.975	1054.0	2.252232142857143	3.970954356846473	529.0	714.05							
+MF	0.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	ky50	744.0	923.025	3.453061224489796	inf	594.975	910.05							
+MF	0.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	ky70	627.9	793.0	inf	inf	627.9	793.0							
+MF	0.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	pooled_auprc	0.4980091032988494	0.5991899084078325	3.050523859389011	5.275103714167604	0.3557418850136211	0.46078957597535813	1.3457000677440427	1.7140504430544594					
+MF	0.0	proteins	comparator[interpro2go_t0]	old[supra_input_relative|p|pscore]	ky30	278.975	415.04999999999995	0.7958115183246073	1.4641350210970465	-82.07499999999999	115.02499999999998							
+MF	0.0	proteins	comparator[interpro2go_t0]	old[supra_input|p|pscore]	ky50	0.0	0.0	0.0	1.5841584158415842	-254.025	0.0							
+MF	0.0	proteins	comparator[interpro2go_t0]	old[supra_input|p|pscore]	ky70	0.0	0.0			0.0	0.0							
+MF	0.0	proteins	comparator[interpro2go_t0]	old[supra_input|p|pscore]	pooled_auprc	0.07563731171417909	0.13751086146971198	0.5653470583176564	1.0125623864562936	-0.07075071971793208	0.0016083114719845232	0.2045123882440752	0.3995288016422973					
+MF	0.0	proteins	comparator[iea_t0]	old[supra_input_relative|p|pscore]	ky30	0.0	365.025	0.0	1.0503355704697988	-434.0	19.024999999999977							
+MF	0.0	proteins	comparator[iea_t0]	old[supra_input|p|pscore]	ky50	0.0	0.0	0.0	0.0	-255.025	0.0							
+MF	0.0	proteins	comparator[iea_t0]	old[supra_input|p|pscore]	ky70	0.0	0.0			0.0	0.0							
+MF	0.0	proteins	comparator[iea_t0]	old[supra_input|p|pscore]	pooled_auprc	0.04062666580171999	0.08246241201688276	0.30418685882736207	0.594832585101246	-0.11503540349538581	-0.044856170994809	0.10540783129095903	0.24090833085439023					
+MF	0.0	proteins	naive	old[supra_input_relative|p|pscore]	ky30	576.975	632.0	1.3504273504273505	2.625	155.975	375.025							
+MF	0.0	proteins	naive	old[supra_input|p|pscore]	ky50	565.0	621.0	2.3225806451612905	inf	334.975	621.0							
+MF	0.0	proteins	naive	old[supra_input|p|pscore]	ky70	530.0	594.025	inf	inf	530.0	594.025							
+MF	0.0	proteins	naive	old[supra_input|p|pscore]	pooled_auprc	0.3119503669404868	0.41608185582881824	1.8582243285048268	3.796317783337003	0.1518731686596053	0.2937711165009919	1.0	1.0					
+MF	0.0	proteins	old[supra_input_relative|p|pscore]	old[supra_input_relative|p|pscore]	ky30	233.975	446.0	1.0	1.0	0.0	0.0							
+MF	0.0	proteins	old[supra_input_relative|p|pscore]	old[supra_input|p|pscore]	ky50	0.0	144.0	0.0	inf	-225.0	123.02499999999998							
+MF	0.0	proteins	old[supra_input_relative|p|pscore]	old[supra_input|p|pscore]	ky70	0.0	0.0			0.0	0.0							
+MF	0.0	proteins	old[supra_input_relative|p|pscore]	old[supra_input|p|pscore]	pooled_auprc	0.09765575163236963	0.15822461906271884	0.7901169578324381	1.0557757797493263	-0.03407872484531973	0.006480172569378803	0.2576656055642057	0.46736544517380874					
+MF	0.0	proteins	old[supra_input|p|pscore]	old[supra_input_relative|p|pscore]	ky30	204.9	478.025	0.7951807228915663	1.2893617021276595	-63.0	77.02499999999998							
+MF	0.0	proteins	old[supra_input|p|pscore]	old[supra_input|p|pscore]	ky50	0.0	255.02499999999998	1.0	1.0	0.0	0.0							
+MF	0.0	proteins	old[supra_input|p|pscore]	old[supra_input|p|pscore]	ky70	0.0	0.0			0.0	0.0							
+MF	0.0	proteins	old[supra_input|p|pscore]	old[supra_input|p|pscore]	pooled_auprc	0.10030682231463219	0.18084020513507523	1.0	1.0	0.0	0.0	0.2634131432276962	0.538148158249884					
+MF	0.0	proteins	proj[ipr|s=0.5]@allsp-experimental		precision_at_frozen	0.5143978024007386	0.6257633342489294											
+MF	0.0	proteins	seq[k=25,T=0.1]@allsp-experimental		precision_at_frozen	0.47250549292283783	0.5639789693720924											
+MF	0.0	proteins	lit[k=25,T=0.1]@allsp-experimental		precision_at_frozen	0.48838809621469587	0.61050748856855											
+MF	0.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental		precision_at_frozen	0.4897384301775359	0.5873153125735272											
+MF	0.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental		precision_at_frozen	0.5012807151436293	0.5972478405456058											
+MF	0.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental		precision_at_frozen	0.4830304010486199	0.5714365791159512											
+MF	0.0	proteins	naive		precision_at_frozen	0.7181571815718157	0.8049119241192412											
+MF	2.0	proteins	proj[ipr|s=0.5]@allsp-experimental	old[supra_input|p|pscore]	ky30	235.0	442.025	1.0833333333333333	1.8641975308641976	22.0	185.02499999999998			16.0	181.07499999999993	1.0565371024734982	1.861344537815126	0.0
+MF	2.0	proteins	proj[ipr|s=0.5]@allsp-experimental	old[supra_input|p|pscore]	ky50	153.975	366.025	0.8961538461538462	1.8785714285714286	-21.025	150.04999999999995			-21.025	146.02499999999998	0.8961538461538462	1.8310810810810811	0.0
+MF	2.0	proteins	proj[ipr|s=0.5]@allsp-experimental	old[supra_input|p|pscore]	ky70	70.975	249.02499999999998	0.8361581920903954	inf	-30.025	233.04999999999995			-32.099999999999994	196.07499999999993	0.7832167832167832	inf	0.296
+MF	2.0	proteins	proj[ipr|s=0.5]@allsp-experimental	old[supra_input|p|pscore]	pooled_auprc	0.25872727464886874	0.4234979459965392	1.258701066580133	2.141181784524699	0.0638579831499635	0.19587157839304215	9.292173050369433	16.553170813679333	0.0638579831499635	0.19587157839304215	1.258701066580133	2.141181784524699	0.0
+MF	2.0	proteins	seq[k=25,T=0.1]@allsp-experimental	old[supra_input|p|pscore]	ky30	215.0	400.0999999999999	0.9458333333333333	1.7302904564315353	-13.024999999999999	148.0			-24.0	147.02499999999998	0.9209726443768997	1.7215909090909092	0.0
+MF	2.0	proteins	seq[k=25,T=0.1]@allsp-experimental	old[supra_input|p|pscore]	ky50	142.975	313.0	0.8038277511961722	1.7727272727272727	-44.05	118.02499999999998			-44.05	116.0	0.7971698113207547	1.7301587301587302	0.0
+MF	2.0	proteins	seq[k=25,T=0.1]@allsp-experimental	old[supra_input|p|pscore]	ky70	47.0	245.0	0.7785234899328859	inf	-38.0	226.02499999999998			-41.074999999999996	197.02499999999998	0.75	inf	0.289
+MF	2.0	proteins	seq[k=25,T=0.1]@allsp-experimental	old[supra_input|p|pscore]	pooled_auprc	0.2444865935287213	0.41136642247501076	1.1749611604602535	2.1080312779150168	0.04371331718778328	0.18553434976696206	8.792731438368596	15.621291663614397	0.04371331718778328	0.18553434976696206	1.1749611604602535	2.1080312779150168	0.0
+MF	2.0	proteins	lit[k=25,T=0.1]@allsp-experimental	old[supra_input|p|pscore]	ky30	93.95	256.04999999999995	0.47282608695652173	1.0211640211640212	-133.05	4.024999999999977			-139.075	2.0249999999999773	0.47058823529411764	1.009049773755656	0.0
+MF	2.0	proteins	lit[k=25,T=0.1]@allsp-experimental	old[supra_input|p|pscore]	ky50	58.975	211.02499999999998	0.3087557603686636	1.0	-158.0	0.024999999999977263			-159.025	-4.0	0.3065326633165829	0.9803921568627451	0.0
+MF	2.0	proteins	lit[k=25,T=0.1]@allsp-experimental	old[supra_input|p|pscore]	ky70	28.0	138.0	0.3605769230769231	inf	-115.0	132.0			-116.025	115.0	0.34024896265560167	inf	0.276
+MF	2.0	proteins	lit[k=25,T=0.1]@allsp-experimental	old[supra_input|p|pscore]	pooled_auprc	0.12266054049941535	0.26717747425395943	0.6273961290853558	1.2754802536671483	-0.09138339123336085	0.05045225145264694	4.473197616422971	10.160746322868851	-0.09138339123336085	0.050312395753633325	0.6273961290853558	1.2754802536671483	0.0
+MF	2.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	ky30	283.975	485.0	1.2523076923076923	2.118556701030928	70.975	229.02499999999998			64.0	228.0	1.229607250755287	2.118556701030928	0.0
+MF	2.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	ky50	182.95	389.0	0.9650655021834061	1.9880239520958083	-8.024999999999999	160.0			-9.049999999999997	156.02499999999998	0.9547325102880658	1.9408284023668638	0.0
+MF	2.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	ky70	55.975	262.025	0.8877005347593583	inf	-22.0	240.0			-23.025	211.0	0.8715596330275229	inf	0.298
+MF	2.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	pooled_auprc	0.3015812435162162	0.47389342902027504	1.45589245708128	2.4746768255241767	0.11245692408483458	0.24548844116163437	10.794387326077816	18.14877206486254	0.11127167570474628	0.24548844116163437	1.45589245708128	2.4746768255241767	0.0
+MF	2.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	ky30	232.0	420.0	1.0663716814159292	1.7723214285714286	18.975	162.04999999999995			8.0	161.02499999999998	1.0344827586206897	1.7723214285714286	0.0
+MF	2.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	ky50	163.975	325.0	0.916030534351145	1.7131147540983607	-18.0	108.02499999999998			-18.074999999999996	102.0	0.916030534351145	1.6788321167883211	0.0
+MF	2.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	ky70	117.95	266.0	0.9664804469273743	inf	-6.0	247.0			-7.024999999999999	215.02499999999998	0.9583333333333334	inf	0.302
+MF	2.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	pooled_auprc	0.27640213829644456	0.4392497233754214	1.3215302862461247	2.2620180610723666	0.07835685129847952	0.2143723915372227	10.04380540961523	17.236508256459476	0.07835685129847952	0.21387951424510843	1.3215302862461247	2.2620180610723666	0.0
+MF	2.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	ky30	277.0	469.025	1.2058823529411764	2.0187793427230045	56.975	208.0			49.0	206.0	1.173758865248227	2.0170454545454546	0.0
+MF	2.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	ky50	169.95	360.0	0.9156626506024096	1.9281045751633987	-18.025	143.0999999999999			-19.025	138.02499999999998	0.9102564102564102	1.8698224852071006	0.0
+MF	2.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	ky70	123.0	259.0	1.0091743119266054	inf	1.9750000000000014	240.02499999999998			1.9750000000000014	218.0	1.0091743119266054	inf	0.308
+MF	2.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	pooled_auprc	0.3100424547212974	0.4785659097241314	1.4680197690016643	2.506079081416189	0.11768550381764845	0.2486909093256707	11.410007640561298	18.347530150413036	0.11768550381764845	0.2486909093256707	1.4680197690016643	2.506079081416189	0.0
+MF	2.0	proteins	comparator[interpro2go_t0]	old[supra_input|p|pscore]	ky30	116.0	228.04999999999995	0.5181818181818182	0.9491525423728814	-139.025	-9.975000000000023			-144.025	-10.975000000000023	0.5053763440860215	0.9411764705882353	0.0
+MF	2.0	proteins	comparator[interpro2go_t0]	old[supra_input|p|pscore]	ky50	0.0	224.02499999999998	0.0	1.1104651162790697	-256.025	19.074999999999932			-258.0	19.0	0.0	1.0952380952380953	0.0
+MF	2.0	proteins	comparator[interpro2go_t0]	old[supra_input|p|pscore]	ky70	0.0	0.0	0.0	0.0	-208.025	0.0			-208.025	0.0	0.0	0.0	0.0
+MF	2.0	proteins	comparator[interpro2go_t0]	old[supra_input|p|pscore]	pooled_auprc	0.06870710063293012	0.16907642557919572	0.33307749522277297	0.7970778296772043	-0.1650378934911216	-0.035431897119992666	2.4748897132864895	6.413690366245681	-0.1650378934911216	-0.035431897119992666	0.33307749522277297	0.7970778296772043	0.0
+MF	2.0	proteins	comparator[iea_t0]	old[supra_input|p|pscore]	ky30	119.775	252.0	0.5081967213114754	1.0941176470588236	-150.14999999999998	19.0			-152.17499999999998	18.0	0.504885993485342	1.0922330097087378	0.0
+MF	2.0	proteins	comparator[iea_t0]	old[supra_input|p|pscore]	ky50	0.0	0.0	0.0	0.0	-273.025	-99.90000000000009			-274.1	-103.95000000000005	0.0	0.0	0.0
+MF	2.0	proteins	comparator[iea_t0]	old[supra_input|p|pscore]	ky70	0.0	0.0	0.0	0.0	-208.025	0.0			-208.025	0.0	0.0	0.0	0.0
+MF	2.0	proteins	comparator[iea_t0]	old[supra_input|p|pscore]	pooled_auprc	0.06188502004240902	0.1487152162999303	0.30413118791657345	0.732626161614835	-0.17978020579467321	-0.043357752253980565	2.238692260689756	5.474485873487501	-0.17978020579467321	-0.043357752253980565	0.30413118791657345	0.732626161614835	0.0
+MF	2.0	proteins	naive	old[supra_input|p|pscore]	ky30	0.0	0.0	0.0	0.0	-323.025	-168.97500000000002			-327.05	-169.97500000000002	0.0	0.0	0.0
+MF	2.0	proteins	naive	old[supra_input|p|pscore]	ky50	0.0	0.0	0.0	0.0	-275.0	-118.97500000000002			-278.0	-126.0	0.0	0.0	0.0
+MF	2.0	proteins	naive	old[supra_input|p|pscore]	ky70	0.0	0.0	0.0	0.0	-208.025	0.0			-208.025	0.0	0.0	0.0	0.0
+MF	2.0	proteins	naive	old[supra_input|p|pscore]	pooled_auprc	0.0215925326722191	0.03414615232885749	0.09379593834432698	0.18667144081337841	-0.2521552538268712	-0.11827177669367708	1.0	1.0	-0.2521552538268712	-0.11827177669367708	0.09379593834432698	0.18667144081337841	0.0
+MF	2.0	proteins	old[supra_input|p|pscore]	old[supra_input|p|pscore]	ky30	168.975	323.025	1.0	1.0	0.0	0.0			-34.0	0.0	0.875	1.0	0.0
+MF	2.0	proteins	old[supra_input|p|pscore]	old[supra_input|p|pscore]	ky50	118.975	275.0	1.0	1.0	0.0	0.0			-17.025	0.0	0.9034090909090909	1.0	0.0
+MF	2.0	proteins	old[supra_input|p|pscore]	old[supra_input|p|pscore]	ky70	0.0	208.02499999999998	1.0	1.0	0.0	0.0			-105.0	0.0	0.0	1.0	0.0
+MF	2.0	proteins	old[supra_input|p|pscore]	old[supra_input|p|pscore]	pooled_auprc	0.14292545686245628	0.28052828695445436	1.0	1.0	0.0	0.0	5.357005847507938	10.661442463840787	-0.000837651499647457	0.0	0.9958750642100588	1.0	0.0
+MF	2.0	proteins	proj[ipr|s=0.5]@allsp-experimental		precision_at_frozen	0.43485609151850774	0.6417170425482446											
+MF	2.0	proteins	seq[k=25,T=0.1]@allsp-experimental		precision_at_frozen	0.3645310730585773	0.5685807023078603											
+MF	2.0	proteins	lit[k=25,T=0.1]@allsp-experimental		precision_at_frozen	0.540185676392573	0.9375473484848484											
+MF	2.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental		precision_at_frozen	0.44824278041566123	0.6355893565376234											
+MF	2.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental		precision_at_frozen	0.44299875410354783	0.6600532414657062											
+MF	2.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental		precision_at_frozen	0.4262670738984849	0.600940262003233											
+MF	2.0	proteins	old[single|q|max]		precision_at_frozen	0.32797757009345796	0.7721662830840046											
+MF	2.0	proteins	old[single|p|max]		precision_at_frozen	0.32797757009345796	0.7721662830840046											
+MF	2.0	proteins	old[supra|q|max]		precision_at_frozen	0.32797757009345796	0.7721662830840046											
+MF	2.0	proteins	old[supra|p|max]		precision_at_frozen	0.32797757009345796	0.7721662830840046											
+MF	2.0	proteins	old[supra_input|q|max]		precision_at_frozen	0.37725288651084204	0.7310924369747899											
+MF	2.0	proteins	old[supra_input|p|max]		precision_at_frozen	0.37725288651084204	0.7310924369747899											
+MF	2.0	proteins	old[supra_output|q|max]		precision_at_frozen	0.32797757009345796	0.7721662830840046											
+MF	2.0	proteins	old[supra_input_relative|q|max]		precision_at_frozen	0.35185185185185186	0.707876872659176											
+MF	2.0	proteins	old[supra_input_relative|p|pscore]		precision_at_frozen	0.3978464076246334	0.6901745579862151											
+MF	2.0	proteins	old[supra_input_relative|p|max]		precision_at_frozen	0.35185185185185186	0.707876872659176											
+MF	2.0	proteins	old[supra_input_output|q|max]		precision_at_frozen	0.37725288651084204	0.7310924369747899											
+MF	2.0	proteins	old[full|q|max]		precision_at_frozen	0.35185185185185186	0.707876872659176											
+CC	0.0	proteins	proj[ipr|s=0.5]@allsp-experimental	old[supra_input_relative|q|pscore]	ky30	2406.95	2875.0	1.9568234387047032	2.5361904761904763	1234.95	1653.0							
+CC	0.0	proteins	proj[ipr|s=0.5]@allsp-experimental	old[supra_relative|p|max]	ky50	1938.0	2343.025	3.1057827926657264	4.9440389294403895	1364.975	1779.125							
+CC	0.0	proteins	proj[ipr|s=0.5]@allsp-experimental	old[supra_relative|p|pscore]	ky70	1360.975	1700.025	3.0508849557522124	inf	960.975	1560.025							
+CC	0.0	proteins	proj[ipr|s=0.5]@allsp-experimental	old[supra_input_relative|p|max]	pooled_auprc	0.3899100374434832	0.4588184354022585	2.717516114092547	3.6650350547939285	0.2586609757347083	0.3226446110280843	0.7224125309101975	0.8440422811787324					
+CC	0.0	proteins	seq[k=25,T=0.1]@allsp-experimental	old[supra_input_relative|q|pscore]	ky30	3544.975	3977.1499999999996	2.7626373626373626	3.6535819430814525	2329.0	2796.075							
+CC	0.0	proteins	seq[k=25,T=0.1]@allsp-experimental	old[supra_relative|p|max]	ky50	2919.95	3393.0	4.535465924895688	7.338129496402877	2334.95	2838.0							
+CC	0.0	proteins	seq[k=25,T=0.1]@allsp-experimental	old[supra_relative|p|pscore]	ky70	2101.975	2586.0	4.623762376237623	inf	1707.925	2380.025							
+CC	0.0	proteins	seq[k=25,T=0.1]@allsp-experimental	old[supra_input_relative|p|max]	pooled_auprc	0.5842326423527986	0.6380448696477141	3.8254176981879313	5.374906031083529	0.44714005014379465	0.5050145428266557	1.08628324860151	1.1737960095944244					
+CC	0.0	proteins	lit[k=25,T=0.1]@allsp-experimental	old[supra_input_relative|q|pscore]	ky30	3253.9	3703.1	2.557719054242003	3.3611383709519136	2054.925	2510.0							
+CC	0.0	proteins	lit[k=25,T=0.1]@allsp-experimental	old[supra_relative|p|max]	ky50	2533.0	2944.05	3.9534555712270802	6.297592997811816	1954.0	2394.025							
+CC	0.0	proteins	lit[k=25,T=0.1]@allsp-experimental	old[supra_relative|p|pscore]	ky70	1435.0	2064.125	3.332007952286282	inf	1047.0	1749.05							
+CC	0.0	proteins	lit[k=25,T=0.1]@allsp-experimental	old[supra_input_relative|p|max]	pooled_auprc	0.4983272738264157	0.5552522343993245	3.3254907381974887	4.605182461621828	0.3631667991524747	0.41947647366714635	0.9255048444900239	1.0196981534590877					
+CC	0.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental	old[supra_input_relative|q|pscore]	ky30	3533.0	3997.0	2.76946800308404	3.656472986748216	2325.0	2810.025							
+CC	0.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental	old[supra_relative|p|max]	ky50	2773.875	3274.0	4.338323353293413	6.988558352402746	2196.0	2721.025							
+CC	0.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental	old[supra_relative|p|pscore]	ky70	1538.975	2248.1499999999996	3.5106837606837606	inf	1141.975	1896.225							
+CC	0.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental	old[supra_input_relative|p|max]	pooled_auprc	0.559060167251839	0.6133445331709315	3.6941165575783073	5.109083410892061	0.42559668706223835	0.47863016180014767	1.0397388871362288	1.1303107363370357					
+CC	0.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input_relative|q|pscore]	ky30	3393.0	3857.075	2.6596066565809378	3.5273972602739727	2190.925	2650.2							
+CC	0.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_relative|p|max]	ky50	2607.875	3072.125	4.113782051282051	6.5265486725663715	2039.975	2520.025							
+CC	0.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_relative|p|pscore]	ky70	1512.0	2034.025	3.388235294117647	inf	1124.925	1717.0749999999998							
+CC	0.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input_relative|p|max]	pooled_auprc	0.530707135241269	0.5841862480582839	3.5243691446584267	4.831423292513151	0.39841170637908274	0.4462759037573314	0.9842441168620463	1.0725700559078					
+CC	0.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input_relative|q|pscore]	ky30	3657.95	4100.05	2.8364591147786946	3.780318091451292	2440.75	2914.0							
+CC	0.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_relative|p|max]	ky50	2918.975	3371.025	4.517647058823529	7.255656108597285	2346.9	2816.075							
+CC	0.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_relative|p|pscore]	ky70	2090.9	2507.05	4.539714867617108	inf	1686.925	2280.3999999999996							
+CC	0.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input_relative|p|max]	pooled_auprc	0.5889633920237037	0.6392116055772539	3.876277294794133	5.367797824414723	0.4555105732802816	0.5046982055584834	1.0935734973625915	1.1764635312807579					
+CC	0.0	proteins	comparator[interpro2go_t0]	old[supra_input_relative|q|pscore]	ky30	63.0	184.02499999999998	0.05412371134020619	0.15452151009657594	-1244.025	-913.9250000000001							
+CC	0.0	proteins	comparator[interpro2go_t0]	old[supra_relative|p|max]	ky50	62.0	184.02499999999998	0.11	0.3541147132169576	-583.025	-297.95000000000005							
+CC	0.0	proteins	comparator[interpro2go_t0]	old[supra_relative|p|pscore]	ky70	0.0	179.04999999999995	0.0	inf	-480.025	120.14999999999986							
+CC	0.0	proteins	comparator[interpro2go_t0]	old[supra_input_relative|p|max]	pooled_auprc	0.007851071702071093	0.028766217932484454	0.05835499204329598	0.21576494061827997	-0.1437230595407313	-0.09362769088822775	0.014564141816083662	0.05311797364646903					
+CC	0.0	proteins	comparator[iea_t0]	old[supra_input_relative|q|pscore]	ky30	1280.975	1627.025	1.0355699272433307	1.4119373776908024	44.0	449.0							
+CC	0.0	proteins	comparator[iea_t0]	old[supra_relative|p|max]	ky50	1280.975	1627.025	2.0647249190938513	3.365800865800866	683.925	1079.025							
+CC	0.0	proteins	comparator[iea_t0]	old[supra_relative|p|pscore]	ky70	0.0	1627.025	0.0	inf	-449.1	1428.025							
+CC	0.0	proteins	comparator[iea_t0]	old[supra_input_relative|p|max]	pooled_auprc	0.19138092674771037	0.255308871786988	1.3478879494647658	1.9756968315906513	0.051387282784014346	0.11773013044974008	0.35191047604988707	0.46463772939308656					
+CC	0.0	proteins	naive	old[supra_input_relative|q|pscore]	ky30	3266.875	3670.0	2.5165609584214237	3.341511285574092	2021.0	2472.05							
+CC	0.0	proteins	naive	old[supra_relative|p|max]	ky50	2347.975	2825.025	3.590015128593041	5.995	1736.9	2302.075							
+CC	0.0	proteins	naive	old[supra_relative|p|pscore]	ky70	1631.0	2269.0	3.661596958174905	inf	1217.925	1964.0749999999998							
+CC	0.0	proteins	naive	old[supra_input_relative|p|max]	pooled_auprc	0.5198024182447407	0.5621276000110323	3.387825604918803	4.785674311714085	0.3787200422270319	0.43482576824771624	1.0	1.0					
+CC	0.0	proteins	old[supra_input_relative|p|max]	old[supra_input_relative|q|pscore]	ky30	894.9	1334.0	0.830948121645796	1.015693112467306	-194.025	19.049999999999955							
+CC	0.0	proteins	old[supra_input_relative|p|max]	old[supra_relative|p|max]	ky50	358.9	761.0749999999999	0.7738095238095238	1.1842105263157894	-104.125	103.02499999999998							
+CC	0.0	proteins	old[supra_input_relative|p|max]	old[supra_relative|p|pscore]	ky70	24.0	343.025	0.062370062370062374	inf	-433.025	47.02499999999998							
+CC	0.0	proteins	old[supra_input_relative|p|max]	old[supra_input_relative|p|max]	pooled_auprc	0.11189193422784288	0.16169630322728112	1.0	1.0	0.0	0.0	0.2089569692513885	0.2951745799866718					
+CC	0.0	proteins	old[supra_input_relative|q|pscore]	old[supra_input_relative|q|pscore]	ky30	1021.975	1372.025	1.0	1.0	0.0	0.0							
+CC	0.0	proteins	old[supra_input_relative|q|pscore]	old[supra_relative|p|max]	ky50	220.0	708.025	0.39173553719008264	1.1533646322378717	-373.05	87.02499999999998							
+CC	0.0	proteins	old[supra_input_relative|q|pscore]	old[supra_relative|p|pscore]	ky70	0.0	264.0	0.0	0.6021052631578947	-499.0	0.0							
+CC	0.0	proteins	old[supra_input_relative|q|pscore]	old[supra_input_relative|p|max]	pooled_auprc	0.10429015279046526	0.15132883205932585	0.8422400326383614	1.0450196168677548	-0.0240357756482573	0.006070343656606087	0.19316947307163396	0.2775325302574909					
+CC	0.0	proteins	old[supra_relative|p|max]	old[supra_input_relative|q|pscore]	ky30	784.95	1137.0	0.7131979695431472	0.8844404003639672	-339.025	-135.95000000000005							
+CC	0.0	proteins	old[supra_relative|p|max]	old[supra_relative|p|max]	ky50	427.0	691.025	1.0	1.0	0.0	0.0							
+CC	0.0	proteins	old[supra_relative|p|max]	old[supra_relative|p|pscore]	ky70	160.0	350.0	0.4378238341968912	inf	-236.075	246.02499999999998							
+CC	0.0	proteins	old[supra_relative|p|max]	old[supra_input_relative|p|max]	pooled_auprc	0.10316212916064836	0.14922330725391314	0.8641576280042417	0.9869752745741394	-0.01921571196034221	-0.0016611605326316697	0.19212643712938005	0.27415218102922345					
+CC	0.0	proteins	old[supra_relative|p|pscore]	old[supra_input_relative|q|pscore]	ky30	789.0	1125.025	0.7095435684647303	0.8793375394321766	-351.025	-142.0							
+CC	0.0	proteins	old[supra_relative|p|pscore]	old[supra_relative|p|max]	ky50	378.0	770.025	0.7291981845688351	1.267379679144385	-161.075	152.02499999999998							
+CC	0.0	proteins	old[supra_relative|p|pscore]	old[supra_relative|p|pscore]	ky70	0.0	503.04999999999995	1.0	1.0	0.0	0.0							
+CC	0.0	proteins	old[supra_relative|p|pscore]	old[supra_input_relative|p|max]	pooled_auprc	0.10239755070933877	0.14796315096279952	0.8246801232876674	1.0123988047826573	-0.02473601060486035	0.0016208456548463216	0.18984013301504088	0.27324469368181464					
+CC	0.0	proteins	proj[ipr|s=0.5]@allsp-experimental		precision_at_frozen	0.4530664940129938	0.5115092841083179											
+CC	0.0	proteins	seq[k=25,T=0.1]@allsp-experimental		precision_at_frozen	0.4560288528812413	0.5082019042191595											
+CC	0.0	proteins	lit[k=25,T=0.1]@allsp-experimental		precision_at_frozen	0.4657846306648164	0.518729180567528											
+CC	0.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental		precision_at_frozen	0.4619160203929551	0.5134922806410467											
+CC	0.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental		precision_at_frozen	0.47087011365567943	0.5194932598103896											
+CC	0.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental		precision_at_frozen	0.464445523221815	0.5117083192293084											
+CC	0.0	proteins	comparator[interpro2go_t0]		precision_at_frozen	0.5441949220633135	0.8273500404974033											
+CC	0.0	proteins	comparator[iea_t0]		precision_at_frozen	0.6752534575707395	0.7743464146337056											
+CC	0.0	proteins	naive		precision_at_frozen	0.4746090875643856	0.5196881898454746											
+CC	0.0	proteins	old[supra_input_relative|p|max]		precision_at_frozen	0.3849130036630037	0.5600625											
+CC	0.0	proteins	old[supra_input_relative|q|pscore]		precision_at_frozen	0.4532209188660802	0.5970218703437129											
+CC	0.0	proteins	old[supra_relative|p|max]		precision_at_frozen	0.7984066845522129	0.9535096102792822											
+CC	0.0	proteins	old[supra_relative|p|pscore]		precision_at_frozen	0.42880680571895746	0.5606628315215093											
+CC	2.0	proteins	proj[ipr|s=0.5]@allsp-experimental	old[supra_input|p|pscore]	ky30	64.0	403.025	0.7127659574468085	inf	-26.0	313.07499999999993			-32.0	300.07499999999993	0.6612903225806451	8.193548387096774	0.011
+CC	2.0	proteins	proj[ipr|s=0.5]@allsp-experimental	old[supra|p|pscore]	ky50	2.0	131.04999999999995	0.18	inf	-59.025	120.0			-67.0	112.04999999999995	0.12781954887218044	inf	0.3042168674698795
+CC	2.0	proteins	proj[ipr|s=0.5]@allsp-experimental	old[supra|p|pscore]	ky70	0.0	44.0	0.28205128205128205	inf	-43.025	43.02499999999998			-44.025	43.0	0.17647058823529413	inf	0.9039735099337748
+CC	2.0	proteins	proj[ipr|s=0.5]@allsp-experimental	old[supra|p|pscore]	pooled_auprc	0.08579051193062702	0.1455653870027741	1.7537291004919289	5.783987951616081	0.04520411454867877	0.1082470255963562	0.792084933445453	1.418779686691878	0.04510052319612485	0.10663074860389402	1.7368182755289532	5.385714336561023	0.0
+CC	2.0	proteins	seq[k=25,T=0.1]@allsp-experimental	old[supra_input|p|pscore]	ky30	490.825	773.0999999999999	4.405405405405405	inf	407.0	701.05			397.975	684.025	3.6121495327102804	21.06451612903226	0.262
+CC	2.0	proteins	seq[k=25,T=0.1]@allsp-experimental	old[supra|p|pscore]	ky50	82.875	434.025	1.6071428571428572	inf	41.0	411.0			35.975	399.14999999999986	1.4941176470588236	inf	0.329
+CC	2.0	proteins	seq[k=25,T=0.1]@allsp-experimental	old[supra|p|pscore]	ky70	10.0	144.0	1.0941176470588236	inf	3.0	144.0			-7.049999999999997	143.0	0.8395061728395061	inf	0.915
+CC	2.0	proteins	seq[k=25,T=0.1]@allsp-experimental	old[supra|p|pscore]	pooled_auprc	0.19711617358109423	0.27649496803857665	3.6579365566027033	12.062092213665712	0.16058408534620575	0.23359894560919137	1.8306542466348212	2.72680947569766	0.15976512572391088	0.2324795677120304	3.6293738512582783	11.092077368788338	0.058
+CC	2.0	proteins	lit[k=25,T=0.1]@allsp-experimental	old[supra_input|p|pscore]	ky30	131.0	373.04999999999995	1.371900826446281	inf	44.0	309.0			24.975	294.0	1.1952662721893492	8.555555555555555	0.014
+CC	2.0	proteins	lit[k=25,T=0.1]@allsp-experimental	old[supra|p|pscore]	ky50	0.0	179.04999999999995	0.0	inf	-67.0	167.07499999999993			-73.025	152.02499999999998	0.0	inf	0.27586206896551724
+CC	2.0	proteins	lit[k=25,T=0.1]@allsp-experimental	old[supra|p|pscore]	ky70	0.0	24.0	0.0	inf	-61.0	24.0			-62.0	23.024999999999977	0.0	inf	0.7952941176470588
+CC	2.0	proteins	lit[k=25,T=0.1]@allsp-experimental	old[supra|p|pscore]	pooled_auprc	0.10437161201371178	0.16816342186459204	2.0275622682003513	7.126387368321378	0.06189400168500415	0.13106046861306	0.9813587302991148	1.6393860375363272	0.06008438902257654	0.12958548880376086	2.0075159755010175	6.7152418673366	0.0
+CC	2.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	ky30	381.925	783.05	3.8852459016393444	inf	309.925	696.025			301.0	686.025	3.380281690140845	18.846153846153847	0.219
+CC	2.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental	old[supra|p|pscore]	ky50	27.975	327.04999999999995	0.64	inf	-22.0	291.025			-29.0	277.07499999999993	0.6	inf	0.312
+CC	2.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental	old[supra|p|pscore]	ky70	3.0	91.02499999999998	0.5342465753424658	inf	-30.025	90.02499999999998			-32.05	89.0	0.42105263157894735	inf	0.9128256513026052
+CC	2.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental	old[supra|p|pscore]	pooled_auprc	0.18037870701007955	0.25811090674865433	3.392153126283865	11.02073465418419	0.14249714659968457	0.21934152303699142	1.636901456936796	2.543306064471487	0.14220539944658075	0.218296345366633	3.3334698354547507	10.175957042253112	0.031
+CC	2.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	ky30	296.95	548.0	2.8115942028985508	inf	213.95	472.0			195.95	454.0	2.31875	13.833333333333334	0.097
+CC	2.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental	old[supra|p|pscore]	ky50	11.975000000000001	178.1249999999999	0.26	inf	-47.0	153.04999999999995			-52.025	149.07499999999993	0.25	inf	0.308
+CC	2.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental	old[supra|p|pscore]	ky70	0.0	66.0	0.359375	inf	-39.05	66.0			-41.025	66.0	0.29896907216494845	inf	0.9109518935516888
+CC	2.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental	old[supra|p|pscore]	pooled_auprc	0.14084142362475865	0.21366722354625187	2.7348395829435947	8.819412645986827	0.10393504643927506	0.17559392007675165	1.3115061064050106	2.0757273398691707	0.10217030622430497	0.17465452304458565	2.6953789247406132	8.37870133387637	0.005
+CC	2.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental	old[supra_input|p|pscore]	ky30	466.975	796.025	4.384615384615385	inf	392.9	697.1249999999999			386.0	685.025	3.5675675675675675	20.857142857142858	0.253
+CC	2.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental	old[supra|p|pscore]	ky50	24.0	331.025	1.25	inf	6.900000000000006	320.0			-6.074999999999996	309.0	0.7631578947368421	inf	0.333
+CC	2.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental	old[supra|p|pscore]	ky70	5.0	143.0	0.4519230769230769	inf	-38.05	143.0			-40.05	143.0	0.35294117647058826	inf	0.913
+CC	2.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental	old[supra|p|pscore]	pooled_auprc	0.2035526542454757	0.28636700037940077	3.818786040519081	12.297990018269873	0.16485269227391322	0.2437084405520725	1.8766714116615513	2.795238625635574	0.1639757638528822	0.243355947508199	3.7231062958078134	11.477171026561527	0.072
+CC	2.0	proteins	comparator[interpro2go_t0]	old[supra_input|p|pscore]	ky30	0.0	40.0	0.0	inf	-133.0	23.0			-164.05	-6.0	0.0	0.8148148148148148	0.0
+CC	2.0	proteins	comparator[interpro2go_t0]	old[supra|p|pscore]	ky50	0.0	39.0	0.0	inf	-82.0	34.0			-90.05	32.02499999999998	0.0	inf	0.07456724367509987
+CC	2.0	proteins	comparator[interpro2go_t0]	old[supra|p|pscore]	ky70	0.0	0.0	0.0	inf	-63.0	0.0			-63.025	0.0	0.0	inf	0.09375
+CC	2.0	proteins	comparator[interpro2go_t0]	old[supra|p|pscore]	pooled_auprc	0.0003265722105263262	0.014062986709699408	0.00916543449323578	0.43173593483606604	-0.05960018763776465	-0.013347418390827655	0.0030014979652728253	0.1319427976930911	-0.06121063501454912	-0.014574191916037265	0.008861520043244236	0.4185596580094239	0.0
+CC	2.0	proteins	comparator[iea_t0]	old[supra_input|p|pscore]	ky30	193.0	340.0	1.7107438016528926	inf	91.975	285.0			69.0	267.04999999999995	1.4345238095238095	9.4	0.02
+CC	2.0	proteins	comparator[iea_t0]	old[supra|p|pscore]	ky50	0.0	340.0	0.0	inf	-55.0	323.025			-57.0	312.04999999999995	0.0	inf	0.3126967471143757
+CC	2.0	proteins	comparator[iea_t0]	old[supra|p|pscore]	ky70	0.0	0.0	0.0	inf	-63.0	0.0			-63.025	0.0	0.0	0.0	0.02247191011235955
+CC	2.0	proteins	comparator[iea_t0]	old[supra|p|pscore]	pooled_auprc	0.057108162009418574	0.12581505432644519	1.2474104820613965	4.755899136496589	0.014093604767454703	0.08870090836738226	0.541689328918571	1.2358148708083148	0.011895594773537254	0.08814194753424442	1.2346519917784855	4.498916931605479	0.0
+CC	2.0	proteins	naive	old[supra_input|p|pscore]	ky30	0.0	0.0	0.0	0.0	-146.0	0.0			-179.025	-27.0	0.0	0.0	0.0
+CC	2.0	proteins	naive	old[supra|p|pscore]	ky50	0.0	0.0	0.0	0.0	-85.0	0.0			-94.025	0.0	0.0	0.0	0.0
+CC	2.0	proteins	naive	old[supra|p|pscore]	ky70	0.0	0.0	0.0	0.0	-63.0	0.0			-63.025	0.0	0.0	0.0	0.0
+CC	2.0	proteins	naive	old[supra|p|pscore]	pooled_auprc	0.09328724730253649	0.11786130584080368	1.6373953193144088	5.699924867395215	0.03909388440715655	0.09166460001445047	1.0	1.0	0.03759878659672196	0.08918072277136826	1.598723950380549	5.32416871297077	0.0
+CC	2.0	proteins	old[supra_input|p|pscore]	old[supra_input|p|pscore]	ky30	0.0	146.0	1.0	1.0	0.0	0.0			-51.025	0.0	0.0	1.0	0.0
+CC	2.0	proteins	old[supra_input|p|pscore]	old[supra|p|pscore]	ky50	0.0	69.0	0.0	inf	-73.0	33.0			-74.0	0.0	0.0	1.0	0.0
+CC	2.0	proteins	old[supra_input|p|pscore]	old[supra|p|pscore]	ky70	0.0	26.024999999999977	0.0	inf	-58.0	20.0			-59.0	0.0	0.0	1.0	0.0
+CC	2.0	proteins	old[supra_input|p|pscore]	old[supra|p|pscore]	pooled_auprc	0.018701555524698973	0.0608574119254235	0.7627210945826458	1.215395484529232	-0.011650188934122136	0.006502492238155258	0.17467762261661846	0.5938012888443661	-0.011847359103771875	0.0	0.7534456773879159	1.0	0.0
+CC	2.0	proteins	old[supra|p|pscore]	old[supra_input|p|pscore]	ky30	0.0	152.0	0.0	inf	-61.05	37.02499999999998			-67.025	0.0	0.0	1.0	0.0
+CC	2.0	proteins	old[supra|p|pscore]	old[supra|p|pscore]	ky50	0.0	85.0	1.0	1.0	0.0	0.0			-53.025	0.0	0.0	1.0	0.0
+CC	2.0	proteins	old[supra|p|pscore]	old[supra|p|pscore]	ky70	0.0	63.0	1.0	1.0	0.0	0.0			-22.049999999999997	0.0	0.0	1.0	0.0
+CC	2.0	proteins	old[supra|p|pscore]	old[supra|p|pscore]	pooled_auprc	0.018233962747105294	0.06291534009625015	1.0	1.0	0.0	0.0	0.17544090900569814	0.6107260648691168	-0.006603691264963559	0.0	0.8172897218126306	1.0	0.0
+CC	2.0	proteins	proj[ipr|s=0.5]@allsp-experimental		precision_at_frozen	0.2993858614031324	0.5621323529411765											
+CC	2.0	proteins	seq[k=25,T=0.1]@allsp-experimental		precision_at_frozen	0.40233116851993866	0.6255334274478169											
+CC	2.0	proteins	lit[k=25,T=0.1]@allsp-experimental		precision_at_frozen	0.3044396794150731	0.5261068256194483											
+CC	2.0	proteins	mix(proj=1,seq=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]]@allsp-experimental		precision_at_frozen	0.34308047228749927	0.5381548716663384											
+CC	2.0	proteins	mix(proj=1,lit=1)[proj[ipr|s=0.5]+lit[k=25,T=0.1]]@allsp-experimental		precision_at_frozen	0.32053265033111483	0.4860977297895902											
+CC	2.0	proteins	mix(proj=1,seq=1,lit=1)[proj[ipr|s=0.5]+seq[k=25,T=0.1]+lit[k=25,T=0.1]]@allsp-experimental		precision_at_frozen	0.4048713235294118	0.5793263928894742											
+CC	2.0	proteins	comparator[interpro2go_t0]		precision_at_frozen	0.12487500000000001	0.6456465959630516											
