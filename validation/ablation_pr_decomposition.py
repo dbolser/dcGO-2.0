@@ -79,12 +79,15 @@ def f_max_index(panel, min_tau: float = MIN_TAU) -> int | None:
     """Index of the F_max cutoff among the thresholds ``>= min_tau``.
 
     The same rule ``resampling.panel_metrics`` applies; ``None`` when no cutoff
-    is reachable.
+    is reachable or every reachable cutoff has F = 0 (``panel_metrics`` then
+    reports no F_max cutoff either, so there is no operating point to read).
     """
     reachable = np.nonzero(panel.thresholds >= min_tau)[0]
     if not len(reachable):
         return None
-    return int(reachable[np.argmax(rs.panel_curve(panel).f[reachable])])
+    f = rs.panel_curve(panel).f
+    best = int(reachable[np.argmax(f[reachable])])
+    return best if f[best] > 0 else None
 
 
 def pr_at_fmax(panel, min_tau: float = MIN_TAU) -> dict[str, float]:

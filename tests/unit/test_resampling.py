@@ -178,6 +178,14 @@ class TestCoverage:
         got = rs.panel_metrics(_panel(PRED_A))
         assert got["coverage_at_fmax"] <= got["coverage_any"] + 1e-12
 
+    def test_no_fmax_cutoff_reports_no_coverage(self):
+        # Every prediction is wrong: F is 0 at every cutoff, so there is no F_max
+        # operating point and its coverage must not come from an arbitrary one.
+        got = rs.panel_metrics(_panel({"P1": {"GO:z": 0.4}, "P2": {"GO:z": 0.9}}))
+        assert got["f_max"] == 0.0 and got["f_max_tau"] == 0.0
+        assert got["coverage_any"] > 0
+        assert got["coverage_at_fmax"] == 0.0
+
 
 # --------------------------------------------------------------------------- #
 # Bootstrap                                                                    #

@@ -304,7 +304,9 @@ def panel_metrics(
         "s_min": float(curve.s[s_best]),
         "s_min_tau": float(panel.thresholds[s_best]),
         "auprc": _auprc_from_curve(curve.precision[in_area], curve.recall[in_area]),
-        "coverage_at_fmax": float(curve.coverage[best]) if best is not None else 0.0,
+        # No F_max cutoff (F 0 everywhere) means no operating point: report no
+        # coverage, to agree with f_max_tau = 0.
+        "coverage_at_fmax": float(curve.coverage[best]) if f_max > 0 else 0.0,
         "coverage_any": curve.coverage_any,
     }
 
