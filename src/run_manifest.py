@@ -25,7 +25,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, Sequence
 
 MANIFEST_SCHEMA_VERSION = "1.0"
 DEFAULT_LOCK_FILE = "uv.lock"
@@ -78,6 +78,39 @@ def parameter_mismatches(manifest_path: Path, expected: Mapping[str, Any]) -> li
         for key, want in expected.items()
         if params.get(key) is not None and params[key] != want
     ]
+
+
+def same_command(
+    manifest_path: Path,
+    command: Sequence[str],
+    ignore_flags: Iterable[str] = ("--num-cores",),
+) -> bool:
+    """Whether a run's recorded command is ``command``.
+
+    For resumable drivers deciding whether a finished run can be reused: the
+    interpreter (``[0]``) is not compared, nor the value of any
+    ``ignore_flags`` option (settings that cannot change the output). A
+    manifest without a recorded command never matches.
+    """
+    data = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+    recorded = data.get("command")
+    if not recorded:
+        return False
+    ignore = set(ignore_flags)
+
+    def significant(argv: Sequence[str]) -> list[str]:
+        kept: list[str] = []
+        skip_next = False
+        for arg in argv[1:]:
+            if skip_next:
+                skip_next = False
+            elif arg in ignore:
+                skip_next = True
+            elif arg.split("=", 1)[0] not in ignore:
+                kept.append(arg)
+        return kept
+
+    return significant(recorded) == significant(command)
 
 
 def utc_now() -> str:

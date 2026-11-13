@@ -15,6 +15,7 @@ from src.run_manifest import (
     json_parameters,
     manifest_filename,
     parameter_mismatches,
+    same_command,
     sha256_file,
 )
 
@@ -233,3 +234,28 @@ class TestParameterMismatches:
         # Runs from before a parameter existed must still be scoreable.
         path = self._manifest(tmp_path, domain_key="interpro")
         assert parameter_mismatches(path, {"supra_mode": "bag"}) == []
+
+
+class TestSameCommand:
+    def _manifest(self, tmp_path, command):
+        path = tmp_path / "run_manifest_go.json"
+        path.write_text(json.dumps({"command": command}))
+        return path
+
+    def test_interpreter_and_core_count_are_not_compared(self, tmp_path):
+        path = self._manifest(
+            tmp_path, ["/a/python", "run.py", "--num-cores", "8", "--x", "1"]
+        )
+        assert same_command(
+            path, ["/b/python", "run.py", "--num-cores", "2", "--x", "1"]
+        )
+
+    def test_a_different_flag_does_not_match(self, tmp_path):
+        path = self._manifest(tmp_path, ["py", "run.py", "--min-ic", "1"])
+        assert not same_command(path, ["py", "run.py", "--min-ic", "2"])
+        assert not same_command(path, ["py", "run.py"])
+
+    def test_no_recorded_command_never_matches(self, tmp_path):
+        path = tmp_path / "m.json"
+        path.write_text(json.dumps({"status": "completed"}))
+        assert not same_command(path, ["py", "run.py"])
