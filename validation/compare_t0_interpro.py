@@ -96,6 +96,7 @@ def compare_cell(
         for arm, by_method in panels.items()
         for method, panel in by_method.items()
     }
+
     # The committed cell's conventions (panel_metrics' pre-2026-10-15 defaults),
     # for the observed values *and* every bootstrap replicate, so the interval
     # describes the same metric as the difference it brackets.

@@ -14,6 +14,7 @@ from src.run_manifest import (
     git_metadata,
     json_parameters,
     manifest_filename,
+    parameter_mismatches,
     sha256_file,
 )
 
@@ -213,3 +214,22 @@ def test_git_metadata_separates_tracked_changes_from_untracked_files(tmp_path):
     # Editing a tracked file is.
     (tmp_path / "tracked.py").write_text("x = 2\n", encoding="utf-8")
     assert git_metadata(tmp_path)["dirty"] is True
+
+
+class TestParameterMismatches:
+    def _manifest(self, tmp_path, **params):
+        path = tmp_path / "run_manifest_go.json"
+        path.write_text(json.dumps({"parameters": params}))
+        return path
+
+    def test_differing_recorded_parameter_is_reported(self, tmp_path):
+        path = self._manifest(tmp_path, domain_key="ssf", supra_mode="bag")
+        got = parameter_mismatches(
+            path, {"domain_key": "interpro", "supra_mode": "bag"}
+        )
+        assert got == ["run domain_key=ssf, evaluator interpro"]
+
+    def test_unrecorded_parameter_is_not_checked(self, tmp_path):
+        # Runs from before a parameter existed must still be scoreable.
+        path = self._manifest(tmp_path, domain_key="interpro")
+        assert parameter_mismatches(path, {"supra_mode": "bag"}) == []

@@ -46,6 +46,7 @@ from src.domain_annotation_parser import (  # noqa: E402
     DomainAnnotationParser,
 )
 from src.hierarchy import closure_ancestors, parse_obo_child_parents  # noqa: E402
+from src.run_manifest import manifest_filename, parameter_mismatches  # noqa: E402
 from src.ontology_registry import get_ontology, missing_inputs  # noqa: E402
 from src.surprise_score import (  # noqa: E402
     EmergenceEvidence,
@@ -404,6 +405,20 @@ def main() -> int:
         )
         return 1
 
+    # The architectures are rebuilt below, so they must be keyed as the run's
+    # were. Sub-combinations are spelled canonically (src.surprise_score), so
+    # only bag-mode supra-domains can be scored. A run without a manifest is
+    # not checked.
+    manifest = associations_path.parent / manifest_filename(ontology_label)
+    if manifest.exists():
+        mismatches = parameter_mismatches(
+            manifest, {"domain_key": args.domain_key, "supra_mode": "bag"}
+        )
+        for problem in mismatches:
+            logger.error(f"Settings mismatch — {manifest}: {problem}")
+        if mismatches:
+            return 1
+
     logger.info("=" * 70)
     logger.info(f"SURPRISE SCORE — emergent {ontology_label.upper()} predictions")
     logger.info("=" * 70)
@@ -438,6 +453,7 @@ def main() -> int:
         max_supra_domain_length=3,
         min_domain_length=10,
         domain_key=args.domain_key,
+        supra_mode="bag",
     )
     architectures = domain_parser.parse_protein2ipr_file(interpro_file)
     universe = set(annotations) & set(architectures)

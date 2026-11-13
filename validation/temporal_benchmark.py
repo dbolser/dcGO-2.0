@@ -776,10 +776,14 @@ def main() -> int:
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 
-    from src.domain_annotation_parser import DomainAnnotationParser
+    from src.domain_annotation_parser import (
+        DOMAIN_KEYS,
+        SUPRA_MODES,
+        DomainAnnotationParser,
+    )
     from src.goa_parser import EXPERIMENTAL_EVIDENCE, GOAParser, parse_goa_human
     from src.ontology_processor import OntologyProcessor
-    from src.run_manifest import sha256_file
+    from src.run_manifest import parameter_mismatches, sha256_file
 
     parser = argparse.ArgumentParser(
         description="Temporal held-out CAFA-style benchmark for dcGO (VALIDATION_PLAN §2)."
@@ -802,6 +806,21 @@ def main() -> int:
         default=Path("data/interim/protein2ipr_human.dat.gz"),
         help="protein2ipr human subset (domain architectures) — must be the "
         "file the predictions were trained on",
+    )
+    parser.add_argument(
+        "--domain-key",
+        default="interpro",
+        choices=list(DOMAIN_KEYS),
+        help="Domain keying the predictions were trained with (run_dcgo_human.py "
+        "--domain-key); the architectures are rebuilt here with it",
+    )
+    parser.add_argument(
+        "--supra-mode",
+        default="bag",
+        choices=list(SUPRA_MODES),
+        help="Supra-domain mode the predictions were trained with "
+        "(run_dcgo_human.py --supra-mode); the architectures are rebuilt here "
+        "with it",
     )
     parser.add_argument(
         "--allow-input-mismatch",
@@ -892,6 +911,8 @@ def main() -> int:
                 "domain_annotations": sha256_file(args.interpro),
                 "gaf": sha256_file(args.t0_gaf),
             },
+        ) + parameter_mismatches(
+            manifest, {"domain_key": args.domain_key, "supra_mode": args.supra_mode}
         )
         log = logger.warning if args.allow_input_mismatch else logger.error
         for problem in mismatches:
@@ -923,7 +944,12 @@ def main() -> int:
     )
 
     logger.info("Parsing domain architectures...")
-    dom_parser = DomainAnnotationParser(max_supra_domain_length=3, min_domain_length=10)
+    dom_parser = DomainAnnotationParser(
+        max_supra_domain_length=3,
+        min_domain_length=10,
+        domain_key=args.domain_key,
+        supra_mode=args.supra_mode,
+    )
     architectures = dom_parser.parse_protein2ipr_file(args.interpro)
     protein_domains: dict[str, list[str]] = {}
     for protein, arch in architectures.items():

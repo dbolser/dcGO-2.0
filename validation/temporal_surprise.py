@@ -1352,10 +1352,10 @@ def main() -> int:  # pragma: no cover - I/O wiring, exercised by running it
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 
-    from src.domain_annotation_parser import DomainAnnotationParser
+    from src.domain_annotation_parser import DOMAIN_KEYS, DomainAnnotationParser
     from src.goa_parser import EXPERIMENTAL_EVIDENCE, GOAParser, parse_goa_human
     from src.ontology_processor import OntologyProcessor
-    from src.run_manifest import sha256_file
+    from src.run_manifest import parameter_mismatches, sha256_file
     from validation.temporal_benchmark import training_input_mismatches
 
     logger.remove()
@@ -1393,12 +1393,23 @@ def main() -> int:  # pragma: no cover - I/O wiring, exercised by running it
         default=Path("data/interim/protein2ipr_human.dat.gz"),
     )
     parser.add_argument(
+        "--domain-key",
+        default="interpro",
+        choices=list(DOMAIN_KEYS),
+        help="Domain keying the run used (run_dcgo_human.py --domain-key); the "
+        "carriers are rebuilt here with it. Supra-domains are rebuilt in bag "
+        "mode, the only mode the surprise code supports",
+    )
+    parser.add_argument(
         "--go-ontology", type=Path, default=Path("data/raw/go_ontology/go-basic.obo")
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("validation/temporal_surprise_metrics.tsv"),
+        default=None,
+        help="Default: validation/temporal_surprise_metrics.tsv, or "
+        "validation/temporal_surprise_association_enrichment.tsv with "
+        "--associations (kept apart so neither run overwrites the other)",
     )
     parser.add_argument(
         "--per-association-output",
@@ -1444,6 +1455,12 @@ def main() -> int:  # pragma: no cover - I/O wiring, exercised by running it
     )
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
+    if args.output is None:
+        args.output = Path(
+            "validation/temporal_surprise_association_enrichment.tsv"
+            if args.associations
+            else "validation/temporal_surprise_metrics.tsv"
+        )
 
     if args.replay:
         if not args.replay.exists():
@@ -1472,6 +1489,8 @@ def main() -> int:  # pragma: no cover - I/O wiring, exercised by running it
                     "domain_annotations": sha256_file(args.interpro),
                     "gaf": sha256_file(args.t0_gaf),
                 },
+            ) + parameter_mismatches(
+                manifest, {"domain_key": args.domain_key, "supra_mode": "bag"}
             )
             for problem in mismatches:
                 logger.error(f"Settings mismatch — {manifest}: {problem}")
@@ -1516,7 +1535,10 @@ def main() -> int:  # pragma: no cover - I/O wiring, exercised by running it
 
     logger.info("Parsing domain architectures...")
     architectures = DomainAnnotationParser(
-        max_supra_domain_length=3, min_domain_length=10
+        max_supra_domain_length=3,
+        min_domain_length=10,
+        domain_key=args.domain_key,
+        supra_mode="bag",
     ).parse_protein2ipr_file(args.interpro)
     universe = set(architectures)
     logger.info(f"  Proteins with domains: {len(universe):,}")
