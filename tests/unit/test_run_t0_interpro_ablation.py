@@ -140,9 +140,15 @@ def test_a_subset_selected_differently_is_cut_again(tmp_path, gafs, evidence, ha
     assert "extract" in _names(source, subset, tmp_path)
 
 
-def _finish(run_dir, rung, status="completed"):
+def _finish(run_dir, rung, status="completed", manifests=runbook.MANIFESTS):
+    """A rung manifest as run_dcgo_human writes it for this runbook's command."""
+    command = runbook.rung_command(
+        manifests / f"{rung}.json", run_dir / rung, run_dir / "subset.dat.gz"
+    )
     (run_dir / rung).mkdir()
-    (run_dir / rung / "run_manifest_go.json").write_text(json.dumps({"status": status}))
+    (run_dir / rung / "run_manifest_go.json").write_text(
+        json.dumps({"status": status, "command": command})
+    )
 
 
 def test_completed_rungs_are_not_rerun(tmp_path):
@@ -155,6 +161,21 @@ def test_completed_rungs_are_not_rerun(tmp_path):
     names = _names(source, subset, tmp_path)
     assert "single" not in names
     assert names[names.index("supra") :] == [*runbook.RUNGS[1:], "eval"]
+
+
+def test_a_completed_rung_from_other_manifests_is_rerun(tmp_path):
+    # An interpro rung in the run dir must not be reused for an ssf cell.
+    source = tmp_path / "src.dat.gz"
+    subset = tmp_path / "subset.dat.gz"
+    _cut(subset, source)
+    _finish(tmp_path, "single")
+    ssf = (
+        _ROOT / "validation" / "ablation_cells" / "ssf_manual_t0interpro" / "manifests"
+    )
+    names = [
+        name for name, _ in runbook.build_steps(source, subset, tmp_path, tmp_path, ssf)
+    ]
+    assert "single" in names
 
 
 def test_a_new_subset_reruns_completed_rungs(tmp_path):

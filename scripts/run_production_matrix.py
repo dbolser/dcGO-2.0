@@ -36,7 +36,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.ontology_registry import ONTOLOGIES  # noqa: E402
-from src.run_manifest import manifest_filename  # noqa: E402
+from src.run_manifest import manifest_filename, same_command  # noqa: E402
 
 #: Layers learned on a non-human organism's own proteins.
 SPECIES_FOR_ONTOLOGY = {
@@ -163,10 +163,6 @@ def main(argv: list[str] | None = None) -> int:
     for i, (name, extra) in enumerate(cells, 1):
         out_dir = args.output_root / name
         ontology = extra[extra.index("--ontology") + 1]
-        if (out_dir / manifest_filename(ontology)).exists():
-            print(f"[{i}/{len(cells)}] {name}: manifest exists, skipping")
-            skipped += 1
-            continue
         cmd = [
             sys.executable,
             "run_dcgo_human.py",
@@ -179,6 +175,20 @@ def main(argv: list[str] | None = None) -> int:
             args.domain_key,
             *args.extra_arg,
         ]
+        manifest = out_dir / manifest_filename(ontology)
+        if manifest.exists():
+            if same_command(manifest, cmd):
+                print(f"[{i}/{len(cells)}] {name}: manifest exists, skipping")
+                skipped += 1
+            else:
+                # Neither reuse nor overwrite a cell made with other flags.
+                failures.append(name)
+                print(
+                    f"[{i}/{len(cells)}] {name}: STALE — {manifest} records "
+                    "another command; remove the cell or use another --output-root",
+                    flush=True,
+                )
+            continue
         log_path = args.output_root / f"{name}.log"
         print(f"[{i}/{len(cells)}] {name}: running", flush=True)
         start = time.time()

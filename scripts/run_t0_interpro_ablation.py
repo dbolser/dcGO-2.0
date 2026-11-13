@@ -28,7 +28,8 @@ before it runs and logged to ``<run-dir>/<step>.log``:
 Run it from the repository root; paths are relative to it, and ``data/`` must
 hold the inputs. The md5 of the archived protein2ipr is verified first
 (``scripts/download_data.py --group interpro-85``). Resumable: a rung whose
-manifest says ``completed`` is not rerun, unless the subset is being cut again
+manifest says ``completed`` with the same command is not rerun, unless the
+subset is being cut again
 — and the evaluator refuses a rung trained on a different protein2ipr than
 ``--subset`` regardless.
 
@@ -53,7 +54,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
-from src.run_manifest import manifest_filename, sha256_file  # noqa: E402
+from src.run_manifest import manifest_filename, same_command, sha256_file  # noqa: E402
 from src.universe_provenance import marker_path, read_marker  # noqa: E402
 
 MANIFESTS = REPO / "validation" / "ablation_manifests"
@@ -88,12 +89,17 @@ def rung_command(manifest: Path, output_dir: Path, interpro: Path) -> list[str]:
     return [sys.executable, *args, "--gaf", str(T0_GAF), "--interpro", str(interpro)]
 
 
-def completed(output_dir: Path) -> bool:
-    """Whether a rung's run finished (its manifest is finalised)."""
+def completed(output_dir: Path, command: list[str] | None = None) -> bool:
+    """Whether a rung's run finished (its manifest is finalised).
+
+    With ``command``, also whether it was this command: a finished rung made
+    from other manifests (another ``--domain-key``, say) is not reused.
+    """
     manifest = output_dir / manifest_filename("go")
     return (
         manifest.exists()
         and json.loads(manifest.read_text(encoding="utf-8"))["status"] == "completed"
+        and (command is None or same_command(manifest, command))
     )
 
 
@@ -162,11 +168,11 @@ def build_steps(
             )
         )
     for rung in RUNGS:
-        # A new subset makes every finished rung stale.
-        if extracting or not completed(run_dir / rung):
-            steps.append(
-                (rung, rung_command(manifests / f"{rung}.json", run_dir / rung, subset))
-            )
+        command = rung_command(manifests / f"{rung}.json", run_dir / rung, subset)
+        # A new subset makes every finished rung stale; so does a finished rung
+        # whose recorded command is not this one.
+        if extracting or not completed(run_dir / rung, command):
+            steps.append((rung, command))
     steps.append(
         (
             "eval",
