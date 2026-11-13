@@ -63,6 +63,23 @@ def manifest_filename(label: str) -> str:
     return f"run_manifest_{label}.json"
 
 
+def parameter_mismatches(manifest_path: Path, expected: Mapping[str, Any]) -> list[str]:
+    """Run parameters a manifest records with another value than ``expected``.
+
+    For tools that rebuild part of a run (the domain architectures, say) and
+    must use the run's settings to get the same feature keys. A parameter the
+    manifest does not record (an older run) is not checked. Returns one
+    ``"run key=..., evaluator ..."`` line per mismatch.
+    """
+    data = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+    params = data.get("parameters", {})
+    return [
+        f"run {key}={params[key]}, evaluator {want}"
+        for key, want in expected.items()
+        if params.get(key) is not None and params[key] != want
+    ]
+
+
 def utc_now() -> str:
     """Return an ISO-8601 UTC timestamp."""
     return datetime.now(timezone.utc).isoformat()

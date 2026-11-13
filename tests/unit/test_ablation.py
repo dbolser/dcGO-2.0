@@ -240,6 +240,14 @@ class TestRunSettingMismatches:
         )
         assert problems == [f"{rung.name}: run evidence_filter=all, evaluator manual"]
 
+    def test_a_non_bag_supra_mode_run_is_refused(self, tmp_path):
+        # The evaluator rebuilds bag-mode supra-domains; a contiguous run's
+        # ordered keys would not match them, so it must not be scored.
+        rung = ab.LADDER[0]
+        self._write(tmp_path, rung, supra_mode="contiguous")
+        problems = ab.run_setting_mismatches(tmp_path, [rung], {})
+        assert problems == [f"{rung.name}: run supra_mode=contiguous, evaluator bag"]
+
     def test_runs_without_a_manifest_are_skipped(self, tmp_path):
         assert (
             ab.run_setting_mismatches(

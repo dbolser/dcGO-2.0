@@ -76,7 +76,6 @@ alongside as a sensitivity check (``score`` column of the metrics TSV).
 from __future__ import annotations
 
 import importlib.util
-import json
 import sys
 from collections import defaultdict
 from dataclasses import dataclass
@@ -102,6 +101,15 @@ tb = _load_sibling("temporal_benchmark")
 rs = _load_sibling("resampling")
 tdc = _load_sibling("temporal_domain_centric")
 ts = _load_sibling("temporal_surprise")
+
+from src.run_manifest import parameter_mismatches  # noqa: E402  (path set by tb)
+
+#: How this evaluator rebuilds supra-domains. The surprise and emergence code
+#: (``src.surprise_score``) spells sub-combinations canonically (sorted ids), so
+#: only ``bag`` runs can be scored; a run made with another ``--supra-mode`` is
+#: refused by :func:`run_setting_mismatches` rather than scored on keys that
+#: do not match.
+SUPRA_MODE = "bag"
 
 
 # --------------------------------------------------------------------------- #
@@ -379,18 +387,20 @@ def run_setting_mismatches(
     used. Likewise the evaluator must read the inputs the run was trained on:
     ``input_sha256``, if given, maps manifest input roles (the protein2ipr and
     the t0 GAF) to the evaluator's digests — see
-    ``tb.training_input_mismatches``. Rungs without a manifest are not checked.
+    ``tb.training_input_mismatches``. The run's ``supra_mode`` is always
+    checked against :data:`SUPRA_MODE`, since the architectures are rebuilt
+    here. Rungs without a manifest are not checked.
     """
+    expected = {"supra_mode": SUPRA_MODE, **expected}
     problems = []
     for rung in rungs:
         manifest = run_root / rung.run_dir / "run_manifest_go.json"
         if not manifest.exists():
             continue
-        params = json.loads(manifest.read_text()).get("parameters", {})
-        for key, want in expected.items():
-            got = params.get(key)
-            if got is not None and got != want:
-                problems.append(f"{rung.name}: run {key}={got}, evaluator {want}")
+        problems.extend(
+            f"{rung.name}: {problem}"
+            for problem in parameter_mismatches(manifest, expected)
+        )
         if input_sha256:
             problems.extend(
                 f"{rung.name}: {problem}"
@@ -481,6 +491,7 @@ def load_benchmark_inputs(
             max_supra_domain_length=3,
             min_domain_length=10,
             domain_key=domain_key,
+            supra_mode=SUPRA_MODE,
         ).parse_protein2ipr_file(protein2ipr)
         out: dict[str, list[str]] = {}
         for protein, arch in architectures.items():
