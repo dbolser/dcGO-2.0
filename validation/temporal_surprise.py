@@ -1356,7 +1356,10 @@ def main() -> int:  # pragma: no cover - I/O wiring, exercised by running it
     from src.goa_parser import EXPERIMENTAL_EVIDENCE, GOAParser, parse_goa_human
     from src.ontology_processor import OntologyProcessor
     from src.run_manifest import parameter_mismatches, sha256_file
-    from validation.temporal_benchmark import training_input_mismatches
+    from validation.temporal_benchmark import (
+        remap_retired_ids,
+        training_input_mismatches,
+    )
 
     logger.remove()
     logger.add(sys.stderr, level="INFO")
@@ -1528,6 +1531,11 @@ def main() -> int:  # pragma: no cover - I/O wiring, exercised by running it
     t1_raw = GOAParser(
         evidence_codes=EXPERIMENTAL_EVIDENCE, aspects={"P", "F", "C"}
     ).parse_gaf_file(args.t1_gaf)
+
+    # Score on the live vocabulary, as the protein benchmark does: a retired t0
+    # id and its t1 successor are one term, so the protein already knew it.
+    t0_raw = remap_retired_ids(t0_raw, processor.alt_id_map, processor.replaced_by_map)
+    t1_raw = remap_retired_ids(t1_raw, processor.alt_id_map, processor.replaced_by_map)
 
     logger.info("Propagating both snapshots up the GO DAG...")
     t0_map = {p: propagate(terms, get_ancestors) for p, terms in t0_raw.items()}

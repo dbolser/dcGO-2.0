@@ -703,10 +703,12 @@ def domain_centric_rows(
     """
     from loguru import logger
 
+    remap = tdc.retired_id_remapper(inputs.alt_id_map, inputs.replaced_by_map)
     delta = tdc.curated_delta(
         tdc.read_interpro2go(interpro2go_t0),
         tdc.read_interpro2go(interpro2go_t1),
         inputs.get_ancestors,
+        remap,
     )
     universe, sig_map = tdc.read_protein2ipr_universe(interpro, domain_key)
     if domain_key == "interpro":
@@ -716,7 +718,9 @@ def domain_centric_rows(
         f"{len(delta.added):,} added propagated pairs; universe {len(universe):,}"
     )
     rungs = [
-        tdc.load_rung(r.name, rung_prediction_file(run_root, r, domain_key), sig_map)
+        tdc.load_rung(
+            r.name, rung_prediction_file(run_root, r, domain_key), sig_map, remap
+        )
         for r in LADDER
     ]
     rows = tdc.evaluate_rungs(

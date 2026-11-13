@@ -330,9 +330,9 @@ def naive_predictions(
 
 
 def restrict_to_covered_proteins(
-    predictions: PredScores, reference: PredScores
+    predictions: PredScores, reference: PredScores, min_score: float = CAFA_MIN_TAU
 ) -> dict[str, dict[str, float]]:
-    """Keep ``predictions`` only for proteins ``reference`` predicts at least one term for.
+    """Keep ``predictions`` only for proteins ``reference`` can predict a term for.
 
     The naive baseline predicts for every protein; a domain-based method only
     for proteins with a scored domain. Because CAFA averages precision over the
@@ -340,8 +340,18 @@ def restrict_to_covered_proteins(
     on the same footing. Scoring naive on the method's *covered* proteins —
     same truth, same cohort, the uncovered proteins staying as misses for both
     — gives the fair comparison; report it beside the full-coverage naive.
+
+    "Can predict" means a score ``>= min_score``, the lowest cutoff F_max is
+    read at (:data:`CAFA_MIN_TAU`): a protein whose only reference scores
+    sit below it (the p-score's min-max scaling puts each protein's weakest
+    term at exactly 0) is never covered by the method's sweep, so naive is
+    not scored on it either.
     """
-    return {p: dict(terms) for p, terms in predictions.items() if reference.get(p)}
+    return {
+        p: dict(terms)
+        for p, terms in predictions.items()
+        if any(s >= min_score for s in reference.get(p, {}).values())
+    }
 
 
 def shuffle_domain_go(
