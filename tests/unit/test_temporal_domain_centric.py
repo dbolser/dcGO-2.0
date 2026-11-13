@@ -252,3 +252,17 @@ def test_emergence_enrichment_pools_all_associations_without_a_ranking():
     assert result.expected_rate == pytest.approx(3 / 8)
     assert result.enrichment == pytest.approx(0.5 / (3 / 8))
     assert result.ci_low <= result.enrichment <= result.ci_high
+
+
+def test_supra_association_terms_are_put_on_live_ids(tmp_path):
+    # Remapped snapshots no longer hold a retired id, so the association's
+    # term must be remapped too or it finds no base rate and no hits.
+    path = tmp_path / "assoc.tsv"
+    path.write_text("domain\tgo_term\nD1,D2\told\nD1,D2\tmid\nD1\told\nD2,D3\tgone\n")
+    remap = tdc.retired_id_remapper({"old": "mid"}, {"gone": "leaf"})
+    assert ts.supra_associations(path, remap) == [("D1,D2", "mid"), ("D2,D3", "leaf")]
+    assert ts.supra_associations(path) == [
+        ("D1,D2", "old"),
+        ("D1,D2", "mid"),
+        ("D2,D3", "gone"),
+    ]

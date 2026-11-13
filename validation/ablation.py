@@ -754,7 +754,9 @@ def domain_centric_rows(
         "n_replicates": 0,
     }
     for rung in LADDER:
-        pairs = ts.supra_associations(rung_prediction_file(run_root, rung, domain_key))
+        pairs = ts.supra_associations(
+            rung_prediction_file(run_root, rung, domain_key), remap
+        )
         result = ts.emergence_enrichment(
             pairs,
             inputs.protein_domains,
