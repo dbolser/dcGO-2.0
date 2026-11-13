@@ -20,6 +20,22 @@ dcGO-2.0 is our rebuild of that method on today's databases.
 - **Which jobs each protein has.** From the GO annotation database for human proteins. We only use jobs that a human curator wrote down, not ones a computer guessed.
 - **The dictionary itself.** The GO file, which also says which terms are more general versions of which others ("ATP binding" is a kind of "nucleotide binding").
 
+The numbers below are for the training set used in the test of section 6: one species (human), GO annotations as of April 2021 (GOA release 205, curator-made only, so no IEA or ND codes) and InterPro release 85.0 from the same month. A protein enters the statistics only if it has at least one domain *and* at least one job, so the final universe is smaller than either input file.
+
+| Data type | Count | Source |
+|---|---|---|
+| Species | 1 (human) | UniProt |
+| Proteins with at least one curated GO job | 18,713 | GOA release 205 (April 2021) |
+| Proteins with at least one InterPro domain | 19,394 | InterPro 85.0 (April 2021), human subset |
+| Proteins in the final universe (both) | 18,422 | intersection |
+| Distinct InterPro domain entries | 17,061 | InterPro 85.0 |
+| Protein-to-domain annotations | 81,314 pairs (232,836 signature rows) | InterPro 85.0 |
+| Distinct GO terms used | 16,059 | GOA release 205 |
+| Protein-to-GO annotations | 220,978 protein–term pairs (542,872 evidence rows) | GOA release 205 |
+| GO dictionary | 2026-06-15 release of go-basic.obo | Gene Ontology |
+
+The full production run (section 8) uses the current releases instead: GOA and InterPro as downloaded in July 2026.
+
 ## 4. The statistics, briefly
 
 For each brick–job pair we build a 2 × 2 count: proteins with the brick and the job, with the brick only, with the job only, and with neither. Fisher's exact test turns that into a p-value. Because we test hundreds of millions of pairs, we correct for multiple testing and keep only pairs at a 1% false discovery rate.
