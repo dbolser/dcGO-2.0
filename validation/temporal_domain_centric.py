@@ -100,6 +100,24 @@ def read_interpro2go(path: Path) -> set[Pair]:
     return pairs
 
 
+def retired_id_remapper(
+    alt_id_map: Mapping[str, str], replaced_by_map: Mapping[str, str]
+) -> Callable[[str], str]:
+    """``term -> live term``: ``alt_id`` (merged) first, then ``replaced_by``.
+
+    The same rule as ``temporal_benchmark.remap_retired_ids`` and the
+    pipeline's input cleanup, so both InterPro2GO snapshots and the rung
+    tables are compared on one vocabulary: a t0 pair naming a retired id and
+    its t1 pair naming the successor are the same pair, not an addition.
+    """
+    return lambda term: alt_id_map.get(term) or replaced_by_map.get(term) or term
+
+
+def remap_pairs(pairs: Iterable[Pair], remap: Callable[[str], str]) -> set[Pair]:
+    """``(domain, term)`` pairs with every term put through ``remap``."""
+    return {(domain, remap(term)) for domain, term in pairs}
+
+
 def propagate_pairs(pairs: Iterable[Pair], get_ancestors: GetAncestors) -> set[Pair]:
     """Each ``(domain, term)`` plus ``(domain, ancestor)`` for every ancestor."""
     out: set[Pair] = set()
@@ -124,8 +142,14 @@ class CuratedDelta:
 
 
 def curated_delta(
-    t0_pairs: Iterable[Pair], t1_pairs: Iterable[Pair], get_ancestors: GetAncestors
+    t0_pairs: Iterable[Pair],
+    t1_pairs: Iterable[Pair],
+    get_ancestors: GetAncestors,
+    remap: Callable[[str], str] | None = None,
 ) -> CuratedDelta:
+    """Both snapshots propagated (after ``remap``, see :func:`retired_id_remapper`)."""
+    if remap is not None:
+        t0_pairs, t1_pairs = remap_pairs(t0_pairs, remap), remap_pairs(t1_pairs, remap)
     t0 = propagate_pairs(t0_pairs, get_ancestors)
     t1 = propagate_pairs(t1_pairs, get_ancestors)
     shared = {d for d, _ in t0} & {d for d, _ in t1}
@@ -137,7 +161,7 @@ def _open_text(path: Path):
 
 
 def read_protein2ipr_universe(
-    path: Path, domain_key: str = "interpro"
+    path: Path, domain_key: str = "interpro", min_domain_length: int = 10
 ) -> tuple[set[str], dict[str, str]]:
     """The InterPro entries a run keyed by ``domain_key`` could have tested.
 
@@ -146,6 +170,11 @@ def read_protein2ipr_universe(
     signature with that prefix, and the map lets the run's signature ids be
     re-keyed onto entries. A signature seen under two entries is dropped from
     the map (counted as unmapped downstream) rather than guessed.
+
+    Rows are read as ``DomainAnnotationParser`` reads them for training: six
+    columns, and a match of at least ``min_domain_length`` residues
+    (``run_dcgo_human.MIN_DOMAIN_LENGTH``). An entry seen only in shorter
+    matches was never tested, so it must not add to the recall denominator.
     """
     prefix = SIGNATURE_PREFIXES.get(domain_key)
     entries: set[str] = set()
@@ -154,7 +183,13 @@ def read_protein2ipr_universe(
     with _open_text(path) as handle:
         for line in handle:
             cols = line.rstrip("\n").split("\t")
-            if len(cols) < 4:
+            if len(cols) < 6:
+                continue
+            try:
+                length = int(cols[5]) - int(cols[4]) + 1
+            except ValueError:
+                continue
+            if length < min_domain_length:
                 continue
             entry, signature = cols[1], cols[3]
             if prefix is None:
@@ -229,8 +264,20 @@ def load_rung(
     name: str,
     path: Path,
     sig_to_entry: Mapping[str, str] | None = None,
+    remap: Callable[[str], str] | None = None,
 ) -> RungTable:
+    """A rung's single-domain rows, on InterPro entries and live GO ids.
+
+    ``remap`` (:func:`retired_id_remapper`) puts retired ids on their
+    successor; two rows that land on one pair keep the smaller q.
+    """
     rows = load_single_associations(path)
+    if remap is not None:
+        best: dict[Pair, float] = {}
+        for domain, term, q in rows:
+            key = (domain, remap(term))
+            best[key] = min(q, best.get(key, math.inf))
+        rows = [(d, t, q) for (d, t), q in best.items()]
     n_unmapped = 0
     if sig_to_entry is not None:
         rows, n_unmapped = map_signatures(rows, sig_to_entry)
@@ -525,11 +572,14 @@ def main() -> int:  # pragma: no cover - I/O wiring
         return 1
 
     logger.info("Loading GO ontology...")
-    get_ancestors = OntologyProcessor(args.go_ontology).get_ancestors
+    processor = OntologyProcessor(args.go_ontology)
+    get_ancestors = processor.get_ancestors
+    remap = retired_id_remapper(processor.alt_id_map, processor.replaced_by_map)
     delta = curated_delta(
         read_interpro2go(args.interpro2go_t0),
         read_interpro2go(args.interpro2go_t1),
         get_ancestors,
+        remap,
     )
     logger.info(
         f"InterPro2GO: {len(delta.shared_domains):,} shared domains, "
@@ -549,7 +599,7 @@ def main() -> int:  # pragma: no cover - I/O wiring
         if not path:
             logger.error(f"--rung must be NAME=PATH, got {spec!r}")
             return 1
-        rung = load_rung(name, Path(path), sig_map)
+        rung = load_rung(name, Path(path), sig_map, remap)
         logger.info(
             f"  {name}: {len(rung.direct):,} single-domain rows"
             + (

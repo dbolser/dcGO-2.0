@@ -306,6 +306,18 @@ class TestRestrictToCoveredProteins:
         got["P1"]["GO:leaf"] = 9.0  # a copy, not a view of the naive table
         assert naive["P1"]["GO:leaf"] == 0.5
 
+    def test_a_protein_scored_only_below_the_sweep_floor_is_not_covered(self):
+        # After an IC floor, P1's only dcGO term may be its min-max 0.0: the
+        # F_max sweep (tau >= CAFA_MIN_TAU) can never predict it.
+        naive = {p: {"GO:leaf": 0.5} for p in ("P1", "P2")}
+        reference = {"P1": {"GO:other": 0.0}, "P2": {"GO:other": 0.001}}
+        got = tb.restrict_to_covered_proteins(naive, reference)
+        assert got == {"P2": {"GO:leaf": 0.5}}
+        assert set(tb.restrict_to_covered_proteins(naive, reference, 0.0)) == {
+            "P1",
+            "P2",
+        }
+
 
 class TestPrecisionRecall:
     def test_cafa_averaging_conventions(self):

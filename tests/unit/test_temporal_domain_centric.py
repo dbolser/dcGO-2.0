@@ -54,6 +54,24 @@ def test_added_pairs_are_propagated_and_restricted_to_shared_domains(delta):
     assert delta.added == {("D1", "leaf"), ("D2", "other")}
 
 
+def test_a_retired_id_and_its_successor_are_not_an_addition():
+    # t0 curated D1 -> "old" (merged into "mid"); t1 names "mid" directly.
+    remap = tdc.retired_id_remapper({"old": "mid"}, {})
+    t0 = {("D1", "old"), ("D2", "root")}
+    t1 = {("D1", "mid"), ("D2", "root")}
+    assert tdc.curated_delta(t0, t1, get_ancestors, remap).added == frozenset()
+
+
+def test_rung_rows_on_retired_ids_are_remapped_and_pooled(tmp_path):
+    path = tmp_path / "assoc.tsv"
+    path.write_text(
+        "domain\tgo_term\tadj_p_value\nD1\told\t1e-3\nD1\tmid\t1e-6\nD2\tgone\t1e-2\n"
+    )
+    remap = tdc.retired_id_remapper({"old": "mid"}, {"gone": "leaf"})
+    rung = tdc.load_rung("r", path, remap=remap)
+    assert sorted(rung.direct) == [("D1", "mid", 1e-6), ("D2", "leaf", 1e-2)]
+
+
 def _rung(name, rows):
     return tdc.RungTable(name, tuple(rows))
 
@@ -155,6 +173,18 @@ def test_protein2ipr_universe_maps_signatures_to_entries(tmp_path):
     assert sig_map == {"SSF1": "IPR1", "SSF2": "IPR2"}
     entries, sig_map = tdc.read_protein2ipr_universe(path, "pfam")
     assert entries == {"IPR1", "IPR3"} and sig_map == {"PF1": "IPR1", "PF2": "IPR3"}
+
+
+def test_protein2ipr_universe_drops_matches_training_drops(tmp_path):
+    # Training (DomainAnnotationParser) ignores matches under 10 residues, so
+    # an entry seen only in one was never tested and is not in the universe.
+    lines = ["P1\tIPR1\tname\tPF1\t1\t10", "P1\tIPR2\tname\tPF2\t5\t13"]
+    path = tmp_path / "protein2ipr.dat"
+    path.write_text("\n".join(lines) + "\n")
+    entries, _ = tdc.read_protein2ipr_universe(path, "interpro")
+    assert entries == {"IPR1"}
+    entries, _ = tdc.read_protein2ipr_universe(path, "interpro", min_domain_length=9)
+    assert entries == {"IPR1", "IPR2"}
 
 
 def test_read_interpro2go_and_single_rows(tmp_path):
