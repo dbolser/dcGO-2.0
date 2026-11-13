@@ -57,7 +57,7 @@ We also compare with a "naive" predictor that guesses the most common jobs for e
 
 **Both methods beat naive on molecular function** by a wide margin (F_max 0.33 and 0.30 versus 0.08). On biological process the margin is small and only the simpler configuration clears it.
 
-**The relative test is a trade.** With it, the associations are more often right (7.4% of them were later curated, against 5.6% without it, and 9.0% against 6.9% when both are limited to their best 4,024). But it keeps far fewer associations, so it finds less than half as many of the newly curated links (7.4% versus 16.6%). At the protein level this costs F_max about 0.03 in both aspects. In short: fewer but more trustworthy predictions.
+**The relative test is a trade.** With it, more of the associations were later curated (7.4% of them, against 5.6% without it, and 9.0% against 6.9% when both are limited to their best 4,024). But it keeps far fewer associations, so it recovers less than half as many of the newly curated links (7.4% versus 16.6%). At the protein level this costs F_max about 0.03 in both aspects. In short: fewer predictions, more of which curators have since confirmed. Because curation is incomplete, an association not yet curated is not shown to be wrong, so this is evidence of higher reliability, not proof of it.
 
 **Adding ancestor terms beforehand helps.** Giving the test every protein's general terms as well as its specific ones improves both scores in every configuration.
 
@@ -67,7 +67,7 @@ We also compare with a "naive" predictor that guesses the most common jobs for e
 
 ## 8. Which configuration is "best" is a judgement call
 
-The two scores disagree about the relative test. The association-level score says keep it, because each prediction is more reliable. The protein-level score says drop it, because you find more. Neither is wrong. Which matters more depends on what the predictions are for: if each one will be checked by an expensive experiment, reliability wins; if they feed a cheap downstream screen, coverage wins.
+The two scores disagree about the relative test. The association-level score favours keeping it, because a larger share of its predictions has since been curated. The protein-level score says drop it, because you find more. Neither is wrong. Which matters more depends on what the predictions are for: if each one will be checked by an expensive experiment, reliability wins; if they feed a cheap downstream screen, coverage wins.
 
 We ran the full production set (34 ontologies, three ways of naming bricks) with the relative test on, matching the original method. Switching it off is one flag.
 

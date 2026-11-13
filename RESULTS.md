@@ -227,4 +227,7 @@ uv run python validation/domain_centric_eval.py \
 
 > Note: `validation/apply_relative_inference.py` was retired on 2026-10-15
 > (superseded by the pipeline's `--enable-relative-inference`); step 4 above
-> no longer runs.
+> no longer runs at this revision. To reproduce it, run it from the last
+> revision that has the script, `b1b4da3`
+> (`git show b1b4da3:validation/apply_relative_inference.py > /tmp/ari.py`, or
+> `git worktree add ../dcgo-b1b4da3 b1b4da3`).

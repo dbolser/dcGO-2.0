@@ -400,6 +400,14 @@ missing pieces and measured each (`apply_relative_inference.py` — retired
 | C + relative inference | 0.219 | 0.273 | 0.356 | 0.065 | 0.164 | 0.180 |
 | D both | 0.224 | **0.385** | 0.356 | 0.100 | **0.217** | 0.196 |
 
+> **Historical (2026-10-15).** Rows C and D, the MF gain credited to relative
+> inference below, and the domain-centric 0.218 → 0.253 that follows all came
+> from the retired post-hoc `apply_relative_inference.py` filter (intersection
+> of parents, alpha 0.05), not from the pipeline's
+> `--enable-relative-inference` (union of parents, combined before BH). They
+> are not evidence for the pipeline option; its effect is measured by the §4
+> ablation rungs. Rows A and B are unaffected.
+
 **The per-target p-score (2) is the main lever; the relative inference (1) helps
 MF.** Per-protein calibration (B) lifts F_max/AUPRC across the board (BP
 0.218→0.248, MF 0.234→0.360, CC 0.349→0.380). The relative inference (C) helps
