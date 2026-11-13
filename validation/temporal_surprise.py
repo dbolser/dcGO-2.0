@@ -75,6 +75,7 @@ from typing import (
     Iterable,
     List,
     Mapping,
+    Optional,
     Sequence,
     Set,
     Tuple,
@@ -569,20 +570,27 @@ def emergence_enrichment(
     return pool(name, [o for o in outcomes if o.n_predicted > 0], n_resamples, seed)
 
 
-def supra_associations(path) -> List[Tuple[str, str]]:
+def supra_associations(
+    path, remap: Optional[Callable[[str], str]] = None
+) -> List[Tuple[str, str]]:
     """The ``(supra-domain, term)`` rows of a rung's association table.
 
     Supra-domain ids are comma-joined constituent ids; both the significant
-    (``go_term``) and the True-Path-propagated table qualify.
+    (``go_term``) and the True-Path-propagated table qualify. ``remap`` puts
+    each term on the vocabulary the snapshots were remapped to (retired ids
+    onto their successor, ``temporal_domain_centric.retired_id_remapper``); a
+    retired id left as is has no base rate and no hits in remapped
+    snapshots. Rows that land on one pair are kept once, in file order.
     """
     import csv
 
-    out: List[Tuple[str, str]] = []
+    out: Dict[Tuple[str, str], None] = {}
     with open(path) as f:
         for row in csv.DictReader(f, delimiter="\t"):
             if "," in row["domain"]:
-                out.append((row["domain"], row["go_term"]))
-    return out
+                term = row["go_term"] if remap is None else remap(row["go_term"])
+                out.setdefault((row["domain"], term), None)
+    return list(out)
 
 
 def top_k(
@@ -1360,6 +1368,7 @@ def main() -> int:  # pragma: no cover - I/O wiring, exercised by running it
         remap_retired_ids,
         training_input_mismatches,
     )
+    from validation.temporal_domain_centric import retired_id_remapper
 
     logger.remove()
     logger.add(sys.stderr, level="INFO")
@@ -1534,6 +1543,9 @@ def main() -> int:  # pragma: no cover - I/O wiring, exercised by running it
 
     # Score on the live vocabulary, as the protein benchmark does: a retired t0
     # id and its t1 successor are one term, so the protein already knew it.
+    # The association terms are put on it too (remap_term), or a retired id
+    # would find no base rate and no hits in the remapped snapshots.
+    remap_term = retired_id_remapper(processor.alt_id_map, processor.replaced_by_map)
     t0_raw = remap_retired_ids(t0_raw, processor.alt_id_map, processor.replaced_by_map)
     t1_raw = remap_retired_ids(t1_raw, processor.alt_id_map, processor.replaced_by_map)
 
@@ -1558,7 +1570,7 @@ def main() -> int:  # pragma: no cover - I/O wiring, exercised by running it
             for p, a in architectures.items()
         }
         result = emergence_enrichment(
-            supra_associations(args.associations),
+            supra_associations(args.associations, remap_term),
             protein_features,
             t0_map,
             t1_map,
@@ -1588,9 +1600,15 @@ def main() -> int:  # pragma: no cover - I/O wiring, exercised by running it
 
     logger.info(f"Reading the t0 surprise ranking from {args.surprising}...")
     rows = []
+    seen: Set[Tuple[str, str]] = set()
     with open(args.surprising) as f:
         for row in csv.DictReader(f, delimiter="\t"):
-            rows.append(row)
+            row["term"] = remap_term(row["term"])
+            # A retired id and its successor ranked for one feature: keep the
+            # first row in the file only.
+            if (row["domain"], row["term"]) not in seen:
+                seen.add((row["domain"], row["term"]))
+                rows.append(row)
     logger.info(f"  Candidate associations: {len(rows):,}")
     if not rows:
         logger.error("No ranked associations to evaluate.")
