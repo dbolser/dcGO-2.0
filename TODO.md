@@ -47,6 +47,17 @@ implementation.
 
 ## P0 — publication blockers
 
+- [ ] **Settle the two open rules of the pre-registered primary endpoint**
+  (gap noted under "Pre-registered evaluation" above), before it picks the
+  production configuration. Any answer given now comes after the t0 cells
+  were read, so report it as post hoc; for the untouched final evaluation, fix
+  it before looking.
+  1. *Budget:* how many top associations (by q) are compared per rung? The
+     code currently takes the smallest rung's eligible single-domain count
+     (514 in the committed SSF cell). Keep that rule, or name a number?
+  2. *Aspects:* the plan says BP and MF, but the implemented metric pools all
+     GO aspects. Split it into BP and MF? If so, which rung wins when BP and
+     MF disagree (BP first, MF first, both must agree, or a combined score)?
 - [ ] **Freeze and run a genuinely untouched final evaluation.** Model choices
   (p-score transfer, IC floors, minimum support, True Path policy, and feature
   family) were inspected on the headline 2021→2026 split. Use the nested human
