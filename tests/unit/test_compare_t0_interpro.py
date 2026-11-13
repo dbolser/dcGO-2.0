@@ -80,3 +80,24 @@ def test_arms_scored_on_different_cohorts_are_refused():
     panels = {"x": {"m": _panel(GOOD)}, "y": {"m": _panel(GOOD, other)}}
     with pytest.raises(ValueError, match="different cohort"):
         _rows(panels, ("x", "y"))
+
+
+def test_bootstrap_replicates_use_the_observed_conventions(monkeypatch):
+    # The interval must describe the same metric as the observed difference:
+    # every replicate is scored with the committed (legacy) conventions too.
+    seen = {}
+    real = rs.paired_bootstrap
+
+    def spy(panels, **kwargs):
+        seen["evaluate"] = kwargs.get("evaluate")
+        return real(panels, **kwargs)
+
+    monkeypatch.setattr(ct.rs, "paired_bootstrap", spy)
+    # A wrong term below CAFA's 0.001 floor separates the two conventions.
+    panel = _panel({"P1": {"GO:a": 0.0, "GO:x": 0.4}, "P2": {"GO:b": 0.9}})
+    _rows({"x": {"m": panel}, "y": {"m": _panel(POOR)}}, ("x", "y"))
+    evaluate = seen["evaluate"]
+    assert evaluate is not None
+    idx = __import__("numpy").arange(panel.n_proteins)
+    legacy = rs.panel_metrics(panel, idx, min_tau=0.0, anchor_origin=True)
+    assert evaluate(panel, idx) == legacy

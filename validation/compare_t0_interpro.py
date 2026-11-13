@@ -96,13 +96,20 @@ def compare_cell(
         for arm, by_method in panels.items()
         for method, panel in by_method.items()
     }
-    # The committed cell's conventions (panel_metrics' pre-2026-10-15 defaults).
-    observed = {
-        name: rs.panel_metrics(panel, min_tau=0.0, anchor_origin=True)
-        for name, panel in flat.items()
-    }
+    # The committed cell's conventions (panel_metrics' pre-2026-10-15 defaults),
+    # for the observed values *and* every bootstrap replicate, so the interval
+    # describes the same metric as the difference it brackets.
+    def evaluate(panel, index=None):
+        return rs.panel_metrics(panel, index, min_tau=0.0, anchor_origin=True)
+
+    observed = {name: evaluate(panel) for name, panel in flat.items()}
     reps = rs.paired_bootstrap(
-        flat, metrics=METRICS, n_replicates=n_replicates, seed=seed, level=level
+        flat,
+        metrics=METRICS,
+        n_replicates=n_replicates,
+        seed=seed,
+        level=level,
+        evaluate=evaluate,
     )
     rows = []
     for arm_a, arm_b in contrasts:
