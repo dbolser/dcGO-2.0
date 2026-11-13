@@ -23,6 +23,15 @@ excluded, CAFA-evaluator curve conventions). See `REVIEW_2026-10-15.md`.
   floor; transfer = p-score as corrected.
 - **Not to be changed after reading results:** any of the above.
 
+*Gap noted 2026-11-13, after the t0 cells were committed (so not part of the
+pre-registration, and the text above is left as written):* the budget is
+not given as a number. The code (`temporal_domain_centric.default_budget`)
+uses the smallest rung's eligible single-domain association count (514 in the
+committed SSF cell). The primary endpoint as implemented pools all GO aspects;
+it is not split into BP and MF, and no rule says which rung wins if BP and MF
+disagree. Settle both, and record why, before this rule picks the
+production configuration.
+
 Last reviewed against `main` (`d166013`) on 2026-08-31. This is the short,
 prioritized project queue. Detailed experiment designs and results live in
 [VALIDATION_PLAN.md](VALIDATION_PLAN.md), [MULTISPECIES_BACKGROUND.md](MULTISPECIES_BACKGROUND.md),
